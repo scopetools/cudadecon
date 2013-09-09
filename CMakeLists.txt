@@ -41,7 +41,6 @@ IF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
     if (GCC_VER VERSION_GREATER 4.6.3)
       set ( CMAKE_C_COMPILER /opt/bin/gcc )
       set ( CMAKE_CXX_COMPILER /opt/bin/g++ )
-      set (CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};--compiler-bindir=/opt/bin)
     endif()
     message (STATUS "gcc used: " ${CMAKE_C_COMPILER} )
   endif()
@@ -69,20 +68,27 @@ endif(WIN32)
 set(CUDA_NVCC_FLAGS
   --ptxas-options=-v;-O3;-gencode=arch=compute_20,code=sm_20;-gencode=arch=compute_30,code=sm_30;-gencode=arch=compute_35,code=sm_35)
 
+if (GCC_VER VERSION_GREATER 4.6.3)
+  set (CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};--compiler-bindir=/opt/bin)
+endif()
+
 add_subdirectory(Buffers)
 
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CUDA_INCLUDE_DIRS}
   "${CMAKE_CURRENT_SOURCE_DIR}/Buffers"
-  "C:/ProgramData/NVIDIA Corporation/CUDA Samples/v5.0/common/inc"
-  )
+)
 
+  
 if(WIN32)
   set(CUDA_NVCC_FLAGS
      ${CUDA_NVCC_FLAGS};--use-local-env;--cl-version=2010)
   link_directories ( ${Boost_LIBRARY_DIRS} c:/fftw3 ${TIFF_LIBRARY} )
-  include_directories( ${Boost_INCLUDE_DIRS} c:/fftw3  ${TIFF_INCLUDE_DIR} )
+  include_directories( ${Boost_INCLUDE_DIRS} c:/fftw3  ${TIFF_INCLUDE_DIR}
+  "C:/ProgramData/NVIDIA Corporation/CUDA Samples/v5.0/common/inc" )
+else(WIN32)
+  include_directories( ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc )
 endif()
 
 CUDA_ADD_EXECUTABLE(
@@ -108,6 +114,9 @@ else(WIN32)
 target_link_libraries(
   cudaDeconv
   Buffer
+  fftw3f
+  fftw3f_threads
+  X11
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
   ${TIFF_LIBRARIES}
   )
