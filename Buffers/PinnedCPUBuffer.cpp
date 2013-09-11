@@ -110,7 +110,11 @@ void PinnedCPUBuffer::setFrom(const GPUBuffer& src, size_t srcBegin,
 void PinnedCPUBuffer::setFrom(const void* src, size_t srcBegin,
     size_t srcEnd, size_t destBegin)
 {
-  CPUBuffer::setFrom(src, srcBegin, srcEnd, destBegin);
+  // CPUBuffer::setFrom(src, srcBegin, srcEnd, destBegin);
+  if (srcEnd - srcBegin > size_ - destBegin) {
+    throw std::runtime_error("Buffer overflow.");
+  }
+  memcpy(ptr_ + destBegin, (char*)src + srcBegin, srcEnd - srcBegin);
 }
 
 bool PinnedCPUBuffer::hasNaNs(bool verbose) const 

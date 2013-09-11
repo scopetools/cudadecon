@@ -143,7 +143,6 @@ int main(int argc, char *argv[])
   int napodize = 10;
   float background;
   float NA=1.2;
-  // int nphases = 1;  /* allow input to be 2D SIM datasets */
   ImgParams imgParams;
   float dz_psf, dr_psf;
   float wiener;
@@ -158,13 +157,13 @@ int main(int argc, char *argv[])
 
   TIFFSetWarningHandler(NULL);
 
-  std::string ifiles, ofiles, otffiles;
+  std::string datafolder, filenamePattern, otffiles;
   po::options_description progopts;
   progopts.add_options()
     ("drdata", po::value<float>(&imgParams.dr)->default_value(.104), "image x-y pixel size (um)")
-    ("dzdata", po::value<float>(&imgParams.dz)->default_value(.25), "image z step (um)")
+    ("dzdata,z", po::value<float>(&imgParams.dz)->default_value(.25), "image z step (um)")
     ("drpsf", po::value<float>(&dr_psf)->default_value(.104), "PSF x-y pixel size (um)")
-    ("dzpsf", po::value<float>(&dz_psf)->default_value(.1), "PSF z step (um)")
+    ("dzpsf,Z", po::value<float>(&dz_psf)->default_value(.1), "PSF z step (um)")
     ("wavelength,l", po::value<float>(&imgParams.wave)->default_value(.525), "emission wavelength (um)")
 
     ("wiener,w", po::value<float>(&wiener)->default_value(1e-2), "Wiener constant (regularization factor)")
@@ -175,14 +174,14 @@ int main(int argc, char *argv[])
     ("deskew,D", po::value<float>(&deskewAngle)->default_value(0.0), "Deskew angle; if not 0.0 then perform deskewing before deconv")
     ("rotate,R", po::value<float>(&rotationAngle)->default_value(0.0), "rotation angle; if not 0.0 then perform rotation around y axis after deconv")
     // ("PSF", po::value<bool>(&bPSF)->implicit_value(true), "PSF instead of OTF file is provided")
-    ("input-file", po::value<std::string>(&ifiles), "input file")
-    ("otf-file", po::value<std::string>(&otffiles), "OTF file")
-    ("output-file", po::value<std::string>(&ofiles), "output file")
+    ("input-dir", po::value<std::string>(&datafolder)->required(), "input folder name")
+    ("otf-file", po::value<std::string>(&otffiles)->required(), "OTF file")
+    ("filename-pattern", po::value<std::string>(&filenamePattern)->required(), "pattern in file names")
     ("help,h", "produce help message")
     ;
   po::positional_options_description p;
-  p.add("input-file", 1);
-  p.add("output-file", 1);
+  p.add("input-dir", 1);
+  p.add("filename-pattern", 1);
   p.add("otf-file", 1);
 
 /* Parse commandline option */
@@ -190,147 +189,206 @@ int main(int argc, char *argv[])
 
   store(po::command_line_parser(argc, argv).
         options(progopts).positional(p).run(), varsmap);
-  notify(varsmap);
 
   if (varsmap.count("help")) {
     std::cout << progopts << "\n";
     return 0;
   }
 
-  if (!ifiles.length()) {
-    std::cout << " PSF dataset file name: ";
-    std::cin >> ifiles;
-  }
-  if (!ofiles.length()) {
-    std::cout << " Output file name: ";
-    std::cin >> ofiles;
-  }
-  if (!otffiles.length()) {
-    std::cout << " OTF file name: ";
-    std::cin >> otffiles;
-  }
+  notify(varsmap);
 
-  // bool bUseTIFF = false;
-  CImg<> raw_image(ifiles.c_str());
+  // Gather all files in 'datafolder' and matching the file name pattern:
+  std::vector< std::string > all_matching_files = 
+    gatherMatchingFiles(datafolder, filenamePattern);
 
-  imgParams.nx = raw_image.width();
-  imgParams.ny = raw_image.height();
-  imgParams.nz = raw_image.depth();
-
-  CImg<> raw_imageFFT(imgParams.nx+2, imgParams.ny, imgParams.nz);
-
-  CImg<> complexOTF;
+  CImg<> raw_image, raw_imageFFT, complexOTF;
   float dkr_otf, dkz_otf;
-  // if (!bPSF) {
-    // Assuming 3D rotationally averaged OTF
-    complexOTF.assign(otffiles.c_str());
-    int nr_otf = complexOTF.height();
-    int nz_otf = complexOTF.width() / 2;
-    dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
-    dkz_otf = 1/(nz_otf * dz_psf);
-  // }
-  // else {
-  //   // Do PSF-to-OTF conversion
-  //   PSF_to_OTF(otffiles.c_str());
-  // }
-
+  float dkx, dky, dkz, rdistcutoff;
   fftwf_plan rfftplan=NULL, rfftplan_inv=NULL;
-  if (!RL_iters || bCPU) {
-    if (!fftwf_init_threads()) { /* one-time initialization required to use threads */
-      printf("Error returned by fftwf_init_threads()\n");
-    }
+  CPUBuffer deskewMatrix, rotMatrix;
+  bool bCrop = false;
+  unsigned new_ny, new_nz, new_nx;
+  int deskewedXdim;
+  cufftHandle rfftplanGPU, rfftplanInvGPU;
+  GPUBuffer d_interpOTF(0);
 
-    fftwf_plan_with_nthreads(8);
+  // Loop over all matching input TIFFs:
+  for (std::vector<std::string>::iterator it=all_matching_files.begin();
+       it != all_matching_files.end(); it++) {
 
-    rfftplan = fftwf_plan_dft_r2c_3d(imgParams.nz, imgParams.ny, imgParams.nx,
-                                     raw_image.data(),
-                                     (fftwf_complex *) raw_imageFFT.data(),
-                                     FFTW_ESTIMATE);
+    std::cout<< *it << std::endl;
+    raw_image.assign(it->c_str());
 
-    rfftplan_inv = fftwf_plan_dft_c2r_3d(imgParams.nz, imgParams.ny, imgParams.nx,
-                                         (fftwf_complex *) raw_imageFFT.data(),
+    // If it's the first input file, initialize a bunch including:
+    // 1. crop image to make dimensions nice factorizable numbers
+    // 2. calculate deskew parameters, new X dimensions
+    // 3. calculate rotation matrix
+    // 4. create FFT plans
+    // 5. transfer constants into GPU device constant memory
+    // 6. make 3D OTF array in device memory
+    if (it == all_matching_files.begin()) {
+      unsigned nx = raw_image.width();
+      unsigned ny = raw_image.height();
+      unsigned nz = raw_image.depth();
+
+      printf("Original image size: nz=%d, ny=%d, nx=%d\n", nz, ny, nx);
+
+      new_ny = findOptimalDimension(ny);
+      if (new_ny != ny) {
+        printf("new ny=%d\n", new_ny);
+        bCrop = true;
+      }
+
+      new_nz = findOptimalDimension(nz);
+      if (new_nz != nz) {
+        printf("new nz=%d\n", new_nz);
+        bCrop = true;
+      }
+
+      // only if no deskewing is happening do we want to change image width here
+      new_nx = nx;
+      if (!fabs(deskewAngle) > 0.0) {
+        new_nx = findOptimalDimension(nx);
+        if (new_nx != nx) {
+          printf("new nx=%d\n", new_nx);
+          bCrop = true;
+        }
+      }
+
+      // Load OTF (assuming 3D rotationally averaged OTF):
+      complexOTF.assign(otffiles.c_str());
+      unsigned nr_otf = complexOTF.height();
+      unsigned nz_otf = complexOTF.width() / 2;
+      dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
+      dkz_otf = 1/(nz_otf * dz_psf);
+
+      // Construct deskew matrix:
+      deskewedXdim = new_nx;
+      if (fabs(deskewAngle) > 0.0) {
+        if (deskewAngle <0) deskewAngle += 180.;
+        deskewMatrix.resize(2*sizeof(float));
+        float *ptr = (float *) deskewMatrix.getPtr();
+        ptr[0] = cos(deskewAngle * M_PI/180.) * imgParams.dz / imgParams.dr;
+        deskewedXdim += floor(new_nz * imgParams.dz * 
+                              fabs(cos(deskewAngle * M_PI/180.)) / imgParams.dr)/4.; // TODO /4.
+
+        deskewedXdim = findOptimalDimension(deskewedXdim);
+
+        ptr[1] = 0.0;
+        if (ptr[0] < 0)
+          ptr[1]= deskewedXdim - new_nx;
+
+        // update z step size:
+        imgParams.dz *= sin(deskewAngle * M_PI/180.);
+
+        printf("new nx=%d\n", deskewedXdim);
+
+        for (int j=0; j<2; j++)
+          printf("%.4f ", ptr[j]);
+        printf("\n");
+      }
+
+      // Construct rotation matrix:
+      if (fabs(rotationAngle) > 0.0) {
+        rotMatrix.resize(4*sizeof(float));
+        rotationAngle *= M_PI/180;
+        float stretch = imgParams.dr / imgParams.dz;
+        float *p = (float *)rotMatrix.getPtr();
+        p[0] = cos(rotationAngle) * stretch;
+        p[1] = sin(rotationAngle) * stretch;
+        p[2] = -sin(rotationAngle);
+        p[3] = cos(rotationAngle);
+      }
+
+      if (!RL_iters || bCPU) {
+        raw_imageFFT.assign(deskewedXdim+2, new_ny, new_nz);
+
+        if (!fftwf_init_threads()) { /* one-time initialization required to use threads */
+          printf("Error returned by fftwf_init_threads()\n");
+        }
+
+        fftwf_plan_with_nthreads(8);
+
+        rfftplan = fftwf_plan_dft_r2c_3d(new_nz, new_ny, deskewedXdim,
                                          raw_image.data(),
+                                         (fftwf_complex *) raw_imageFFT.data(),
                                          FFTW_ESTIMATE);
-    raw_image -= background;
-  }
 
-  float dkx = 1.0/(imgParams.dr * imgParams.nx);
-  float dky = 1.0/(imgParams.dr * imgParams.ny);
-  float dkz = 1.0/(imgParams.dz * imgParams.nz);
-  float rdistcutoff = 2*NA/(imgParams.wave); // lateral resolution limit in 1/um
+        rfftplan_inv = fftwf_plan_dft_c2r_3d(new_nz, new_ny, deskewedXdim,
+                                             (fftwf_complex *) raw_imageFFT.data(),
+                                             raw_image.data(),
+                                             FFTW_ESTIMATE);
+      }
+      else {
+        // Create reusable cuFFT plans
+        cufftResult cuFFTErr = cufftPlan3d(&rfftplanGPU, new_nz, new_ny, deskewedXdim, CUFFT_R2C);
+        if (cuFFTErr != CUFFT_SUCCESS) {
+          std::cout << "Error code: " << cuFFTErr << std::endl;
+          throw std::runtime_error("cufftPlan3d() r2c failed.");
+        }
+        cuFFTErr = cufftPlan3d(&rfftplanInvGPU, new_nz, new_ny, deskewedXdim, CUFFT_C2R);
+        if (cuFFTErr != CUFFT_SUCCESS) {
+          std::cout << "Error code: " << cuFFTErr << std::endl;
+          throw std::runtime_error("cufftPlan3d() c2r failed.");
+        }
+      }
 
-  // construct deskew matrix (only 2 numbers: slope and offset (if slope<0)
-  CPUBuffer deskewMatrix;
-  int newXdimension = imgParams.nx;
-  if (fabs(deskewAngle) > 0.0) {
-    if (deskewAngle <0) deskewAngle += 180.;
-    deskewMatrix.resize(2*sizeof(float));
-    float *ptr = (float *) deskewMatrix.getPtr();
-    ptr[0] = cos(deskewAngle * M_PI/180.) * imgParams.dz / imgParams.dr;
-    newXdimension += floor(imgParams.nz * imgParams.dz * 
-                           fabs(cos(deskewAngle * M_PI/180.)) / imgParams.dr)/4.; // TODO /4.
-    ptr[1] = 0.0;
-    if (ptr[0] < 0)
-      ptr[1]= newXdimension - imgParams.nx;
+      dkx = 1.0/(imgParams.dr * deskewedXdim);
+      dky = 1.0/(imgParams.dr * new_ny);
+      dkz = 1.0/(imgParams.dz * new_nz);
+      rdistcutoff = 2*NA/(imgParams.wave); // lateral resolution limit in 1/um
 
-    // update z step size:
-    imgParams.dz *= sin(deskewAngle * M_PI/180.);
+      // transfer a bunch of constants to device, including OTF array:
+      float eps = std::numeric_limits<float>::epsilon();
+      transferConstants(deskewedXdim, new_ny, new_nz,
+                        complexOTF.height(), complexOTF.width()/2,
+                        dkx/dkr_otf, dky/dkr_otf, dkz/dkz_otf,
+                        eps, complexOTF.data());
 
-    for (int j=0; j<2; j++)
-      printf("%.4f ", ptr[j]);
-    printf("\n");
-  }
+      // make a 3D interpolated OTF array:
+      d_interpOTF.resize(new_nz * new_ny * (deskewedXdim+2) * sizeof(float));
+      makeOTFarray(d_interpOTF, deskewedXdim, new_ny, new_nz);
+    } // if (it == all_matching_files.begin())
 
-  CPUBuffer rotMatrix;
-  if (fabs(rotationAngle) > 0.0) {
-    rotMatrix.resize(4*sizeof(float));
-    rotationAngle *= M_PI/180;
-    float stretch = imgParams.dr / imgParams.dz;
-    float *p = (float *)rotMatrix.getPtr();
-    p[0] = cos(rotationAngle) * stretch;
-    p[1] = sin(rotationAngle) * stretch;
-    p[2] = -sin(rotationAngle);
-    p[3] = cos(rotationAngle);
-  }
-
-  if (RL_iters) {
-    timeval startTime, endTime;
-#ifndef _WIN32
-    gettimeofday(&startTime, NULL);
-#endif
-
-    if (bCPU) {
-      raw_image.max(0.f); // background subtraction earlier could have caused negative pixels
-      RichardsonLucy(raw_image, imgParams.dr, imgParams.dz,
-                     complexOTF, dkr_otf, dkz_otf,
-                     rdistcutoff, RL_iters,
-                     rfftplan, rfftplan_inv, raw_imageFFT);
+    if (bCrop) {
+      raw_image.crop(0, 0, 0, 0, new_nx, new_ny, new_nz, 0);
+      // If deskew is to happen, it'll be performed inside RichardsonLucy_GPU() on GPU;
+      // but here raw data's x dimension is still just "new_nx"
     }
-    else
-      RichardsonLucy_GPU(raw_image, background,
-                         imgParams.dr, imgParams.dz,
-                         complexOTF, dkr_otf, dkz_otf,
-                         rdistcutoff, RL_iters,
-                         deskewMatrix, newXdimension,
-                         rotMatrix);
-#ifndef _WIN32
-    gettimeofday(&endTime, NULL);
-    printf("%f seconds elapsed\n", (endTime.tv_sec -  startTime.tv_sec) +  (endTime.tv_usec -  startTime.tv_usec)/1.e6);
-#endif
-  }
-  else { // plain 1-step Wiener filtering
-    fftwf_execute_dft_r2c(rfftplan, raw_image.data(), (fftwf_complex *) raw_imageFFT.data());
 
-    wienerfilter(raw_imageFFT, 
-                 dkx, dky, dkz,
-                 complexOTF,
-                 dkr_otf, dkz_otf,
-                 rdistcutoff, wiener);
+    if (RL_iters) {
+      if (bCPU) {
+        raw_image -= background;
+        raw_image.max(0.f); // background subtraction earlier could have caused negative pixels
+        RichardsonLucy(raw_image, imgParams.dr, imgParams.dz,
+                       complexOTF, dkr_otf, dkz_otf,
+                       rdistcutoff, RL_iters,
+                       rfftplan, rfftplan_inv, raw_imageFFT);
+      }
+      else
+        RichardsonLucy_GPU(raw_image, background,
+                           // imgParams.dr, imgParams.dz,
+                           // complexOTF, dkr_otf, dkz_otf,
+                           d_interpOTF, RL_iters,
+                           deskewMatrix, deskewedXdim,
+                           rotMatrix,
+                           rfftplanGPU, rfftplanInvGPU);
+    }
+    else { // plain 1-step Wiener filtering
+      raw_image -= background;
+      fftwf_execute_dft_r2c(rfftplan, raw_image.data(), (fftwf_complex *) raw_imageFFT.data());
 
-    fftwf_execute_dft_c2r(rfftplan_inv, (fftwf_complex *) raw_imageFFT.data(), raw_image.data());
-    raw_image /= raw_image.size();
-  }
-  raw_image.save(ofiles.c_str());
+      wienerfilter(raw_imageFFT, 
+                   dkx, dky, dkz,
+                   complexOTF,
+                   dkr_otf, dkz_otf,
+                   rdistcutoff, wiener);
 
+      fftwf_execute_dft_c2r(rfftplan_inv, (fftwf_complex *) raw_imageFFT.data(), raw_image.data());
+      raw_image /= raw_image.size();
+    }
+    // raw_image.save(it->insert(pos-3, "_decon").c_str());
+    raw_image.save(makeOutputFilePath(*it).c_str());
+  } // iteration over all_matching_files
   return 0; 
 }

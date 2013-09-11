@@ -244,7 +244,7 @@ __host__ void makeOTFarray(GPUBuffer &otfarray, int nx, int ny, int nz)
   dim3 grid(blockNx, ny, nz);
 
   makeOTFarray_kernel<<<grid, block>>>( (cuFloatComplex *) otfarray.getPtr());
-  std::cout<< cudaGetErrorString(cudaGetLastError()) << std::endl;
+  std::cout<< "makeOTFarray(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
 }
 
 __global__ void scale_kernel(float * img, double factor)
@@ -403,8 +403,8 @@ __global__ void innerProduct_kernel(float * img1, float * img2,
     // we need to declare our shared memory volatile so that the compiler
     // doesn't reorder stores to it and induce incorrect behavior.
     volatile double *smem1 = sdata1;
-    // volatile double *smem2 = sdata2;
 
+    // Assuming blockSize is > 64:
     smem1[2*tid] += smem1[2*(tid + 32)];
     smem1[2*tid] += smem1[2*(tid + 16)];
     smem1[2*tid] += smem1[2*(tid +  8)];

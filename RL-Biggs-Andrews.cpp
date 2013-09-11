@@ -121,7 +121,7 @@ bool notGoodDimension(unsigned num)
     return true;
 }
 
-unsigned findOptimalDimension(unsigned inSize, int step=-1)
+unsigned findOptimalDimension(unsigned inSize, int step)
 {
   unsigned outSize = inSize;
   while (notGoodDimension(outSize))
@@ -130,24 +130,19 @@ unsigned findOptimalDimension(unsigned inSize, int step=-1)
   return outSize;
 }
 
-void RichardsonLucy_GPU(CImg<> & raw, float background, float dr, float dz, 
-                        CImg<> & otf, float dkr_otf, float dkz_otf, 
-                        float rcutoff, int nIter,
-                        CPUBuffer &deskewMatrix, int newXdim,
-                        CPUBuffer &rotationMatrix)
+void RichardsonLucy_GPU(CImg<> & raw, float background, 
+                        GPUBuffer & d_interpOTF, int nIter,
+                        CPUBuffer &deskewMatrix, int deskewedNx,
+                        CPUBuffer &rotationMatrix,
+                        cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU)
 {
   // "raw" contains the raw image, also used as the initial guess X_0
-
   unsigned int nx = raw.width();
   unsigned int ny = raw.height();
   unsigned int nz = raw.depth();
-  std::cout << nz << ", " << ny << ", " << nx << std::endl;
-
 
   unsigned int nxy = nx * ny;
   unsigned int nxy2 = (nx+2)*ny;
-
-  CPUBuffer raw1plane(nxy*sizeof(float));
 
 #ifdef _WIN32
   StopWatchWin stopwatch;
@@ -160,8 +155,9 @@ void RichardsonLucy_GPU(CImg<> & raw, float background, float dr, float dz,
    // allocate buffers in GPU device 0
   GPUBuffer X_k(nz * nxy * sizeof(float), 0);
   // transfer host data to GPU
-  cutilSafeCall(cudaMemcpy(X_k.getPtr(), raw.data(), nz*nxy*sizeof(float),
-                           cudaMemcpyHostToDevice));
+  // PinnedCPUBuffer raw1plane(nxy * sizeof(float));
+  // raw1plane.setFrom(raw.data(), 0, nz*nxy*sizeof(float), 0);
+  // raw1plane.set(&X_k, 0, nz*nxy*sizeof(float), 0);
 
   // for (unsigned int z=0; z<nz; z++) {
   //   raw1plane.setFrom(raw.data(0, 0, z), 0, nxy*sizeof(float), 0);
@@ -169,45 +165,23 @@ void RichardsonLucy_GPU(CImg<> & raw, float background, float dr, float dz,
   //                 (z*nxy) * sizeof(float));
   // }
 
+  cutilSafeCall(cudaMemcpy(X_k.getPtr(), raw.data(), nz*nxy*sizeof(float),
+                           cudaMemcpyHostToDevice));
+
   printf("%f msecs\n", stopwatch.getTime());
 
-  // resize the 3 dimensions to be cuFFT friendly (i.e., factoriz-able into 2^m*3^n*5^o*7^p)
+  // if (bCrop) {
+  //   GPUBuffer croppedImg(new_nx * new_ny * new_nz * sizeof(float), 0);
+  //   cropGPU(X_k, nx, ny, nz, new_nx, new_ny, new_nz, croppedImg);
 
-  bool bCrop = false;
-  unsigned new_ny = findOptimalDimension(ny);
-  if (new_ny != ny) {
-    printf("new ny=%d\n", new_ny);
-    bCrop = true;
-  }
+  //   X_k = croppedImg;
 
-  unsigned new_nz = findOptimalDimension(nz);
-  if (new_nz != nz) {
-    printf("new nz=%d\n", new_nz);
-    bCrop = true;
-  }
-
-  // only if no deskewing is happening do we want to change image width here
-  unsigned new_nx = nx;
-  if (!deskewMatrix.getSize()) {
-    new_nx = findOptimalDimension(nx);
-    if (new_nx != nx) {
-      printf("new nx=%d\n", new_nx);
-      bCrop = true;
-    }
-  }
-
-  if (bCrop) {
-    GPUBuffer croppedImg(new_nx * new_ny * new_nz * sizeof(float), 0);
-    cropGPU(X_k, nx, ny, nz, new_nx, new_ny, new_nz, croppedImg);
-
-    X_k = croppedImg;
-
-    nx = new_nx;
-    ny = new_ny;
-    nz = new_nz;
-    nxy = nx*ny;
-    nxy2 = (nx+2)*ny;
-  }
+  //   nx = new_nx;
+  //   ny = new_ny;
+  //   nz = new_nz;
+  //   nxy = nx*ny;
+  //   nxy2 = (nx+2)*ny;
+  // }
 
   // background subtraction:
   backgroundSubtraction_GPU(X_k, nx, ny, nz, background);
@@ -215,20 +189,22 @@ void RichardsonLucy_GPU(CImg<> & raw, float background, float dr, float dz,
   // if deskewMatrix's size > 0 then deskew raw data along x-axis first.
   GPUBuffer d_deskewMatrix;
   if (deskewMatrix.getSize()) {
-    unsigned deskewedNx = findOptimalDimension(newXdim);
-    printf("new nx=%d\n", deskewedNx);
+
     GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), 0);
   
     d_deskewMatrix = deskewMatrix; // should be done only for the first time point
 
     deskew_GPU(X_k, nx, ny, nz, d_deskewMatrix, deskewedRaw, deskewedNx);
-    std::cout<< cudaGetErrorString(cudaGetLastError()) << std::endl;
+
     // update raw (i.e., X_k) and its dimension variables.
     X_k = deskewedRaw;
 
     nx = deskewedNx;
     nxy = nx*ny;
     nxy2 = (nx+2)*ny;
+
+    raw.clear();
+    raw.assign(nx, ny, nz, 1);
   }
 
   GPUBuffer rawGPUbuf(X_k);  // make a copy of raw image
@@ -248,16 +224,6 @@ void RichardsonLucy_GPU(CImg<> & raw, float background, float dr, float dz,
 
 //   prepareOTFtexture(realpart.data(), imagpart.data(), realpart.width(), realpart.height());
   
-  // transfer a bunch of constants to device, including OTF array
-  float eps = std::numeric_limits<float>::epsilon();
-  transferConstants(nx, ny, nz, otf.height(), otf.width()/2,
-                    1/(dr*nx)/dkr_otf, 1/(dr*ny)/dkr_otf, 1/(dz*nz)/dkz_otf,
-                    eps, otf.data());
-
-  // make a 3D interpolated OTF array:
-  GPUBuffer d_interpOTF(nz * nxy2 * sizeof(float), 0);
-  makeOTFarray(d_interpOTF, nx, ny, nz);
-
   // CPUBuffer interpOTF(d_interpOTF); //.getSize());
   // // d_interpOTF.set(&interpOTF, 0, interpOTF.getSize(), 0);
 
@@ -267,25 +233,12 @@ void RichardsonLucy_GPU(CImg<> & raw, float background, float dr, float dz,
   // return;
   //debugging code ends
 
-  // 
-
-  // Create reusable cuFFT plans
-  cufftHandle rfftplanGPU, rfftplanInvGPU;
-  cufftResult cuFFTErr = cufftPlan3d(&rfftplanGPU, nz, ny, nx, CUFFT_R2C);
-  if (cuFFTErr != CUFFT_SUCCESS) {
-    std::cout << "Error code: " << cuFFTErr << std::endl;
-    throw std::runtime_error("cufftPlan3d() r2c failed.");
-  }
-  cuFFTErr = cufftPlan3d(&rfftplanInvGPU, nz, ny, nx, CUFFT_C2R);
-  if (cuFFTErr != CUFFT_SUCCESS) {
-    std::cout << "Error code: " << cuFFTErr << std::endl;
-    throw std::runtime_error("cufftPlan3d() c2r failed.");
-  }
-
   // Allocate GPU buffer for temp FFT result
   GPUBuffer fftGPUbuf(nz * nxy2 * sizeof(float), 0);
 
   double lambda=0;
+  float eps = std::numeric_limits<float>::epsilon();
+
   // R-L iteration
   for (int k = 0; k < nIter; k++) {
     std::cout << "Iteration " << k << std::endl;
@@ -314,10 +267,6 @@ void RichardsonLucy_GPU(CImg<> & raw, float background, float dr, float dz,
     calcCurrPrevDiff(X_k, Y_k, G_kminus1, nx, ny, nz);
   }
 
-  raw1plane.resize(nxy * sizeof(float));
-  raw.clear();
-  raw.assign(nx, ny, nz, 1);
-
   // Rotate decon result if requested:
   
   if (rotationMatrix.getSize()) {
@@ -326,23 +275,26 @@ void RichardsonLucy_GPU(CImg<> & raw, float background, float dr, float dz,
     GPUBuffer d_rotMatrix(rotationMatrix, 0);
 
     rotate_GPU(X_k, nx, ny, nz, d_rotMatrix, d_rotatedResult);
-
-    for (unsigned int z=0; z<nz; z++) {
-      // transfer from device to host one plane at a time
-      d_rotatedResult.set(&raw1plane, z*nxy*sizeof(float), (z+1)*nxy*sizeof(float), 0);
-      // transfer to "raw"
-      raw1plane.setPlainArray(raw.data(0, 0, z), 0, nxy*sizeof(float), 0);
-    }
+    cutilSafeCall(cudaMemcpy(raw.data(), d_rotatedResult.getPtr(), nz*nxy*sizeof(float),
+                             cudaMemcpyDeviceToHost));
+    // for (unsigned int z=0; z<nz; z++) {
+    //   // transfer from device to host one plane at a time
+    //   d_rotatedResult.set(&raw1plane, z*nxy*sizeof(float), (z+1)*nxy*sizeof(float), 0);
+    //   // transfer to "raw"
+    //   raw1plane.setPlainArray(raw.data(0, 0, z), 0, nxy*sizeof(float), 0);
+    // }
   }
 
   else {
     // Download from device memory back to "raw":
-    for (unsigned int z=0; z<nz; z++) {
-      // transfer from device to host one plane at a time
-      X_k.set(&raw1plane, z*nxy*sizeof(float), (z+1)*nxy*sizeof(float), 0);
-      // transfer to "raw"
-      raw1plane.setPlainArray(raw.data(0, 0, z), 0, nxy*sizeof(float), 0);
-    }
+    cutilSafeCall(cudaMemcpy(raw.data(), X_k.getPtr(), nz*nxy*sizeof(float),
+                             cudaMemcpyDeviceToHost));
+    // for (unsigned int z=0; z<nz; z++) {
+    //   // transfer from device to host one plane at a time
+    //   X_k.set(&raw1plane, z*nxy*sizeof(float), (z+1)*nxy*sizeof(float), 0);
+    //   // transfer to "raw"
+    //   raw1plane.setPlainArray(raw.data(0, 0, z), 0, nxy*sizeof(float), 0);
+    // }
   }
   printf("%f msecs\n", stopwatch.getTime());
   // result is returned in "raw"

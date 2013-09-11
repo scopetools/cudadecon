@@ -62,7 +62,7 @@ find_package(TIFF REQUIRED)
 if(WIN32)
   find_package( Boost )
 else()
-  find_package( Boost REQUIRED COMPONENTS program_options )
+  find_package( Boost REQUIRED COMPONENTS program_options filesystem regex system)
 endif(WIN32)
 
 set(CUDA_NVCC_FLAGS
@@ -95,6 +95,7 @@ CUDA_ADD_EXECUTABLE(
 	cudaDeconv
 	linearDecon.cpp
 	RL-Biggs-Andrews.cpp
+	boostfs.cpp
 	RLgpuImpl.cu
 	geometryTransform.cu
   )
@@ -118,6 +119,9 @@ target_link_libraries(
   fftw3f_threads
   X11
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
+  ${Boost_FILESYSTEM_LIBRARY}
+  ${Boost_REGEX_LIBRARY}
+  ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
   )
 endif(WIN32)

@@ -5,6 +5,7 @@
 
 #include <string>
 #include <complex>
+#include <vector>
 
 #include <omp.h>
 
@@ -14,6 +15,7 @@
 
 #include <CPUBuffer.h>
 #include <GPUBuffer.h>
+#include <PinnedCPUBuffer.h>
 
 #ifdef _WIN32
 #define _USE_MATH_DEFINES
@@ -26,7 +28,7 @@
 using namespace cimg_library;
 
 struct ImgParams {
-  int nx, ny, nz, nt;
+//  int nx, ny, nz, nt;
   float dr, dz, wave;
 };
 
@@ -37,17 +39,17 @@ void RichardsonLucy(CImg<> & raw, float dr, float dz,
                       float rcutoff, int nIter,
                       fftwf_plan rfftplan, fftwf_plan rfftplan_inv, CImg<> &fft);
 
-void RichardsonLucy_GPU(CImg<> & raw, float background, float dr, float dz, 
-                        CImg<> & otf, float dkr_otf, float dkz_otf, 
-                        float rcutoff, int nIter,
-                        CPUBuffer &deskewMatrix, int newXdim,
-                        CPUBuffer &rotationMatrix);
+void RichardsonLucy_GPU(CImg<> & raw, float background,
+                        GPUBuffer& otf, int nIter,
+                        CPUBuffer &deskewMatrix, int deskewedNx,
+                        CPUBuffer &rotationMatrix,
+                        cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU);
 
 void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
                        float kxscale, float kyscale, float kzscale,
                        float eps, float *otf);
-
-void prepareOTFtexture(float * realpart, float * imagpart, int nx, int ny);
+unsigned findOptimalDimension(unsigned inSize, int step=-1);
+// void prepareOTFtexture(float * realpart, float * imagpart, int nx, int ny);
 void makeOTFarray(GPUBuffer &otfarray, int nx, int ny, int nz);
 
 void backgroundSubtraction_GPU(GPUBuffer &img, int nx, int ny, int nz, float background);
@@ -81,4 +83,8 @@ void rotate_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
 void cropGPU(GPUBuffer &inBuf, int nx, int ny, int nz,
              int new_nx, int new_ny, int new_nz,
              GPUBuffer &outBuf);
+
+std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern);
+std::string makeOutputFilePath(std::string inputFileName, std::string insert=std::string("_decon"));
+
 #endif
