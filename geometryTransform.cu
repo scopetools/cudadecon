@@ -3,15 +3,15 @@
 
 
 __global__ void deskew_kernel(float *in, int nx, int ny, int nz,
-                              float *out, int nxOut,
-                              float *Tvector)
+                              float *out, int nxOut, int extraShift,
+                              double deskewFactor)
 {
   unsigned xout = blockIdx.x * blockDim.x + threadIdx.x;
   unsigned yout = blockIdx.y;
   unsigned zout = blockIdx.z;
 
   if (xout < nxOut) {
-    float xin = (xout - nxOut/2.) - Tvector[0]*(zout-nz/2.) + nx/2.; // - Tvector[1];
+    float xin = (xout - nxOut/2.+extraShift) - deskewFactor*(zout-nz/2.) + nx/2.;
 
     unsigned indout = zout * nxOut * ny + yout * nxOut + xout;
     if (xin >= 0 && xin < nx-1) {
@@ -32,7 +32,8 @@ __global__ void deskew_kernel(float *in, int nx, int ny, int nz,
 }
 
 __host__ void deskew_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
-                         GPUBuffer &deskewMatrix, GPUBuffer &outBuf, int newNx)
+                         double deskewFactor, GPUBuffer &outBuf,
+                         int newNx, int extraShift)
 {
   dim3 block(128, 1, 1);
   unsigned nxBlocks = (unsigned ) ceil(newNx / (float) block.x);
@@ -41,7 +42,7 @@ __host__ void deskew_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
   deskew_kernel<<<grid, block>>>((float *) inBuf.getPtr(),
                                  nx, ny, nz, 
                                  (float *) outBuf.getPtr(), newNx,
-                                 (float *) deskewMatrix.getPtr());
+                                 extraShift, deskewFactor);
   std::cout<< "deskew_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
 }
 
@@ -130,5 +131,5 @@ __host__ void cropGPU(GPUBuffer &inBuf, int nx, int ny, int nz,
                                new_nx, new_ny, new_nz,
                                (float *) outBuf.getPtr());
 
-  // std::cout<< "cropGPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+  std::cout<< "cropGPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
 }

@@ -130,9 +130,13 @@ unsigned findOptimalDimension(unsigned inSize, int step)
   return outSize;
 }
 
+// static globals for photobleach correction:
+static double intensity_overall0 = 0.;
+static bool bFirstTime = true;
+
 void RichardsonLucy_GPU(CImg<> & raw, float background, 
                         GPUBuffer & d_interpOTF, int nIter,
-                        CPUBuffer &deskewMatrix, int deskewedNx,
+                        double deskewFactor, int deskewedNx, int extraShift,
                         CPUBuffer &rotationMatrix,
                         cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU)
 {
@@ -183,18 +187,25 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   //   nxy2 = (nx+2)*ny;
   // }
 
-  // background subtraction:
+  // background subtraction (including thresholding by 0):
   backgroundSubtraction_GPU(X_k, nx, ny, nz, background);
+  // Calculate sum for bleach correction:
+  double intensity_overall = meanAboveBackground_GPU(X_k, nx, ny, nz);
+  if (bFirstTime) {
+    intensity_overall0 = intensity_overall;
+    bFirstTime = false;
+  }
+  else
+    rescale_GPU(X_k, nx, ny, nz, intensity_overall0/intensity_overall);
+  printf("%lf\n", intensity_overall);
 
-  // if deskewMatrix's size > 0 then deskew raw data along x-axis first.
-  GPUBuffer d_deskewMatrix;
-  if (deskewMatrix.getSize()) {
+  // if abs(deskewFactor) > 0 then deskew raw data along x-axis first.
+
+  if (fabs(deskewFactor) > 0.0) {
 
     GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), 0);
   
-    d_deskewMatrix = deskewMatrix; // should be done only for the first time point
-
-    deskew_GPU(X_k, nx, ny, nz, d_deskewMatrix, deskewedRaw, deskewedNx);
+    deskew_GPU(X_k, nx, ny, nz, deskewFactor, deskewedRaw, deskewedNx, extraShift);
 
     // update raw (i.e., X_k) and its dimension variables.
     X_k = deskewedRaw;

@@ -7,9 +7,7 @@ namespace po = boost::program_options;
 
 #include <stdio.h>
 
-#include <IMInclude.h>
-#include <sfftw.h>
-#include <srfftw.h>
+#include <fftw3.h>
 
 #include <tiffio.h>
 
@@ -25,27 +23,23 @@ void determine_center_and_background(float *stack5phases, int nx, int ny, int nz
 void shift_center(std::complex<float> *bands, int nx, int ny, int nz, float xc, float yc, float zc);
 void cleanup(std::complex<float> *otfkxkz, int nx, int nz, float dkr, float dkz, float linespacing, int lambdanm, int twolens, float NA, float NIMM);
 void radialft(std::complex<float> *bands, int nx, int ny, int nz, std::complex<float> *avg);
-void fixorigin(std::complex<float> *otfkxkz, int nx, int nz, int kx1, int kx2);
-void rescale(std::complex<float> *otfkxkz, int nx, int nz);
 
-void outputMRC(int ostream_no, std::complex<float> *bands, IW_MRC_HEADER *header, int nx, int ny, int nz, float dkr, float dkz);
-void outputTIFF(TIFF *tif, std::complex<float> *bands, int nx, int ny, int nz, float dkr, float dkz);
+bool fixorigin(std::complex<float> *otfkxkz, int nx, int nz, int kx2);
+void rescale(std::complex<float> *otfkxkz, int nx, int nz);
 
 
 int main(int argc, char **argv)
 {
-  std::string ifiles, ofiles, I2Mfiles, order0files;
-  int istream_no=1, ostream_no=2;
-  int ixyz[3], mxyz[3], pixeltype;      /* variables for IMRdHdr call */
-  float min, max, mean;                 /* variables for IMRdHdr call */
+  std::string ifiles, ofiles;
   int nx, ny, nz, nxy;
   int i, j, z;
   float dr, dz, dkr, dkz, background, estBackground, xcofm, ycofm, zcofm;
   float *floatimage;
   std::complex<float> *bands, *avg_output;
-  rfftwnd_plan rfftplan3d;
-  IW_MRC_HEADER header, otfheader;
-  std::vector<int> interpkr(2);
+  fftwf_plan rfftplan3d;
+
+  // std::vector<int> interpkr(2);
+  int interpkr;
   float NA, NIMM;
   int lambdanm;
   int krmax=0;
@@ -59,14 +53,14 @@ int main(int argc, char **argv)
     ("xyres", po::value<float>(&dr)->default_value(.104), "x-y pixel size")
     ("zres", po::value<float>(&dz)->default_value(.104), "z pixel size")
     ("wavelength", po::value<int>(&lambdanm)->default_value(530), "emission wavelength in nm")
-    ("fixorigin", po::value< std::vector<int> >(&interpkr)->multitoken(),
-     "extrapolate near the origin using these pixels on Kr axis")
+    ("fixorigin", po::value<int>(&interpkr)->default_value(5),
+     "for all kz, extrapolate using pixels kr=1 to this pixel to get value for kr=0")
     ("krmax", po::value<int>(&krmax)->default_value(0),
      "pixels outside this limit will be zeroed (overwriting estimated value from NA and NIMM)")
     ("nocleanup", po::value<bool>(&bDoCleanup)->implicit_value(false), "elect not to do clean-up outside OTF support")
     ("background", po::value<float>(&background), "use user-supplied background instead of the estimated")
-    ("input-file", po::value<std::string>(&ifiles), "input file")
-    ("output-file", po::value<std::string>(&ofiles), "output file")
+    ("input-file", po::value<std::string>(&ifiles)->required(), "input file")
+    ("output-file", po::value<std::string>(&ofiles)->required(), "output file")
     ("help,h", "produce help message")
     ;
 
@@ -79,21 +73,17 @@ int main(int argc, char **argv)
 
   store(po::command_line_parser(argc, argv).
         options(progopts).positional(p).run(), varsmap);
-  notify(varsmap);
 
   if (varsmap.count("help")) {
     std::cout << progopts << "\n";
     return 0;
   }
 
+  notify(varsmap);
+
   if (varsmap.count("background")) {
     bUserBackground = true;
   }
-
-
-  // printf("NA=%f,fixorign=%d,%d\ndr=%f, dz=%f\n", NA, interpkr[0], interpkr[1], dr, dz);
-
-  IMAlPrt(0);
 
   if (!ifiles.length()) {
     printf(" PSF dataset file name: ");
@@ -104,40 +94,13 @@ int main(int argc, char **argv)
     std::cin >> ofiles;
   }
 
-  TIFF *input_tiff = TIFFOpen(ifiles.c_str(), "r");
+  TIFFSetWarningHandler(NULL);
 
-  CImg<> rawtiff;
-  bool bUseTIFF = false;
+  CImg<> rawtiff(ifiles.c_str());
 
-  if (! input_tiff) {
-    if (IMOpen(istream_no, ifiles.c_str(), "ro")) {
-      fprintf(stderr, "File %s does not exist.\n", ifiles.c_str());
-      return -1;
-    }
-    IMRdHdr(istream_no, ixyz, mxyz, &pixeltype, &min, &max, &mean);
-    IMGetHdr(istream_no, &header);
-
-    nx = header.nx;
-    ny = header.ny;
-    nz = header.nz;
-    dr = header.ylen;
-    dz = header.zlen;
-
-    if (IMOpen(ostream_no, ofiles.c_str(), "new")) {
-      fprintf(stderr, "File %s can not be created.\n", ofiles.c_str());
-      return -1;
-    }
-  }
-  else {
-    bUseTIFF = true;
-    TIFFSetWarningHandler(NULL);
-    TIFFClose(input_tiff);
-
-    rawtiff.assign(ifiles.c_str());
-    nz = rawtiff.depth();
-    ny = rawtiff.height();
-    nx = rawtiff.width();
-  }
+  nz = rawtiff.depth();
+  ny = rawtiff.height();
+  nx = rawtiff.width();
 
   printf("nx=%d, ny=%d, nz=%d\n", nx, ny, nz);
 
@@ -152,17 +115,12 @@ int main(int argc, char **argv)
   printf("Reading data...\n\n");
 
   for(z=0; z<nz; z++)
-    if (!bUseTIFF)
-      for (i=0; i<ny; i++)
-        IMRdLin(istream_no, floatimage+z*nxy+i*(nx+2));
-    else {
-      for (i=0; i<ny; i++) {
-        for (j=0; j<nx; j++)
-          floatimage[z*nxy+i*(nx+2)+j] = rawtiff(j, i, z);
-      }
+    for (i=0; i<ny; i++) {
+      for (j=0; j<nx; j++)
+        floatimage[z*nxy+i*(nx+2)+j] = rawtiff(j, i, z);
     }
 
-  /* Before FFT, use center band to estimate bead center position */
+  /* Before FFT, estimate bead center position */
   determine_center_and_background(floatimage, nx, ny, nz, &xcofm, &ycofm, &zcofm, &estBackground);
 
   printf("Center of mass is (%.3f, %.3f, %.3f)\n\n", xcofm, ycofm, zcofm);
@@ -177,11 +135,13 @@ int main(int argc, char **argv)
         floatimage[z*nxy + i*(nx+2) + j] -= background;
   }
 
-  rfftplan3d = rfftw3d_create_plan(nz, ny, nx, FFTW_REAL_TO_COMPLEX, FFTW_ESTIMATE | FFTW_IN_PLACE);
+  rfftplan3d = fftwf_plan_dft_r2c_3d(nz, ny, nx, floatimage, 
+                                     (fftwf_complex *) floatimage, FFTW_ESTIMATE);
   printf("Before fft\n");
-  rfftwnd_one_real_to_complex(rfftplan3d, floatimage, NULL);
+  fftwf_execute_dft_r2c(rfftplan3d, floatimage, (fftwf_complex *) floatimage);
 
-  fftwnd_destroy_plan(rfftplan3d);
+  fftwf_destroy_plan(rfftplan3d);
+
   printf("After fft\n\n");
 
   /* modify the phase of bands, so that it corresponds to FFT of a bead at origin */
@@ -193,25 +153,22 @@ int main(int argc, char **argv)
 
   radialft(bands, nx, ny, nz, avg_output);
 
-  if (!bUseTIFF)
-    lambdanm = header.iwav1;
-
   if (bDoCleanup)
     cleanup(avg_output, nx, nz, dkr, dkz, 1.0, lambdanm, krmax, NA, NIMM);
 
-  if (interpkr[0] > 0 || interpkr[1] > 0)
-    fixorigin(avg_output, nx, nz, interpkr[0], interpkr[1]);
+  if (interpkr > 0)
+    while (!fixorigin(avg_output, nx, nz, interpkr)) {
+      interpkr --;
+      if (interpkr < 5)
+        throw std::runtime_error("#pixels < 5 used in kr=0 extrapolation");
+    }
+  printf("%d\n", interpkr);
   rescale(avg_output, nx, nz);
 
   /* For side bands, combine bandre's and bandim's into bandplus */
   /* Shouldn't this be done later on the averaged bands? */
 
-  if (!bUseTIFF) {
-    otfheader = header;
-    outputMRC(ostream_no, avg_output, &otfheader, nx, ny, nz, dkr, dkz);
-  }
-  else
-    output_tiff.save_tiff(ofiles.c_str());
+  output_tiff.save_tiff(ofiles.c_str());
 }
 
 /*  locate peak pixel to subpixel accuracy by fitting parabolas  */
@@ -431,67 +388,32 @@ void cleanup(std::complex<float> *otfkxkz, int nx, int nz, float dkr, float dkz,
   }
 }
 
-
-void outputMRC(int ostream_no, std::complex<float> *bands, IW_MRC_HEADER *header, int nx, int ny, int nz, float dkr, float dkz)
+bool fixorigin(std::complex<float> *otfkxkz, int nx, int nz, int kx2)
 {
+  // linear fit the value at kx=0 using kx in [1, kx2]
+  double mean_kx = (kx2+1)/2.; // the mean of [1, 2, ..., n] is (n+1)/2
 
-  printf("In outputMRC()\n");
+  for (int z=0; z<nz; z++) {
+    std::complex<double> mean_val=0;
+    std::complex<double> slope_numerator=0;
+    std::complex<double> slope_denominat=0;
 
-  header->nx = nz;
-  header->ny = nx/2+1;
-  header->nz = 1;
-  header->mode = IW_COMPLEX;
-  header->xlen = dkz;
-  header->ylen = dkr;
-  header->zlen = 0;
-  header->amin = 0;
-  header->amax = 1;
+    for (int x=1; x<=kx2; x++)
+      mean_val += otfkxkz[x*nz + z];
 
-  IMPutHdr(ostream_no, header);
-  IMWrSec(ostream_no, bands);
-  IMWrHdr(ostream_no, header->label, 0, header->amin, header->amax, header->amean);
-  IMClose(ostream_no);
-}
-
-void outputTIFF(TIFF *tif, std::complex<float> *bands, int nx, int ny, int nz, float dkr, float dkz)
-{
-  TIFFSetField(tif, TIFFTAG_XRESOLUTION, dkz);
-  TIFFSetField(tif, TIFFTAG_YRESOLUTION, dkr);
-  save_tiff(tif, 0, 0, 1, nz*2, nx/2+1, (float*) bands);
-}
-
-
-void fixorigin(std::complex<float> *otfkxkz, int nx, int nz, int kx1, int kx2)
-{
-  float meani, slope, avg, lineval;
-  int numvals, i, j;
-  double *sum, totsum=0, ysum=0, sqsum=0;
-
-  printf("In fixorigin()\n");
-  meani = 0.5*(kx1+kx2);
-  numvals = kx2-kx1+1;
-  sum = (double *) malloc((kx2+1)*sizeof(double));
-
-  for (i=0; i<=kx2; i++) {
-    sum[i] = 0;
-
-    for (j=0; j<nz; j++)
-      sum[i] += otfkxkz[i*nz+j].real(); /* imaginary parts will cancel each other because of symmetry */
-    if (i>=kx1) {
-      totsum += sum[i];
-      ysum += sum[i] * (i-meani);
-      sqsum += (i-meani) * (i-meani);
+    mean_val /= kx2;
+    for (int x=1; x<=kx2; x++) {
+      std::complex<double> complexval = otfkxkz [x*nz+z];
+      slope_numerator += (x - mean_kx) * (complexval - mean_val);
+      slope_denominat += (x - mean_kx) * (x - mean_kx);
+    }
+    std::complex<double> slope = slope_numerator / slope_denominat;
+    otfkxkz[z] = mean_val - slope * mean_kx;  // intercept at kx=0
+    if (z==0 && std::abs(otfkxkz[z]) <= std::abs(otfkxkz[nz+z])) {
+      return false; // indicating kx2 may be too large
     }
   }
-  slope = ysum / sqsum;
-  avg = totsum / numvals;
-
-  for (i=0; i<kx1; i++) {
-    lineval = avg + (i-meani)*slope;
-    otfkxkz[i*nz] -= /*std::complex<float>*/(sum[i] - lineval);
-  }
-
-  free(sum);
+  return true;
 }
 
 void rescale(std::complex<float> *otfkxkz, int nx, int nz)

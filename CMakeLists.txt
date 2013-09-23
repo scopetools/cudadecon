@@ -22,16 +22,16 @@ if(WIN32)
 set(CMAKE_CXX_FLAGS
   ${CMAKE_CXX_FLAGS}
   " /openmp")
-set(CMAKE_CXX_RELEASE_FLAGS
-  ${CMAKE_CXX_RELEASE_FLAGS}
+set(CMAKE_CXX_FLAGS_RELEASE
+  ${CMAKE_CXX_FLAGS_RELEASE}
   " /DNDEBUG /O2")
 else(WIN32)
 set(CMAKE_CXX_FLAGS
   ${CMAKE_CXX_FLAGS}
   "-fopenmp")
-set(CMAKE_CXX_RELEASE_FLAGS
-  ${CMAKE_CXX_RELEASE_FLAGS}
-  "-DNDEBUG -O3")
+# set(CMAKE_CXX_FLAGS_RELEASE
+#   ${CMAKE_CXX_FLAGS_RELEASE}
+#   " -DNDEBUG -O3")
 endif(WIN32)
 
 IF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
@@ -104,12 +104,24 @@ add_dependencies(cudaDeconv
   Buffer
   )
 
+add_executable(radialft radialft-nonSIM.cpp)
+add_executable(otfviewer OTF_TIFF_viewer.cpp)
+
 if(WIN32)
 target_link_libraries(
   cudaDeconv
   Buffer
   libtiff
   libfftw3f-3
+  )
+target_link_libraries(
+  radialft
+  libtiff
+  libfftw3f-3
+  )
+target_link_libraries(
+  otfviewer
+  libtiff
   )
 else(WIN32)
 target_link_libraries(
@@ -124,8 +136,20 @@ target_link_libraries(
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
   )
+target_link_libraries(
+  radialft
+  fftw3f
+  fftw3f_threads
+  X11
+  ${Boost_PROGRAM_OPTIONS_LIBRARY}
+  ${TIFF_LIBRARIES}
+  )
+target_link_libraries(
+  otfviewer
+  ${TIFF_LIBRARIES}
+  X11
+  )
 endif(WIN32)
 
 CUDA_ADD_CUFFT_TO_TARGET(cudaDeconv)
-
 

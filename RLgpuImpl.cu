@@ -25,6 +25,8 @@ __global__ void currPrevDiff_kernel(float * img1, float * img2, float * img3);
 __global__ void innerProduct_kernel(float * img1, float * img2,
                                     double * intRes1, double * intRes2);
 __global__ void updatePrediction_kernel(float * Y_k, float * X_k, float *X_km1, float lambda);
+__global__ void summation_kernel(float * img, double * intRes, int n);
+__global__ void sumAboveThresh_kernel(float * img, double * intRes, unsigned * counter, float thresh, int n);
 
 // Utility class used to avoid linker errors with extern
 // unsized shared memory arrays with templated type
@@ -116,6 +118,7 @@ __host__ void backgroundSubtraction_GPU(GPUBuffer &img, int nx, int ny, int nz, 
   dim3 block(nThreads, 1, 1);
 
   bgsubtr_kernel<<<grid, block>>>((float *) img.getPtr(), nx*ny*nz, background);
+  std::cout<< "backgroundSubtraction_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
 }
 
 __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
@@ -365,7 +368,7 @@ __global__ void innerProduct_kernel(float * img1, float * img2,
 // Using reduction to implement two inner products (img1.dot.img2 and img2.dot.img2)
 // Copied from CUDA "reduction" sample code reduce4()
 {
-  double *sdata1 = SharedMemory<double>();
+  double *sdata = SharedMemory<double>();
   // shared memory; even-numbered indices for img1.dot.img2;
   // odd-numbered indices for img2.dot.img2
 
@@ -384,15 +387,15 @@ __global__ void innerProduct_kernel(float * img1, float * img2,
     mySum2 += img2[indPlusBlockDim] * img2[indPlusBlockDim];
   }
 
-  sdata1[2*tid] = mySum1;
-  sdata1[2*tid + 1] = mySum2;
+  sdata[2*tid] = mySum1;
+  sdata[2*tid + 1] = mySum2;
   __syncthreads();
 
   // do reduction in shared mem
   for (unsigned int s=blockDim.x/2; s>32; s>>=1) {
     if (tid < s) {
-      sdata1[2*tid] += sdata1[2*(tid + s)];
-      sdata1[2*tid +1] += sdata1[2*(tid + s) +1];
+      sdata[2*tid] += sdata[2*(tid + s)];
+      sdata[2*tid +1] += sdata[2*(tid + s) +1];
     }
 
     __syncthreads();
@@ -402,7 +405,7 @@ __global__ void innerProduct_kernel(float * img1, float * img2,
     // now that we are using warp-synchronous programming (below)
     // we need to declare our shared memory volatile so that the compiler
     // doesn't reorder stores to it and induce incorrect behavior.
-    volatile double *smem1 = sdata1;
+    volatile double *smem1 = sdata;
 
     // Assuming blockSize is > 64:
     smem1[2*tid] += smem1[2*(tid + 32)];
@@ -420,8 +423,8 @@ __global__ void innerProduct_kernel(float * img1, float * img2,
   }
   // write result for this block to global mem
   if (tid == 0) {
-    intRes1[blockIdx.x] = sdata1[0];
-    intRes2[blockIdx.x] = sdata1[1];
+    intRes1[blockIdx.x] = sdata[0];
+    intRes2[blockIdx.x] = sdata[1];
   }
 }
 
@@ -446,4 +449,161 @@ __global__ void updatePrediction_kernel(float * Y_k, float * X_k, float *X_km1, 
     Y_k[ind] = X_k[ind] + lambda * (X_k[ind] - X_km1[ind]);
     Y_k[ind] = (Y_k[ind] > 0) ? Y_k[ind] : 0;
   }
+}
+
+__host__ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz)
+{
+  unsigned nThreads = 1024;
+  unsigned nBlocks = (unsigned) ceil( nx*ny*nz /(float) nThreads/2 );
+  unsigned smemSize = nThreads * sizeof(double);
+
+  // used for holding intermediate reduction results; one for each thread block
+  GPUBuffer d_intres(nBlocks * sizeof(double), 0);
+
+  summation_kernel<<<nBlocks, nThreads, smemSize>>>((float *) img.getPtr(),
+                                                    (double *) d_intres.getPtr(), nx*ny*nz);
+  // download intermediate results to host:
+  CPUBuffer intRes(d_intres);
+  double sum=0;
+  double *p=(double *)intRes.getPtr();
+  for (int i=0; i<nBlocks; i++)
+    sum += *p++;
+
+  float mean = sum/(nx*ny*nz);
+
+  GPUBuffer d_counter(nBlocks * sizeof(unsigned), 0);
+  smemSize = nThreads * (sizeof(double) + sizeof(unsigned));
+  sumAboveThresh_kernel<<<nBlocks, nThreads, smemSize>>>((float *) img.getPtr(),
+                                                         (double *) d_intres.getPtr(),
+                                                         (unsigned *) d_counter.getPtr(),
+                                                         mean, nx*ny*nz);
+  
+  // download intermediate results to host:
+  CPUBuffer counter(d_counter);
+  intRes = d_intres;
+  sum=0;
+  unsigned count = 0;
+  p=(double *)intRes.getPtr();
+  unsigned *pc = (unsigned *) counter.getPtr();
+  for (int i=0; i<nBlocks; i++) {
+    sum += *p++;
+    count += *pc++;
+  }
+
+  printf("mean=%f, sum=%lf, count=%d\n", mean, sum, count);
+  return sum/count;
+}
+
+__global__ void summation_kernel(float * img, double * intRes, int n)
+// Copied from CUDA "reduction" sample code reduce4()
+{
+  double *sdata = SharedMemory<double>();
+
+  unsigned tid = threadIdx.x;
+  unsigned ind = blockIdx.x * blockDim.x*2 + threadIdx.x;
+
+  double mySum= (ind < n) ? img[ind] : 0;
+
+  if (ind + blockDim.x < n)
+    mySum += img[ind + blockDim.x];
+
+  sdata[tid] = mySum;
+  __syncthreads();
+
+  // do reduction in shared mem
+  for (unsigned int s=blockDim.x/2; s>32; s>>=1) {
+    if (tid < s) {
+      sdata[tid] += sdata[tid + s];
+    }
+    __syncthreads();
+  }
+
+  if (tid < 32) {
+    // now that we are using warp-synchronous programming (below)
+    // we need to declare our shared memory volatile so that the compiler
+    // doesn't reorder stores to it and induce incorrect behavior.
+    volatile double *smem = sdata;
+
+    // Assuming blockSize is > 64:
+    smem[tid] += smem[(tid + 32)];
+    smem[tid] += smem[(tid + 16)];
+    smem[tid] += smem[(tid +  8)];
+    smem[tid] += smem[(tid +  4)];
+    smem[tid] += smem[(tid +  2)];
+    smem[tid] += smem[(tid +  1)];
+  }
+  // write result for this block to global mem
+  if (tid == 0)
+    intRes[blockIdx.x] = sdata[0];
+}
+
+
+__global__ void sumAboveThresh_kernel(float * img, double * intRes, unsigned * counter, float thresh, int n)
+// Adapted from CUDA "reduction" sample code reduce4()
+{
+// Size of shared memory allocated is nThreads * (sizeof(double) + sizeof(unsigned))
+// The first nThreads * sizeof(double) bytes are used for image intensity sum;
+// the next nThreads * sizeof(unsigned) bytes are for counting pixels whose intensity is > thresh
+  double *sdata = SharedMemory<double>();
+  unsigned *count = (unsigned *) (sdata + blockDim.x);
+
+  unsigned tid = threadIdx.x;
+  unsigned ind = blockIdx.x * blockDim.x*2 + threadIdx.x;
+
+  double mySum= 0;
+  unsigned myCount = 0;
+  if (ind < n && img[ind] > thresh) {
+    mySum = img[ind]; 
+    myCount ++;
+  }
+
+  unsigned ind2 = ind + blockDim.x;
+  if (ind2 < n && img[ind2] > thresh) {
+    mySum += img[ind2];
+    myCount ++;
+  }
+
+  sdata[tid] = mySum;
+  count[tid] = myCount;
+  __syncthreads();
+
+  // do reduction in shared mem
+  for (unsigned int s=blockDim.x/2; s>32; s>>=1) {
+    if (tid < s) {
+      sdata[tid] += sdata[tid + s];
+      count[tid] += count[tid + s];
+    }
+    __syncthreads();
+  }
+
+  if (tid < 32) {
+    volatile double *smem = sdata;
+    volatile unsigned *cmem = count;
+
+    smem[tid] += smem[(tid + 32)];
+    smem[tid] += smem[(tid + 16)];
+    smem[tid] += smem[(tid +  8)];
+    smem[tid] += smem[(tid +  4)];
+    smem[tid] += smem[(tid +  2)];
+    smem[tid] += smem[(tid +  1)];
+    cmem[tid] += cmem[(tid + 32)];
+    cmem[tid] += cmem[(tid + 16)];
+    cmem[tid] += cmem[(tid +  8)];
+    cmem[tid] += cmem[(tid +  4)];
+    cmem[tid] += cmem[(tid +  2)];
+    cmem[tid] += cmem[(tid +  1)];
+  }
+  // write result for this block to global mem
+  if (tid == 0) {
+    intRes[blockIdx.x] = sdata[0];
+    counter[blockIdx.x] = count[0];
+  }
+}
+
+__host__ void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale)
+{
+  unsigned nThreads = 1024;
+  unsigned nBlocks = (unsigned) ceil( nx*ny*nz / (float) nThreads );
+  scale_kernel<<<nBlocks, nThreads>>>((float *) img.getPtr(), scale);
+  std::cout<< "rescale_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
 }

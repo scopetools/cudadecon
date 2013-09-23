@@ -41,7 +41,7 @@ void RichardsonLucy(CImg<> & raw, float dr, float dz,
 
 void RichardsonLucy_GPU(CImg<> & raw, float background,
                         GPUBuffer& otf, int nIter,
-                        CPUBuffer &deskewMatrix, int deskewedNx,
+                        double deskewFactor, int deskewedNx, int extraShift,
                         CPUBuffer &rotationMatrix,
                         cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU);
 
@@ -75,7 +75,7 @@ void updatePrediction(GPUBuffer &Y_k, GPUBuffer &X_k, GPUBuffer &X_kminus1,
 
 
 void deskew_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
-                GPUBuffer &deskewMatrix, GPUBuffer &outBuf, int newNx);
+                double deskewFactor, GPUBuffer &outBuf, int newNx, int extraShift);
 
 void rotate_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
                 GPUBuffer &rotMatrix, GPUBuffer &outBuf);
@@ -83,6 +83,8 @@ void rotate_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
 void cropGPU(GPUBuffer &inBuf, int nx, int ny, int nz,
              int new_nx, int new_ny, int new_nz,
              GPUBuffer &outBuf);
+double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz);
+void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale);
 
 std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern);
 std::string makeOutputFilePath(std::string inputFileName, std::string insert=std::string("_decon"));

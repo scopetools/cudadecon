@@ -152,6 +152,8 @@ int main(int argc, char *argv[])
   // bool bPSF = false;
   float deskewAngle=0.0;
   float rotationAngle=0.0;
+  unsigned outputWidth;
+  int extraShift=0;
 
   // IMAlPrt(0);       /* suppress printout of file header info */
 
@@ -165,15 +167,15 @@ int main(int argc, char *argv[])
     ("drpsf", po::value<float>(&dr_psf)->default_value(.104), "PSF x-y pixel size (um)")
     ("dzpsf,Z", po::value<float>(&dz_psf)->default_value(.1), "PSF z step (um)")
     ("wavelength,l", po::value<float>(&imgParams.wave)->default_value(.525), "emission wavelength (um)")
-
     ("wiener,w", po::value<float>(&wiener)->default_value(1e-2), "Wiener constant (regularization factor)")
     ("background,b", po::value<float>(&background)->default_value(90.f), "user-supplied background")
     ("NA,n", po::value<float>(&NA)->default_value(1.2), "numerical aperture")
     ("RL", po::value<int>(&RL_iters)->default_value(0), "run Richardson-Lucy how-many iterations")
     ("CPU,C", po::value<bool>(&bCPU)->implicit_value(true), "use CPU code to run R-L")
     ("deskew,D", po::value<float>(&deskewAngle)->default_value(0.0), "Deskew angle; if not 0.0 then perform deskewing before deconv")
+    ("width,W", po::value<unsigned>(&outputWidth)->default_value(0), "If deskewed, the output image's width")
+    ("shift,s", po::value<int>(&extraShift)->default_value(0), "If deskewed, the output image's extra shift in X (positive->left")
     ("rotate,R", po::value<float>(&rotationAngle)->default_value(0.0), "rotation angle; if not 0.0 then perform rotation around y axis after deconv")
-    // ("PSF", po::value<bool>(&bPSF)->implicit_value(true), "PSF instead of OTF file is provided")
     ("input-dir", po::value<std::string>(&datafolder)->required(), "input folder name")
     ("otf-file", po::value<std::string>(&otffiles)->required(), "OTF file")
     ("filename-pattern", po::value<std::string>(&filenamePattern)->required(), "pattern in file names")
@@ -205,7 +207,8 @@ int main(int argc, char *argv[])
   float dkr_otf, dkz_otf;
   float dkx, dky, dkz, rdistcutoff;
   fftwf_plan rfftplan=NULL, rfftplan_inv=NULL;
-  CPUBuffer deskewMatrix, rotMatrix;
+  CPUBuffer /*deskewMatrix,*/ rotMatrix;
+  double deskewFactor;
   bool bCrop = false;
   unsigned new_ny, new_nz, new_nx;
   int deskewedXdim;
@@ -266,26 +269,19 @@ int main(int argc, char *argv[])
       deskewedXdim = new_nx;
       if (fabs(deskewAngle) > 0.0) {
         if (deskewAngle <0) deskewAngle += 180.;
-        deskewMatrix.resize(2*sizeof(float));
-        float *ptr = (float *) deskewMatrix.getPtr();
-        ptr[0] = cos(deskewAngle * M_PI/180.) * imgParams.dz / imgParams.dr;
-        deskewedXdim += floor(new_nz * imgParams.dz * 
-                              fabs(cos(deskewAngle * M_PI/180.)) / imgParams.dr)/4.; // TODO /4.
+        deskewFactor = cos(deskewAngle * M_PI/180.) * imgParams.dz / imgParams.dr;
+        if (outputWidth ==0)
+          deskewedXdim += floor(new_nz * imgParams.dz * 
+                                fabs(cos(deskewAngle * M_PI/180.)) / imgParams.dr)/4.; // TODO /4.
+        else
+          deskewedXdim = outputWidth; // use user-provided output width if available
 
         deskewedXdim = findOptimalDimension(deskewedXdim);
-
-        ptr[1] = 0.0;
-        if (ptr[0] < 0)
-          ptr[1]= deskewedXdim - new_nx;
 
         // update z step size:
         imgParams.dz *= sin(deskewAngle * M_PI/180.);
 
-        printf("new nx=%d\n", deskewedXdim);
-
-        for (int j=0; j<2; j++)
-          printf("%.4f ", ptr[j]);
-        printf("\n");
+        printf("deskewFactor=%f, new nx=%d\n", deskewFactor, deskewedXdim);
       }
 
       // Construct rotation matrix:
@@ -351,7 +347,7 @@ int main(int argc, char *argv[])
     } // if (it == all_matching_files.begin())
 
     if (bCrop) {
-      raw_image.crop(0, 0, 0, 0, new_nx, new_ny, new_nz, 0);
+      raw_image.crop(0, 0, 0, 0, new_nx-1, new_ny-1, new_nz-1, 0);
       // If deskew is to happen, it'll be performed inside RichardsonLucy_GPU() on GPU;
       // but here raw data's x dimension is still just "new_nx"
     }
@@ -370,8 +366,8 @@ int main(int argc, char *argv[])
                            // imgParams.dr, imgParams.dz,
                            // complexOTF, dkr_otf, dkz_otf,
                            d_interpOTF, RL_iters,
-                           deskewMatrix, deskewedXdim,
-                           rotMatrix,
+                           deskewFactor, deskewedXdim,
+                           extraShift, rotMatrix,
                            rfftplanGPU, rfftplanInvGPU);
     }
     else { // plain 1-step Wiener filtering
