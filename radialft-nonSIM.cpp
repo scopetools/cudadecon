@@ -15,6 +15,15 @@ namespace po = boost::program_options;
 #include <CImg.h>
 using namespace cimg_library;
 
+#ifdef _WIN32
+#define _USE_MATH_DEFINES
+#define rint(fp) (int)((fp) >= 0 ? (fp) + 0.5 : (fp) - 0.5)
+#endif
+
+#include <math.h>
+
+
+
 extern int save_tiff(TIFF *tif, const unsigned int directory, int colind, const int nwaves, int width, int height, float * buffer);
 extern int load_tiff(TIFF *const tif, const unsigned int directory, const unsigned colind, float *const buffer);
 
@@ -326,7 +335,6 @@ void radialft(std::complex<float> *band, int nx, int ny, int nz, std::complex<fl
           indin = kin*nxy+iin*(nx/2+1)+jin;
           indout = rint(rdist)*nz+kin;
           if (indout < nxz) {
-          // std::cout << avg_output[indout] << std::endl;
             avg_output[indout] += band[indin];
             count[indout] ++;
           }

@@ -19,12 +19,13 @@ set(SCI_WORLD_FILE_PERMS WORLD_READ)
 set(SCI_WORLD_PROGRAM_PERMS WORLD_READ WORLD_EXECUTE)
 
 if(WIN32)
-set(CMAKE_CXX_FLAGS
-  ${CMAKE_CXX_FLAGS}
-  " /openmp")
-set(CMAKE_CXX_FLAGS_RELEASE
-  ${CMAKE_CXX_FLAGS_RELEASE}
-  " /DNDEBUG /O2")
+# set(CMAKE_CXX_FLAGS
+#   ${CMAKE_CXX_FLAGS}
+#   " /openmp")
+# set(CMAKE_CXX_FLAGS_RELEASE
+#   ${CMAKE_CXX_FLAGS_RELEASE}
+#   " /DNDEBUG /O2")
+message(STATUS ${CMAKE_CXX_FLAGS})
 else(WIN32)
 set(CMAKE_CXX_FLAGS
   ${CMAKE_CXX_FLAGS}
@@ -86,7 +87,7 @@ if(WIN32)
      ${CUDA_NVCC_FLAGS};--use-local-env;--cl-version=2010)
   link_directories ( ${Boost_LIBRARY_DIRS} c:/fftw3 ${TIFF_LIBRARY} )
   include_directories( ${Boost_INCLUDE_DIRS} c:/fftw3  ${TIFF_INCLUDE_DIR}
-  "C:/ProgramData/NVIDIA Corporation/CUDA Samples/v5.0/common/inc" )
+  "C:/ProgramData/NVIDIA Corporation/CUDA Samples/v5.5/common/inc" )
 else(WIN32)
   include_directories( ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc )
 endif()
