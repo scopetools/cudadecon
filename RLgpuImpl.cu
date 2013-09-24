@@ -23,7 +23,7 @@ __global__ void LRcore_kernel(float * img1, float * img2);
 __global__ void currEstimate_kernel(float * img1, float * img2, float * img3);
 __global__ void currPrevDiff_kernel(float * img1, float * img2, float * img3);
 __global__ void innerProduct_kernel(float * img1, float * img2,
-                                    double * intRes1, double * intRes2);
+                                    double * intRes1); //, double * intRes2);
 __global__ void updatePrediction_kernel(float * Y_k, float * X_k, float *X_km1, float lambda);
 __global__ void summation_kernel(float * img, double * intRes, int n);
 __global__ void sumAboveThresh_kernel(float * img, double * intRes, unsigned * counter, float thresh, int n);
@@ -118,7 +118,9 @@ __host__ void backgroundSubtraction_GPU(GPUBuffer &img, int nx, int ny, int nz, 
   dim3 block(nThreads, 1, 1);
 
   bgsubtr_kernel<<<grid, block>>>((float *) img.getPtr(), nx*ny*nz, background);
+#ifndef NDEBUG
   std::cout<< "backgroundSubtraction_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
 }
 
 __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
@@ -247,7 +249,9 @@ __host__ void makeOTFarray(GPUBuffer &otfarray, int nx, int ny, int nz)
   dim3 grid(blockNx, ny, nz);
 
   makeOTFarray_kernel<<<grid, block>>>( (cuFloatComplex *) otfarray.getPtr());
+#ifndef NDEBUG
   std::cout<< "makeOTFarray(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
 }
 
 __global__ void scale_kernel(float * img, double factor)
@@ -338,33 +342,33 @@ __host__ double calcAccelFactor(GPUBuffer &G_km1, GPUBuffer &G_km2,
 // (G_km1 dot G_km2) / (G_km2 dot G_km2)
 // All inputs are of dimension (nx, ny, nz) and of floating type;
 {
-  int nThreads = 1024; // Maximum number of threads per block for C2070, M20990, or Quadro 4000
+  int nThreads = 1024; // Maximum number of threads per block for C2070, M2090, or Quadro 4000
   int nBlocks = (int) ceil( ((float) (nx*ny*nz)) / nThreads/2 );
 
-  // used for holding partial reduction results; one for each thread block
-  GPUBuffer devBuf1(nBlocks * sizeof(double), 0);
-  GPUBuffer devBuf2(nBlocks * sizeof(double), 0);
+  // Used for holding partial reduction results; one for each thread block:
+  GPUBuffer devBuf1(nBlocks * sizeof(double) * 2, 0);
+  // First nBlocks: numerator; second nBlocks: denominator
 
   unsigned smemSize = nThreads * sizeof(double) * 2;
   innerProduct_kernel<<<nBlocks, nThreads, smemSize>>>((float *) G_km1.getPtr(),
                                                        (float *) G_km2.getPtr(),
-                                                       (double *) devBuf1.getPtr(),
-                                                       (double *) devBuf2.getPtr());
+                                                       (double *) devBuf1.getPtr());
 
-  CPUBuffer h_Numerator(devBuf1);
-  CPUBuffer h_Denominator (devBuf2);
+  CPUBuffer h_numer_denom(devBuf1);
 
   double numerator=0, denom=0;
+  double *ptr = (double *) h_numer_denom.getPtr();
   for (int i=0; i<nBlocks; i++) {
-    numerator += *((double *) h_Numerator.getPtr() + i);
-    denom   += *((double *) h_Denominator.getPtr() + i);
+    numerator += *ptr;
+    denom += *(ptr + nBlocks);
+    ptr++;
   }
 
   return numerator / (denom + eps);
 }
 
 __global__ void innerProduct_kernel(float * img1, float * img2,
-                                    double * intRes1, double * intRes2)
+                                    double * intRes1)
 // Using reduction to implement two inner products (img1.dot.img2 and img2.dot.img2)
 // Copied from CUDA "reduction" sample code reduce4()
 {
@@ -424,7 +428,7 @@ __global__ void innerProduct_kernel(float * img1, float * img2,
   // write result for this block to global mem
   if (tid == 0) {
     intRes1[blockIdx.x] = sdata[0];
-    intRes2[blockIdx.x] = sdata[1];
+    intRes1[blockIdx.x + gridDim.x] = sdata[1];
   }
 }
 
@@ -490,7 +494,9 @@ __host__ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz)
     count += *pc++;
   }
 
+#ifndef NDEBUG
   printf("mean=%f, sum=%lf, count=%d\n", mean, sum, count);
+#endif
   return sum/count;
 }
 
@@ -605,5 +611,7 @@ __host__ void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale)
   unsigned nThreads = 1024;
   unsigned nBlocks = (unsigned) ceil( nx*ny*nz / (float) nThreads );
   scale_kernel<<<nBlocks, nThreads>>>((float *) img.getPtr(), scale);
+#ifndef NDEBUG
   std::cout<< "rescale_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
 }

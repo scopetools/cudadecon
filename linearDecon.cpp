@@ -10,10 +10,6 @@ namespace po = boost::program_options;
 // #include <clapack.h>  // clapack_sgetrf(), clapack_sgetri()
 // }
 
-#ifndef _WIN32
-#include <sys/time.h>  //gettimeofday()
-#endif
-
 std::complex<float> otfinterpolate(std::complex<float> * otf, float kx, float ky, float kz, int nzotf, int nrotf)
 // Use sub-pixel coordinates (kx,ky,kz) to linearly interpolate a rotationally-averaged 3D OTF ("otf").
 // otf has 2 dimensions: fast dimension is kz with length "nzotf" while the slow dimension is kr.

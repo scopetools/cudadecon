@@ -43,7 +43,9 @@ __host__ void deskew_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
                                  nx, ny, nz, 
                                  (float *) outBuf.getPtr(), newNx,
                                  extraShift, deskewFactor);
+#ifndef NDEBUG
   std::cout<< "deskew_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
 }
 
 __global__ void rotate_kernel(float *in, int nx, int ny, int nz,
@@ -94,7 +96,9 @@ __host__ void rotate_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
                                  nx, ny, nz,
                                  (float *) outBuf.getPtr(),
                                  (float *) rotMatrix.getPtr());
+#ifndef NDEBUG
   std::cout<< "rotate_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
 }
 
 __global__ void crop_kernel(float *in, int nx, int ny, int nz,
@@ -131,5 +135,7 @@ __host__ void cropGPU(GPUBuffer &inBuf, int nx, int ny, int nz,
                                new_nx, new_ny, new_nz,
                                (float *) outBuf.getPtr());
 
+#ifndef NDEBUG
   std::cout<< "cropGPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
 }

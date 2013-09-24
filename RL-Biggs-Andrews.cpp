@@ -78,7 +78,9 @@ void RichardsonLucy(CImg<> & raw, float dr, float dz,
     if (k > 1) {
       lambda = G_kminus1.dot(G_kminus2) / (G_kminus2.dot(G_kminus2) + eps);
       lambda = std::max(std::min(lambda, 1.f), 0.f); // stability enforcement
-      std::cout << lambda << std::endl;
+#ifndef NDEBUG
+      printf("labmda = %f\n", lambda);
+#endif
       Y_k = X_k + lambda*(X_k - X_kminus1);
       Y_k.max(0.f); // plus positivity constraint
     }
@@ -148,44 +150,25 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   unsigned int nxy = nx * ny;
   unsigned int nxy2 = (nx+2)*ny;
 
+#ifndef NDEBUG
 #ifdef _WIN32
   StopWatchWin stopwatch;
 #else
   StopWatchLinux stopwatch;
 #endif
-
   stopwatch.start();
+#endif
 
    // allocate buffers in GPU device 0
   GPUBuffer X_k(nz * nxy * sizeof(float), 0);
+  // cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
   // transfer host data to GPU
-  // PinnedCPUBuffer raw1plane(nxy * sizeof(float));
-  // raw1plane.setFrom(raw.data(), 0, nz*nxy*sizeof(float), 0);
-  // raw1plane.set(&X_k, 0, nz*nxy*sizeof(float), 0);
-
-  // for (unsigned int z=0; z<nz; z++) {
-  //   raw1plane.setFrom(raw.data(0, 0, z), 0, nxy*sizeof(float), 0);
-  //   raw1plane.set(&X_k, 0, nxy*sizeof(float),
-  //                 (z*nxy) * sizeof(float));
-  // }
-
   cutilSafeCall(cudaMemcpy(X_k.getPtr(), raw.data(), nz*nxy*sizeof(float),
                            cudaMemcpyHostToDevice));
 
+#ifndef NDEBUG
   printf("%f msecs\n", stopwatch.getTime());
-
-  // if (bCrop) {
-  //   GPUBuffer croppedImg(new_nx * new_ny * new_nz * sizeof(float), 0);
-  //   cropGPU(X_k, nx, ny, nz, new_nx, new_ny, new_nz, croppedImg);
-
-  //   X_k = croppedImg;
-
-  //   nx = new_nx;
-  //   ny = new_ny;
-  //   nz = new_nz;
-  //   nxy = nx*ny;
-  //   nxy2 = (nx+2)*ny;
-  // }
+#endif
 
   // background subtraction (including thresholding by 0):
   backgroundSubtraction_GPU(X_k, nx, ny, nz, background);
@@ -197,11 +180,12 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   }
   else
     rescale_GPU(X_k, nx, ny, nz, intensity_overall0/intensity_overall);
-  printf("%lf\n", intensity_overall);
+#ifndef NDEBUG
+  printf("intensity_overall=%lf\n", intensity_overall);
+#endif
 
-  // if abs(deskewFactor) > 0 then deskew raw data along x-axis first.
-
-  if (fabs(deskewFactor) > 0.0) {
+  
+  if (fabs(deskewFactor) > 0.0) { //then deskew raw data along x-axis first:
 
     GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), 0);
   
@@ -216,6 +200,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
     raw.clear();
     raw.assign(nx, ny, nz, 1);
+    // cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
   }
 
   GPUBuffer rawGPUbuf(X_k);  // make a copy of raw image
@@ -257,24 +242,31 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     if (k > 1) {
       lambda = calcAccelFactor(G_kminus1, G_kminus2, nx, ny, nz, eps);
       lambda = std::max(std::min(lambda, 1.), 0.); // stability enforcement
-      std::cout << lambda << std::endl;
+#ifndef NDEBUG
+      printf("labmda = %lf\n", lambda);
+#endif
       updatePrediction(Y_k, X_k, X_kminus1, lambda, nx, ny, nz);
     }
     else 
       Y_k = X_k;
-  
-    // b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
 
+    cutilSafeCall(cudaMemcpyAsync(X_kminus1.getPtr(), X_k.getPtr(), 
+                                  X_k.getSize(), cudaMemcpyDeviceToDevice));
+    if (k>0)
+      cutilSafeCall(cudaMemcpyAsync(G_kminus2.getPtr(), G_kminus1.getPtr(), 
+                                    G_kminus1.getSize(), cudaMemcpyDeviceToDevice));
+    
+    // b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
     CC = Y_k;
     filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF, false);
     calcLRcore(CC, rawGPUbuf, nx, ny, nz);
 
     // c. Determine next iteration image & apply positivity constraint
-    X_kminus1 = X_k;
+    // X_kminus1 = X_k;
     filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF, true);
     updateCurrEstimate(X_k, CC, Y_k, nx, ny, nz);
 
-    G_kminus2 = G_kminus1;
+    // G_kminus2 = G_kminus1;
     calcCurrPrevDiff(X_k, Y_k, G_kminus1, nx, ny, nz);
   }
 
@@ -286,28 +278,21 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     GPUBuffer d_rotMatrix(rotationMatrix, 0);
 
     rotate_GPU(X_k, nx, ny, nz, d_rotMatrix, d_rotatedResult);
+    // Download from device memory back to "raw":
     cutilSafeCall(cudaMemcpy(raw.data(), d_rotatedResult.getPtr(), nz*nxy*sizeof(float),
                              cudaMemcpyDeviceToHost));
-    // for (unsigned int z=0; z<nz; z++) {
-    //   // transfer from device to host one plane at a time
-    //   d_rotatedResult.set(&raw1plane, z*nxy*sizeof(float), (z+1)*nxy*sizeof(float), 0);
-    //   // transfer to "raw"
-    //   raw1plane.setPlainArray(raw.data(0, 0, z), 0, nxy*sizeof(float), 0);
-    // }
   }
 
   else {
     // Download from device memory back to "raw":
     cutilSafeCall(cudaMemcpy(raw.data(), X_k.getPtr(), nz*nxy*sizeof(float),
                              cudaMemcpyDeviceToHost));
-    // for (unsigned int z=0; z<nz; z++) {
-    //   // transfer from device to host one plane at a time
-    //   X_k.set(&raw1plane, z*nxy*sizeof(float), (z+1)*nxy*sizeof(float), 0);
-    //   // transfer to "raw"
-    //   raw1plane.setPlainArray(raw.data(0, 0, z), 0, nxy*sizeof(float), 0);
-    // }
   }
+#ifndef NDEBUG
   printf("%f msecs\n", stopwatch.getTime());
+#endif
+  // cutilSafeCall(cudaHostUnregister(raw.data()));
+
   // result is returned in "raw"
 }
 
