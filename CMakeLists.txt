@@ -18,21 +18,18 @@ set(SCI_GROUP_WRITE GROUP_WRITE)
 set(SCI_WORLD_FILE_PERMS WORLD_READ)
 set(SCI_WORLD_PROGRAM_PERMS WORLD_READ WORLD_EXECUTE)
 
-if(WIN32)
-# set(CMAKE_CXX_FLAGS
-#   ${CMAKE_CXX_FLAGS}
-#   " /openmp")
-# set(CMAKE_CXX_FLAGS_RELEASE
-#   ${CMAKE_CXX_FLAGS_RELEASE}
-#   " /DNDEBUG /O2")
-else(WIN32)
-set(CMAKE_CXX_FLAGS
-  ${CMAKE_CXX_FLAGS}
-  "-fopenmp")
-endif(WIN32)
-message(STATUS ${CMAKE_CXX_FLAGS})
-message(STATUS ${CMAKE_CXX_FLAGS_RELEASE})
-message(STATUS ${CMAKE_CXX_FLAGS_DEBUG})
+message(STATUS "Build type is '${CMAKE_BUILD_TYPE}'")
+
+find_package(openmp)
+
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+
+# message(STATUS ${CMAKE_CXX_FLAGS})
+# message(STATUS ${CMAKE_CXX_FLAGS_DEBUG})
+# message(STATUS ${CMAKE_CXX_FLAGS_RELWITHDEBINFO})
+
+set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -UNDEBUG")
+
 
 IF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
   if (CMAKE_COMPILER_IS_GNUCC)
@@ -65,8 +62,15 @@ else()
   find_package( Boost REQUIRED COMPONENTS program_options filesystem regex system)
 endif(WIN32)
 
+# if (${CMAKE_BUILD_TYPE} MATCHES "Release")
 set(CUDA_NVCC_FLAGS
-  --ptxas-options=-v;-O3;-gencode=arch=compute_20,code=sm_20;-gencode=arch=compute_30,code=sm_30;-gencode=arch=compute_35,code=sm_35)
+  -O2;-gencode=arch=compute_20,code=sm_20;-gencode=arch=compute_30,code=sm_30;-gencode=arch=compute_35,code=sm_35)
+# else()
+# set(CUDA_NVCC_FLAGS
+#   -gencode=arch=compute_20,code=sm_20;-gencode=arch=compute_30,code=sm_30;-gencode=arch=compute_35,code=sm_35)
+# endif()
+
+#--ptxas-options=-v;
 
 if (GCC_VER VERSION_GREATER 4.6.3)
   set (CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};--compiler-bindir=/opt/bin)
@@ -83,7 +87,7 @@ include_directories(
   
 if(WIN32)
   set(CUDA_NVCC_FLAGS
-     ${CUDA_NVCC_FLAGS};--use-local-env;--cl-version=2010)
+     ${CUDA_NVCC_FLAGS};--use-local-env;--cl-version=2012)
   link_directories ( ${Boost_LIBRARY_DIRS} c:/fftw3 ${TIFF_LIBRARY} )
   include_directories( ${Boost_INCLUDE_DIRS} c:/fftw3  ${TIFF_INCLUDE_DIR}
   "C:/ProgramData/NVIDIA Corporation/CUDA Samples/v5.5/common/inc" )

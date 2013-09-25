@@ -161,7 +161,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
    // allocate buffers in GPU device 0
   GPUBuffer X_k(nz * nxy * sizeof(float), 0);
-  // cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
+  cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
   // transfer host data to GPU
   cutilSafeCall(cudaMemcpy(X_k.getPtr(), raw.data(), nz*nxy*sizeof(float),
                            cudaMemcpyHostToDevice));
@@ -198,9 +198,10 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     nxy = nx*ny;
     nxy2 = (nx+2)*ny;
 
+    cutilSafeCall(cudaHostUnregister(raw.data()));
     raw.clear();
     raw.assign(nx, ny, nz, 1);
-    // cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
+    cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
   }
 
   GPUBuffer rawGPUbuf(X_k);  // make a copy of raw image
@@ -288,10 +289,12 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     cutilSafeCall(cudaMemcpy(raw.data(), X_k.getPtr(), nz*nxy*sizeof(float),
                              cudaMemcpyDeviceToHost));
   }
+
+  cutilSafeCall(cudaHostUnregister(raw.data()));
+
 #ifndef NDEBUG
   printf("%f msecs\n", stopwatch.getTime());
 #endif
-  // cutilSafeCall(cudaHostUnregister(raw.data()));
 
   // result is returned in "raw"
 }

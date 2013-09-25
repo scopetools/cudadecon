@@ -17,7 +17,8 @@ __constant__ float const_kzscale;
 __constant__ float const_eps;
 __constant__ cuFloatComplex const_otf[7680]; // 60 kB should be enough for an OTF array??
 
-__global__ void filter_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF, int size, bool bConj);
+__global__ void filter_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF, int size);
+__global__ void filterConj_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF, int size);
 __global__ void scale_kernel(float * img, double factor);
 __global__ void LRcore_kernel(float * img1, float * img2);
 __global__ void currEstimate_kernel(float * img1, float * img2, float * img3);
@@ -147,9 +148,14 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
   dim3 grid(NXblock);
   dim3 block(nThreads);
 
-  filter_kernel<<<grid, block>>>((cuFloatComplex*) fftBuf.getPtr(),
-                                 (cuFloatComplex*) otfArray.getPtr(),
-                                 arraySize, bConj);
+  if (bConj)
+    filterConj_kernel<<<grid, block>>>((cuFloatComplex*) fftBuf.getPtr(),
+                                       (cuFloatComplex*) otfArray.getPtr(),
+                                       arraySize);
+  else
+    filter_kernel<<<grid, block>>>((cuFloatComplex*) fftBuf.getPtr(),
+                                   (cuFloatComplex*) otfArray.getPtr(),
+                                   arraySize);
 
   cuFFTErr = cufftExecC2R(rfftplanInv, (cuFloatComplex*)fftBuf.getPtr(), (cufftReal *) img.getPtr());
 
@@ -214,14 +220,23 @@ __device__ cuFloatComplex dev_otfinterpolate(// cuFloatComplex * d_otf,
   return otfval;
 }
 
-__global__ void filter_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF, int size, bool bConj)
+__global__ void filter_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF, int size)
 {
   int ind = blockIdx.x * blockDim.x + threadIdx.x;
 
   if ( ind < size ) {
     cuFloatComplex otf_val = devOTF[ind];
-    if (bConj)
-      otf_val.y *= -1;
+    devImg[ind] = cuCmulf(otf_val, devImg[ind]);
+  }
+}
+
+__global__ void filterConj_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF, int size)
+{
+  int ind = blockIdx.x * blockDim.x + threadIdx.x;
+
+  if ( ind < size ) {
+    cuFloatComplex otf_val = devOTF[ind];
+    otf_val.y *= -1;
     devImg[ind] = cuCmulf(otf_val, devImg[ind]);
   }
 }
@@ -230,8 +245,9 @@ __global__ void filter_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF, in
 __global__ void makeOTFarray_kernel(cuFloatComplex *result)
 {
   int kx = blockIdx.x * blockDim.x + threadIdx.x;
-  int ky = blockIdx.y > const_ny/2 ? blockIdx.y - const_ny : blockIdx.y;
-  int kz = blockIdx.z > const_nz/2 ? blockIdx.z - const_nz : blockIdx.z;
+  // x>>1 is equivalent to x/2 when x is interger
+  int ky = blockIdx.y > const_ny>>1 ? blockIdx.y - const_ny : blockIdx.y;
+  int kz = blockIdx.z > const_nz>>1 ? blockIdx.z - const_nz : blockIdx.z;
 
   if (kx < const_nx/2+1) {
     cuFloatComplex otf_val = dev_otfinterpolate(kx*const_kxscale, ky*const_kyscale, kz*const_kzscale);
@@ -282,7 +298,7 @@ __global__ void LRcore_kernel(float * img1, float * img2)
   
   if (ind < const_nxyz) {
     img1[ind] = img1[ind] > const_eps ? img1[ind] : const_eps;
-    img1[ind] = img2[ind] / img1[ind];
+    img1[ind] = img2[ind]/img1[ind];
   }
 }
 
@@ -373,8 +389,8 @@ __global__ void innerProduct_kernel(float * img1, float * img2,
 // Copied from CUDA "reduction" sample code reduce4()
 {
   double *sdata = SharedMemory<double>();
-  // shared memory; even-numbered indices for img1.dot.img2;
-  // odd-numbered indices for img2.dot.img2
+  // shared memory; first half for img1.dot.img2;
+  // second half for img2.dot.img2
 
   unsigned tid = threadIdx.x;
   unsigned ind = blockIdx.x * blockDim.x*2 + threadIdx.x;
@@ -391,15 +407,15 @@ __global__ void innerProduct_kernel(float * img1, float * img2,
     mySum2 += img2[indPlusBlockDim] * img2[indPlusBlockDim];
   }
 
-  sdata[2*tid] = mySum1;
-  sdata[2*tid + 1] = mySum2;
+  sdata[tid] = mySum1;
+  sdata[tid + blockDim.x] = mySum2;
   __syncthreads();
 
   // do reduction in shared mem
   for (unsigned int s=blockDim.x/2; s>32; s>>=1) {
     if (tid < s) {
-      sdata[2*tid] += sdata[2*(tid + s)];
-      sdata[2*tid +1] += sdata[2*(tid + s) +1];
+      sdata[tid] += sdata[tid + s];
+      sdata[tid + blockDim.x] += sdata[tid + s + blockDim.x];
     }
 
     __syncthreads();
@@ -412,23 +428,23 @@ __global__ void innerProduct_kernel(float * img1, float * img2,
     volatile double *smem1 = sdata;
 
     // Assuming blockSize is > 64:
-    smem1[2*tid] += smem1[2*(tid + 32)];
-    smem1[2*tid] += smem1[2*(tid + 16)];
-    smem1[2*tid] += smem1[2*(tid +  8)];
-    smem1[2*tid] += smem1[2*(tid +  4)];
-    smem1[2*tid] += smem1[2*(tid +  2)];
-    smem1[2*tid] += smem1[2*(tid +  1)];
-    smem1[2*tid+1] += smem1[2*(tid + 32)+1];
-    smem1[2*tid+1] += smem1[2*(tid + 16)+1];
-    smem1[2*tid+1] += smem1[2*(tid +  8)+1];
-    smem1[2*tid+1] += smem1[2*(tid +  4)+1];
-    smem1[2*tid+1] += smem1[2*(tid +  2)+1];
-    smem1[2*tid+1] += smem1[2*(tid +  1)+1];
+    smem1[tid] += smem1[tid + 32];
+    smem1[tid] += smem1[tid + 16];
+    smem1[tid] += smem1[tid +  8];
+    smem1[tid] += smem1[tid +  4];
+    smem1[tid] += smem1[tid +  2];
+    smem1[tid] += smem1[tid +  1];
+    smem1[tid + blockDim.x] += smem1[tid + 32 + blockDim.x];
+    smem1[tid + blockDim.x] += smem1[tid + 16 + blockDim.x];
+    smem1[tid + blockDim.x] += smem1[tid +  8 + blockDim.x];
+    smem1[tid + blockDim.x] += smem1[tid +  4 + blockDim.x];
+    smem1[tid + blockDim.x] += smem1[tid +  2 + blockDim.x];
+    smem1[tid + blockDim.x] += smem1[tid +  1 + blockDim.x];
   }
   // write result for this block to global mem
   if (tid == 0) {
     intRes1[blockIdx.x] = sdata[0];
-    intRes1[blockIdx.x + gridDim.x] = sdata[1];
+    intRes1[blockIdx.x + gridDim.x] = sdata[blockDim.x];
   }
 }
 
