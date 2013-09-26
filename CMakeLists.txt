@@ -20,16 +20,18 @@ set(SCI_WORLD_PROGRAM_PERMS WORLD_READ WORLD_EXECUTE)
 
 message(STATUS "Build type is '${CMAKE_BUILD_TYPE}'")
 
-find_package(openmp)
-
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+if (WIN32)
+  find_package(openmp)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -UNDEBUG")
+else()
+  set(CMAKE_CXX_FLAGS "-Wall -fopenmp")
+endif()
 
 # message(STATUS ${CMAKE_CXX_FLAGS})
+# message(STATUS ${CMAKE_CXX_FLAGS_RELEASE})
 # message(STATUS ${CMAKE_CXX_FLAGS_DEBUG})
 # message(STATUS ${CMAKE_CXX_FLAGS_RELWITHDEBINFO})
-
-set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} -UNDEBUG")
-
 
 IF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
   if (CMAKE_COMPILER_IS_GNUCC)
@@ -56,20 +58,15 @@ if (WIN32)
 endif(WIN32)
 find_package(TIFF REQUIRED)
 
+# message(STATUS "${TIFF_LIBRARIES}")
+
 if(WIN32)
   find_package( Boost )
 else()
   find_package( Boost REQUIRED COMPONENTS program_options filesystem regex system)
 endif(WIN32)
 
-# if (${CMAKE_BUILD_TYPE} MATCHES "Release")
-set(CUDA_NVCC_FLAGS
-  -O2;-gencode=arch=compute_20,code=sm_20;-gencode=arch=compute_30,code=sm_30;-gencode=arch=compute_35,code=sm_35)
-# else()
-# set(CUDA_NVCC_FLAGS
-#   -gencode=arch=compute_20,code=sm_20;-gencode=arch=compute_30,code=sm_30;-gencode=arch=compute_35,code=sm_35)
-# endif()
-
+set(CUDA_NVCC_FLAGS "-O2;-gencode=arch=compute_20,code=sm_20;-gencode=arch=compute_30,code=sm_30;-gencode=arch=compute_35,code=sm_35")
 #--ptxas-options=-v;
 
 if (GCC_VER VERSION_GREATER 4.6.3)
@@ -94,6 +91,9 @@ if(WIN32)
 else(WIN32)
   include_directories( ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc )
 endif()
+
+# message(STATUS "${CUDA_NVCC_FLAGS}")
+message(STATUS "${CUDA_TOOLKIT_ROOT_DIR} ${CUDA_SDK_ROOT_DIR}")
 
 CUDA_ADD_EXECUTABLE(
 	cudaDeconv

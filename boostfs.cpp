@@ -4,7 +4,7 @@
 #include <string>
 #include <algorithm> // sort
 
-static boost::filesystem::path outputDir;
+static boost::filesystem::path dataDir;
 
 std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern)
 {
@@ -34,9 +34,9 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
   sort(all_matching_files.begin(), all_matching_files.end());
 
 
-  // Create output subfolder "decon/" just under the data folder:
-  outputDir = target_path;
-  outputDir /= "GPUdecon";
+  // Create output subfolder "GPUdecon/" just under the data folder:
+  dataDir = target_path;
+  boost::filesystem::path outputDir = dataDir/"GPUdecon";
 
   if (! boost::filesystem::exists(outputDir) )
     boost::filesystem::create_directory(outputDir);
@@ -44,11 +44,17 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
   return all_matching_files;
 }
 
+void makeDeskewedDir(std::string subdirname)
+{
+  boost::filesystem::path outputDir = dataDir/subdirname;
+  if (! boost::filesystem::exists(outputDir) )
+    boost::filesystem::create_directory(outputDir);
+}
 
-std::string makeOutputFilePath(std::string inputFileName, std::string insert)
+std::string makeOutputFilePath(std::string inputFileName, std::string subdir, std::string insert)
 {
   boost::filesystem::path inputpath(inputFileName);
-  boost::filesystem::path outputpath(outputDir);
+  boost::filesystem::path outputpath(dataDir/subdir);
 
   std::string basename = inputpath.filename().string();
   int pos = basename.find_last_of(".tif");

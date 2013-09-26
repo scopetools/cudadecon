@@ -43,7 +43,8 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         GPUBuffer& otf, int nIter,
                         double deskewFactor, int deskewedNx, int extraShift,
                         CPUBuffer &rotationMatrix,
-                        cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU);
+                        cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU,
+                        CImg<> & raw_deskewed);
 
 void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
                        float kxscale, float kyscale, float kzscale,
@@ -87,6 +88,8 @@ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz);
 void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale);
 
 std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern);
-std::string makeOutputFilePath(std::string inputFileName, std::string insert=std::string("_decon"));
+std::string makeOutputFilePath(std::string inputFileName, std::string subdir="GPUdecon",
+                               std::string insert="_decon");
+void makeDeskewedDir(std::string subdirname);
 
 #endif

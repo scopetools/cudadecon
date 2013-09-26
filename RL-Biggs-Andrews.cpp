@@ -139,8 +139,8 @@ static bool bFirstTime = true;
 void RichardsonLucy_GPU(CImg<> & raw, float background, 
                         GPUBuffer & d_interpOTF, int nIter,
                         double deskewFactor, int deskewedNx, int extraShift,
-                        CPUBuffer &rotationMatrix,
-                        cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU)
+                        CPUBuffer &rotationMatrix, cufftHandle rfftplanGPU, 
+                        cufftHandle rfftplanInvGPU, CImg<> & raw_deskewed)
 {
   // "raw" contains the raw image, also used as the initial guess X_0
   unsigned int nx = raw.width();
@@ -296,6 +296,10 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   printf("%f msecs\n", stopwatch.getTime());
 #endif
 
+  if (raw_deskewed.size()>0) {
+    cutilSafeCall(cudaMemcpy(raw_deskewed.data(), rawGPUbuf.getPtr(),
+                             nz*nxy*sizeof(float), cudaMemcpyDeviceToHost));
+  }
   // result is returned in "raw"
 }
 

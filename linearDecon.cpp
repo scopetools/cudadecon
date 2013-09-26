@@ -145,6 +145,7 @@ int main(int argc, char *argv[])
 
   int RL_iters=0;
   bool bCPU = false;
+  bool bSaveDeskewedRaw = false;
   // bool bPSF = false;
   float deskewAngle=0.0;
   float rotationAngle=0.0;
@@ -163,15 +164,16 @@ int main(int argc, char *argv[])
     ("drpsf", po::value<float>(&dr_psf)->default_value(.104), "PSF x-y pixel size (um)")
     ("dzpsf,Z", po::value<float>(&dz_psf)->default_value(.1), "PSF z step (um)")
     ("wavelength,l", po::value<float>(&imgParams.wave)->default_value(.525), "emission wavelength (um)")
-    ("wiener,w", po::value<float>(&wiener)->default_value(1e-2), "Wiener constant (regularization factor)")
+    ("wiener,W", po::value<float>(&wiener)->default_value(1e-2), "Wiener constant (regularization factor)")
     ("background,b", po::value<float>(&background)->default_value(90.f), "user-supplied background")
     ("NA,n", po::value<float>(&NA)->default_value(1.2), "numerical aperture")
-    ("RL", po::value<int>(&RL_iters)->default_value(0), "run Richardson-Lucy how-many iterations")
+    ("RL,i", po::value<int>(&RL_iters)->default_value(15), "run Richardson-Lucy how-many iterations")
     ("CPU,C", po::value<bool>(&bCPU)->implicit_value(true), "use CPU code to run R-L")
     ("deskew,D", po::value<float>(&deskewAngle)->default_value(0.0), "Deskew angle; if not 0.0 then perform deskewing before deconv")
-    ("width,W", po::value<unsigned>(&outputWidth)->default_value(0), "If deskewed, the output image's width")
-    ("shift,s", po::value<int>(&extraShift)->default_value(0), "If deskewed, the output image's extra shift in X (positive->left")
+    ("width,w", po::value<unsigned>(&outputWidth)->default_value(0), "If deskewed, the output image's width")
+    ("shift,x", po::value<int>(&extraShift)->default_value(0), "If deskewed, the output image's extra shift in X (positive->left")
     ("rotate,R", po::value<float>(&rotationAngle)->default_value(0.0), "rotation angle; if not 0.0 then perform rotation around y axis after deconv")
+    ("saveDeskewedRaw,S", po::value<bool>(&bSaveDeskewedRaw)->implicit_value(true), "use CPU code to run R-L")
     ("input-dir", po::value<std::string>(&datafolder)->required(), "input folder name")
     ("otf-file", po::value<std::string>(&otffiles)->required(), "OTF file")
     ("filename-pattern", po::value<std::string>(&filenamePattern)->required(), "pattern in file names")
@@ -199,7 +201,7 @@ int main(int argc, char *argv[])
   std::vector< std::string > all_matching_files = 
     gatherMatchingFiles(datafolder, filenamePattern);
 
-  CImg<> raw_image, raw_imageFFT, complexOTF;
+  CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed;
   float dkr_otf, dkz_otf;
   float dkx, dky, dkz, rdistcutoff;
   fftwf_plan rfftplan=NULL, rfftplan_inv=NULL;
@@ -278,6 +280,11 @@ int main(int argc, char *argv[])
         imgParams.dz *= sin(deskewAngle * M_PI/180.);
 
         printf("deskewFactor=%f, new nx=%d\n", deskewFactor, deskewedXdim);
+
+        if (bSaveDeskewedRaw) {
+          raw_deskewed.assign(deskewedXdim, new_ny, new_nz);
+          makeDeskewedDir("Deskewed");
+        }
       }
 
       // Construct rotation matrix:
@@ -358,13 +365,9 @@ int main(int argc, char *argv[])
                        rfftplan, rfftplan_inv, raw_imageFFT);
       }
       else
-        RichardsonLucy_GPU(raw_image, background,
-                           // imgParams.dr, imgParams.dz,
-                           // complexOTF, dkr_otf, dkz_otf,
-                           d_interpOTF, RL_iters,
-                           deskewFactor, deskewedXdim,
-                           extraShift, rotMatrix,
-                           rfftplanGPU, rfftplanInvGPU);
+        RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
+                           deskewFactor, deskewedXdim, extraShift, rotMatrix,
+                           rfftplanGPU, rfftplanInvGPU, raw_deskewed);
     }
     else { // plain 1-step Wiener filtering
       raw_image -= background;
@@ -379,8 +382,10 @@ int main(int argc, char *argv[])
       fftwf_execute_dft_c2r(rfftplan_inv, (fftwf_complex *) raw_imageFFT.data(), raw_image.data());
       raw_image /= raw_image.size();
     }
-    // raw_image.save(it->insert(pos-3, "_decon").c_str());
+
     raw_image.save(makeOutputFilePath(*it).c_str());
+    if (bSaveDeskewedRaw)
+      raw_deskewed.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
   } // iteration over all_matching_files
   return 0; 
 }
