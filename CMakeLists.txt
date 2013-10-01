@@ -116,12 +116,12 @@ target_link_libraries(
   cudaDeconv
   Buffer
   libtiff
-  libfftw3f-3
+  libfftwf-3.3
   )
 target_link_libraries(
   radialft
   libtiff
-  libfftw3f-3
+  libfftwf-3.3
   )
 target_link_libraries(
   otfviewer
