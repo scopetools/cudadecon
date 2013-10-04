@@ -87,13 +87,12 @@ if(WIN32)
      ${CUDA_NVCC_FLAGS};--use-local-env;--cl-version=2012)
   link_directories ( ${Boost_LIBRARY_DIRS} c:/fftw3 ${TIFF_LIBRARY} )
   include_directories( ${Boost_INCLUDE_DIRS} c:/fftw3  ${TIFF_INCLUDE_DIR}
-  "C:/ProgramData/NVIDIA Corporation/CUDA Samples/v5.5/common/inc" )
+    "$ENV{NVCUDASAMPLES_ROOT}/common/inc" )
 else(WIN32)
   include_directories( ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc )
 endif()
 
 # message(STATUS "${CUDA_NVCC_FLAGS}")
-message(STATUS "${CUDA_TOOLKIT_ROOT_DIR} ${CUDA_SDK_ROOT_DIR}")
 
 CUDA_ADD_EXECUTABLE(
 	cudaDeconv
