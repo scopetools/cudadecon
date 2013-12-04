@@ -170,38 +170,39 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   printf("%f msecs\n", stopwatch.getTime());
 #endif
 
-  // background subtraction (including thresholding by 0):
-  backgroundSubtraction_GPU(X_k, nx, ny, nz, background);
-  // Calculate sum for bleach correction:
-  double intensity_overall = meanAboveBackground_GPU(X_k, nx, ny, nz);
-  if (bFirstTime) {
-    intensity_overall0 = intensity_overall;
-    bFirstTime = false;
-  }
-  else
-    rescale_GPU(X_k, nx, ny, nz, intensity_overall0/intensity_overall);
+  if (nIter > 0) {
+    // background subtraction (including thresholding by 0):
+    backgroundSubtraction_GPU(X_k, nx, ny, nz, background);
+    // Calculate sum for bleach correction:
+    double intensity_overall = meanAboveBackground_GPU(X_k, nx, ny, nz);
+    if (bFirstTime) {
+      intensity_overall0 = intensity_overall;
+      bFirstTime = false;
+    }
+    else
+      rescale_GPU(X_k, nx, ny, nz, intensity_overall0/intensity_overall);
 #ifndef NDEBUG
-  printf("intensity_overall=%lf\n", intensity_overall);
+    printf("intensity_overall=%lf\n", intensity_overall);
 #endif
-
   
-  if (fabs(deskewFactor) > 0.0) { //then deskew raw data along x-axis first:
+    if (fabs(deskewFactor) > 0.0) { //then deskew raw data along x-axis first:
 
-    GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), 0);
+      GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), 0);
   
-    deskew_GPU(X_k, nx, ny, nz, deskewFactor, deskewedRaw, deskewedNx, extraShift);
+      deskew_GPU(X_k, nx, ny, nz, deskewFactor, deskewedRaw, deskewedNx, extraShift);
 
-    // update raw (i.e., X_k) and its dimension variables.
-    X_k = deskewedRaw;
+      // update raw (i.e., X_k) and its dimension variables.
+      X_k = deskewedRaw;
 
-    nx = deskewedNx;
-    nxy = nx*ny;
-    nxy2 = (nx+2)*ny;
+      nx = deskewedNx;
+      nxy = nx*ny;
+      nxy2 = (nx+2)*ny;
 
-    cutilSafeCall(cudaHostUnregister(raw.data()));
-    raw.clear();
-    raw.assign(nx, ny, nz, 1);
-    cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
+      cutilSafeCall(cudaHostUnregister(raw.data()));
+      raw.clear();
+      raw.assign(nx, ny, nz, 1);
+      cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
+    }
   }
 
   GPUBuffer rawGPUbuf(X_k);  // make a copy of raw image

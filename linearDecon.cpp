@@ -234,26 +234,33 @@ int main(int argc, char *argv[])
 
       printf("Original image size: nz=%d, ny=%d, nx=%d\n", nz, ny, nx);
 
-      new_ny = findOptimalDimension(ny);
-      if (new_ny != ny) {
-        printf("new ny=%d\n", new_ny);
-        bCrop = true;
-      }
-
-      new_nz = findOptimalDimension(nz);
-      if (new_nz != nz) {
-        printf("new nz=%d\n", new_nz);
-        bCrop = true;
-      }
-
-      // only if no deskewing is happening do we want to change image width here
-      new_nx = nx;
-      if (!fabs(deskewAngle) > 0.0) {
-        new_nx = findOptimalDimension(nx);
-        if (new_nx != nx) {
-          printf("new nx=%d\n", new_nx);
+      if (RL_iters>0) {
+        new_ny = findOptimalDimension(ny);
+        if (new_ny != ny) {
+          printf("new ny=%d\n", new_ny);
           bCrop = true;
         }
+
+        new_nz = findOptimalDimension(nz);
+        if (new_nz != nz) {
+          printf("new nz=%d\n", new_nz);
+          bCrop = true;
+        }
+
+        // only if no deskewing is happening do we want to change image width here
+        new_nx = nx;
+        if (!fabs(deskewAngle) > 0.0) {
+          new_nx = findOptimalDimension(nx);
+          if (new_nx != nx) {
+            printf("new nx=%d\n", new_nx);
+            bCrop = true;
+          }
+        }
+      }
+      else {
+        new_nx = nx;
+        new_ny = ny;
+        new_nz = nz;
       }
 
       // Load OTF (assuming 3D rotationally averaged OTF):
@@ -299,7 +306,7 @@ int main(int argc, char *argv[])
         p[3] = cos(rotationAngle);
       }
 
-      if (!RL_iters || bCPU) {
+      if (bCPU) {
         raw_imageFFT.assign(deskewedXdim+2, new_ny, new_nz);
 
         if (!fftwf_init_threads()) { /* one-time initialization required to use threads */
@@ -318,7 +325,7 @@ int main(int argc, char *argv[])
                                              raw_image.data(),
                                              FFTW_ESTIMATE);
       }
-      else {
+      else if (RL_iters>0) {
         // Create reusable cuFFT plans
         cufftResult cuFFTErr = cufftPlan3d(&rfftplanGPU, new_nz, new_ny, deskewedXdim, CUFFT_R2C);
         if (cuFFTErr != CUFFT_SUCCESS) {
@@ -368,6 +375,12 @@ int main(int argc, char *argv[])
         RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
                            deskewFactor, deskewedXdim, extraShift, rotMatrix,
                            rfftplanGPU, rfftplanInvGPU, raw_deskewed);
+    }
+    else if (rotMatrix.getSize()) {// do only rotation
+      std::cout << rotMatrix.getSize() << std::endl;
+      RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
+                         deskewFactor, deskewedXdim, extraShift, rotMatrix,
+                         rfftplanGPU, rfftplanInvGPU, raw_deskewed);
     }
     else { // plain 1-step Wiener filtering
       raw_image -= background;
