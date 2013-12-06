@@ -28,7 +28,6 @@
 using namespace cimg_library;
 
 struct ImgParams {
-//  int nx, ny, nz, nt;
   float dr, dz, wave;
 };
 
@@ -92,6 +91,19 @@ std::string makeOutputFilePath(std::string inputFileName, std::string subdir="GP
                                std::string insert="_decon");
 void makeDeskewedDir(std::string subdirname);
 
+
+
+#ifdef _WIN32
+#ifdef CUDADECON_IMPORT
+  #define CUDADECON_API __declspec( dllimport )
+#else
+  #define CUDADECON_API __declspec( dllexport )
+#endif
+#else
+  #define CUDADECON_API
+#endif
+
+//! All DLL interface calls start HERE:
 extern "C" {
 
 //! Call RL_interface_init() as the first step
@@ -106,7 +118,7 @@ extern "C" {
  * outputWidth: if set to 0, then calculate the output width because of deskewing; otherwise use this value as the output width
  * OTF_file_name: file name of OTF
 */
-  int RL_interface_init(int nx, int ny, int nz, float dr, float dz, float dr_psf, float dz_psf, float deskewAngle, float rotationAngle, int outputWidth, char * OTF_file_name);
+CUDADECON_API int RL_interface_init(int nx, int ny, int nz, float dr, float dz, float dr_psf, float dz_psf, float deskewAngle, float rotationAngle, int outputWidth, char * OTF_file_name);
 
 //! RL_interface() to run deconvolution
 /*!
@@ -117,12 +129,15 @@ extern "C" {
  * nIters: how many iterations to run
  * extraShift: in pixels; sometimes an extra shift in X is needed to center the deskewed image better
 */
-  int RL_interface(const unsigned short * const raw_data, int nx, int ny, int nz, float * const result, float background, int nIters, int extraShift);
+CUDADECON_API int RL_interface(const unsigned short * const raw_data, int nx, int ny, int nz, float * const result, float background, int nIters, int extraShift);
 
-//! To retrieve the calculated output dimensions; can be then used to allocate result buffer
-  unsigned get_output_nx();
-  unsigned get_output_ny();
-  unsigned get_output_nz();
+//! Call this before program quits to release global GPUBuffer d_interpOTF
+CUDADECON_API void RL_cleanup();
+
+//! The following are for retrieving the calculated output dimensions; can be used to allocate result buffer before calling RL_interface()
+CUDADECON_API  unsigned get_output_nx();
+CUDADECON_API  unsigned get_output_ny();
+CUDADECON_API  unsigned get_output_nz();
 }
 
 #endif

@@ -64,6 +64,13 @@ else(WIN32)
   include_directories( ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc )
 endif()
 
+CUDA_ADD_LIBRARY(
+	libcudaDeconv
+    SHARED
+	RL-Biggs-Andrews.cpp
+	RLgpuImpl.cu
+	geometryTransform.cu
+  )
 
 CUDA_ADD_EXECUTABLE(
 	cudaDeconv
@@ -77,14 +84,22 @@ CUDA_ADD_EXECUTABLE(
 CUDA_ADD_EXECUTABLE(
 	RL_interface_driver
 	RL_interface_driver.cpp
-	RL-Biggs-Andrews.cpp
-	RLgpuImpl.cu
-	geometryTransform.cu
   )
 
-add_dependencies(cudaDeconv
+add_dependencies(
+  cudaDeconv
   Buffer
-  )
+)
+
+add_dependencies(
+  libcudaDeconv
+  Buffer
+)
+
+add_dependencies(
+  RL_interface_driver
+  libcudaDeconv
+)
 
 add_executable(radialft radialft-nonSIM.cpp)
 add_executable(otfviewer OTF_TIFF_viewer.cpp)
@@ -95,22 +110,29 @@ target_link_libraries(
   Buffer
   libtiff
   libfftwf-3.3
-  )
+)
 target_link_libraries(
-  RL_interface_driver	
+  libcudaDeconv
   Buffer
   libtiff
   libfftwf-3.3
-  )
+)
+target_link_libraries(
+  RL_interface_driver
+  libcudaDeconv
+  Buffer
+  libtiff
+  libfftwf-3.3
+)
 target_link_libraries(
   radialft
   libtiff
   libfftwf-3.3
-  )
+)
 target_link_libraries(
   otfviewer
   libtiff
-  )
+)
 else(WIN32)
 target_link_libraries(
   cudaDeconv
@@ -140,5 +162,5 @@ target_link_libraries(
 endif(WIN32)
 
 CUDA_ADD_CUFFT_TO_TARGET(cudaDeconv)
-CUDA_ADD_CUFFT_TO_TARGET(RL_interface_driver)
+CUDA_ADD_CUFFT_TO_TARGET(libcudaDeconv)
 

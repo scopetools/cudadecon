@@ -6,109 +6,6 @@
 
 #include <helper_timer.h>
 
-
-// void filter(CImg<> &img, float dr, float dz,
-//             CImg<> &otf, float dkr_otf, float dkz_otf,
-//             fftwf_plan rfftplan, fftwf_plan rfftplan_inv,
-//             CImg<> &fft, bool bConj)
-// {
-//   int nx = img.width();
-//   int ny = img.height();
-//   int nz = img.depth();
-
-//   fftwf_execute_dft_r2c(rfftplan, img.data(), (fftwf_complex *) fft.data());
-
-//   float dkx = 1./(nx * dr);
-//   float dky = 1./(ny * dr);
-//   float dkz = 1./(nz * dz);
-
-//   float kxscale = dkx/dkr_otf;
-//   float kyscale = dky/dkr_otf;
-//   float kzscale = dkz/dkz_otf;
-
-// #pragma omp parallel for
-//   for (int k=0; k<nz; k++) {
-//     int kz = ( k>nz/2 ? k-nz : k );
-//     for (int i=0; i<ny; i++) {
-//       int ky = ( i > ny/2 ? i-ny : i );
-//       for (int j=0; j<nx/2+1; j++) {
-//         int kx = j;
-//         std::complex<float> otf_val =
-//           otfinterpolate((std::complex<float>*) otf.data(),
-//                          kx*kxscale, ky*kyscale,
-//                          kz*kzscale, otf.width()/2, otf.height());
-
-//         std::complex<float> result;
-//         if (bConj) // doing correlation instead of convolution
-//           result = std::conj(otf_val) * std::complex<float>(fft(2*j, i, k), fft(2*j+1, i, k));
-//         else
-//           result = otf_val * std::complex<float>(fft(2*j, i, k), fft(2*j+1, i, k));
-
-//         fft( 2*j,  i, k) = result.real();
-//         fft(2*j+1, i, k) = result.imag();
-//       }
-//     }
-//   }
-
-//   // fft.display();
-//   fftwf_execute_dft_c2r(rfftplan_inv, (fftwf_complex *) fft.data(), img.data());
-//   img /= img.size();
-// }
-
-// void RichardsonLucy(CImg<> & raw, float dr, float dz, 
-//                     CImg<> & otf, float dkr_otf, float dkz_otf, 
-//                     float rcutoff, int nIter,
-//                     fftwf_plan rfftplan, fftwf_plan rfftplan_inv, CImg<> &fft)
-// {
-//   // "raw" contains the raw image, also used as the initial guess X_0
-//   CImg<> G_kminus1, G_kminus2;
-
-//   float lambda=0;
-
-//   CImg<> X_k(raw);
-//   CImg<> X_kminus1; //(X_k, "xyz");
-//   CImg<> Y_k; //(X_k, "xyz");
-//   CImg<> CC;
-
-//   float eps = std::numeric_limits<float>::epsilon();
-
-//   for (int k = 0; k < nIter; k++) {
-//     std::cout << "Iteration " << k << std::endl;
-//     // a. Make an image predictions for the next iteration    
-//     if (k > 1) {
-//       lambda = G_kminus1.dot(G_kminus2) / (G_kminus2.dot(G_kminus2) + eps);
-//       lambda = std::max(std::min(lambda, 1.f), 0.f); // stability enforcement
-// #ifndef NDEBUG
-//       printf("labmda = %f\n", lambda);
-// #endif
-//       Y_k = X_k + lambda*(X_k - X_kminus1);
-//       Y_k.max(0.f); // plus positivity constraint
-//     }
-//     else 
-//       Y_k = X_k;
-  
-//     // b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
-
-//     CC = Y_k;
-//     filter(CC, dr, dz, otf, dkr_otf, dkz_otf, rfftplan, rfftplan_inv, fft, false);
-//     CC.max(eps);
-// #pragma omp parallel for
-//     cimg_forXYZ(CC, x, y, z) CC(x, y, z) = raw(x, y, z) / CC(x, y, z);
-
-//     // c. Determine next iteration image & apply positivity constraint
-//     X_kminus1 = X_k;
-//     filter(CC, dr, dz, otf, dkr_otf, dkz_otf, rfftplan, rfftplan_inv, fft, true);
-// #pragma omp parallel for
-//     cimg_forXYZ(CC, x, y, z) { X_k(x, y, z) = Y_k(x, y, z) * CC(x, y, z); 
-//       X_k(x, y, z) = X_k(x, y, z) > 0 ? X_k(x, y, z) : 0; } // plus positivity constraint
-
-//     G_kminus2 = G_kminus1;
-//     G_kminus1 = X_k - Y_k;
-//   }
-//   raw = X_k; // result is returned in "raw"
-// }
-
-
 bool notGoodDimension(unsigned num)
 /*! Good dimension is defined as one that can be fatorized into 2s, 3s, 5s, and 7s
   According to CUFFT manual, such dimension would warranty fast FFT
@@ -431,6 +328,7 @@ int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
   d_interpOTF.resize(output_nz * output_ny * (deskewedXdim+2) * sizeof(float));
   // catch exception here
   makeOTFarray(d_interpOTF, deskewedXdim, output_ny, output_nz);
+  return 1;
 }
 
 int RL_interface(const unsigned short * const raw_data,
@@ -456,4 +354,9 @@ int RL_interface(const unsigned short * const raw_data,
   memcpy(result, raw_image.data(), raw_image.size() * sizeof(float));
 
   return 1;
+}
+
+void RL_cleanup()
+{
+  d_interpOTF.resize(0);
 }
