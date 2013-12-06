@@ -7,111 +7,112 @@
 #include <helper_timer.h>
 
 
-void filter(CImg<> &img, float dr, float dz,
-            CImg<> &otf, float dkr_otf, float dkz_otf,
-            fftwf_plan rfftplan, fftwf_plan rfftplan_inv,
-            CImg<> &fft, bool bConj)
-{
-  int nx = img.width();
-  int ny = img.height();
-  int nz = img.depth();
+// void filter(CImg<> &img, float dr, float dz,
+//             CImg<> &otf, float dkr_otf, float dkz_otf,
+//             fftwf_plan rfftplan, fftwf_plan rfftplan_inv,
+//             CImg<> &fft, bool bConj)
+// {
+//   int nx = img.width();
+//   int ny = img.height();
+//   int nz = img.depth();
 
-  fftwf_execute_dft_r2c(rfftplan, img.data(), (fftwf_complex *) fft.data());
+//   fftwf_execute_dft_r2c(rfftplan, img.data(), (fftwf_complex *) fft.data());
 
-  float dkx = 1./(nx * dr);
-  float dky = 1./(ny * dr);
-  float dkz = 1./(nz * dz);
+//   float dkx = 1./(nx * dr);
+//   float dky = 1./(ny * dr);
+//   float dkz = 1./(nz * dz);
 
-  float kxscale = dkx/dkr_otf;
-  float kyscale = dky/dkr_otf;
-  float kzscale = dkz/dkz_otf;
+//   float kxscale = dkx/dkr_otf;
+//   float kyscale = dky/dkr_otf;
+//   float kzscale = dkz/dkz_otf;
 
-#pragma omp parallel for
-  for (int k=0; k<nz; k++) {
-    int kz = ( k>nz/2 ? k-nz : k );
-    for (int i=0; i<ny; i++) {
-      int ky = ( i > ny/2 ? i-ny : i );
-      for (int j=0; j<nx/2+1; j++) {
-        int kx = j;
-        std::complex<float> otf_val =
-          otfinterpolate((std::complex<float>*) otf.data(),
-                         kx*kxscale, ky*kyscale,
-                         kz*kzscale, otf.width()/2, otf.height());
+// #pragma omp parallel for
+//   for (int k=0; k<nz; k++) {
+//     int kz = ( k>nz/2 ? k-nz : k );
+//     for (int i=0; i<ny; i++) {
+//       int ky = ( i > ny/2 ? i-ny : i );
+//       for (int j=0; j<nx/2+1; j++) {
+//         int kx = j;
+//         std::complex<float> otf_val =
+//           otfinterpolate((std::complex<float>*) otf.data(),
+//                          kx*kxscale, ky*kyscale,
+//                          kz*kzscale, otf.width()/2, otf.height());
 
-        std::complex<float> result;
-        if (bConj) // doing correlation instead of convolution
-          result = std::conj(otf_val) * std::complex<float>(fft(2*j, i, k), fft(2*j+1, i, k));
-        else
-          result = otf_val * std::complex<float>(fft(2*j, i, k), fft(2*j+1, i, k));
+//         std::complex<float> result;
+//         if (bConj) // doing correlation instead of convolution
+//           result = std::conj(otf_val) * std::complex<float>(fft(2*j, i, k), fft(2*j+1, i, k));
+//         else
+//           result = otf_val * std::complex<float>(fft(2*j, i, k), fft(2*j+1, i, k));
 
-        fft( 2*j,  i, k) = result.real();
-        fft(2*j+1, i, k) = result.imag();
-      }
-    }
-  }
+//         fft( 2*j,  i, k) = result.real();
+//         fft(2*j+1, i, k) = result.imag();
+//       }
+//     }
+//   }
 
-  // fft.display();
-  fftwf_execute_dft_c2r(rfftplan_inv, (fftwf_complex *) fft.data(), img.data());
-  img /= img.size();
-}
+//   // fft.display();
+//   fftwf_execute_dft_c2r(rfftplan_inv, (fftwf_complex *) fft.data(), img.data());
+//   img /= img.size();
+// }
 
-void RichardsonLucy(CImg<> & raw, float dr, float dz, 
-                    CImg<> & otf, float dkr_otf, float dkz_otf, 
-                    float rcutoff, int nIter,
-                    fftwf_plan rfftplan, fftwf_plan rfftplan_inv, CImg<> &fft)
-{
-  // "raw" contains the raw image, also used as the initial guess X_0
-  CImg<> G_kminus1, G_kminus2;
+// void RichardsonLucy(CImg<> & raw, float dr, float dz, 
+//                     CImg<> & otf, float dkr_otf, float dkz_otf, 
+//                     float rcutoff, int nIter,
+//                     fftwf_plan rfftplan, fftwf_plan rfftplan_inv, CImg<> &fft)
+// {
+//   // "raw" contains the raw image, also used as the initial guess X_0
+//   CImg<> G_kminus1, G_kminus2;
 
-  float lambda=0;
+//   float lambda=0;
 
-  CImg<> X_k(raw);
-  CImg<> X_kminus1; //(X_k, "xyz");
-  CImg<> Y_k; //(X_k, "xyz");
-  CImg<> CC;
+//   CImg<> X_k(raw);
+//   CImg<> X_kminus1; //(X_k, "xyz");
+//   CImg<> Y_k; //(X_k, "xyz");
+//   CImg<> CC;
 
-  float eps = std::numeric_limits<float>::epsilon();
+//   float eps = std::numeric_limits<float>::epsilon();
 
-  for (int k = 0; k < nIter; k++) {
-    std::cout << "Iteration " << k << std::endl;
-    // a. Make an image predictions for the next iteration    
-    if (k > 1) {
-      lambda = G_kminus1.dot(G_kminus2) / (G_kminus2.dot(G_kminus2) + eps);
-      lambda = std::max(std::min(lambda, 1.f), 0.f); // stability enforcement
-#ifndef NDEBUG
-      printf("labmda = %f\n", lambda);
-#endif
-      Y_k = X_k + lambda*(X_k - X_kminus1);
-      Y_k.max(0.f); // plus positivity constraint
-    }
-    else 
-      Y_k = X_k;
+//   for (int k = 0; k < nIter; k++) {
+//     std::cout << "Iteration " << k << std::endl;
+//     // a. Make an image predictions for the next iteration    
+//     if (k > 1) {
+//       lambda = G_kminus1.dot(G_kminus2) / (G_kminus2.dot(G_kminus2) + eps);
+//       lambda = std::max(std::min(lambda, 1.f), 0.f); // stability enforcement
+// #ifndef NDEBUG
+//       printf("labmda = %f\n", lambda);
+// #endif
+//       Y_k = X_k + lambda*(X_k - X_kminus1);
+//       Y_k.max(0.f); // plus positivity constraint
+//     }
+//     else 
+//       Y_k = X_k;
   
-    // b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
+//     // b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
 
-    CC = Y_k;
-    filter(CC, dr, dz, otf, dkr_otf, dkz_otf, rfftplan, rfftplan_inv, fft, false);
-    CC.max(eps);
-#pragma omp parallel for
-    cimg_forXYZ(CC, x, y, z) CC(x, y, z) = raw(x, y, z) / CC(x, y, z);
+//     CC = Y_k;
+//     filter(CC, dr, dz, otf, dkr_otf, dkz_otf, rfftplan, rfftplan_inv, fft, false);
+//     CC.max(eps);
+// #pragma omp parallel for
+//     cimg_forXYZ(CC, x, y, z) CC(x, y, z) = raw(x, y, z) / CC(x, y, z);
 
-    // c. Determine next iteration image & apply positivity constraint
-    X_kminus1 = X_k;
-    filter(CC, dr, dz, otf, dkr_otf, dkz_otf, rfftplan, rfftplan_inv, fft, true);
-#pragma omp parallel for
-    cimg_forXYZ(CC, x, y, z) { X_k(x, y, z) = Y_k(x, y, z) * CC(x, y, z); 
-      X_k(x, y, z) = X_k(x, y, z) > 0 ? X_k(x, y, z) : 0; } // plus positivity constraint
+//     // c. Determine next iteration image & apply positivity constraint
+//     X_kminus1 = X_k;
+//     filter(CC, dr, dz, otf, dkr_otf, dkz_otf, rfftplan, rfftplan_inv, fft, true);
+// #pragma omp parallel for
+//     cimg_forXYZ(CC, x, y, z) { X_k(x, y, z) = Y_k(x, y, z) * CC(x, y, z); 
+//       X_k(x, y, z) = X_k(x, y, z) > 0 ? X_k(x, y, z) : 0; } // plus positivity constraint
 
-    G_kminus2 = G_kminus1;
-    G_kminus1 = X_k - Y_k;
-  }
-  raw = X_k; // result is returned in "raw"
-}
+//     G_kminus2 = G_kminus1;
+//     G_kminus1 = X_k - Y_k;
+//   }
+//   raw = X_k; // result is returned in "raw"
+// }
 
 
 bool notGoodDimension(unsigned num)
-// Good dimension is defined as one that can be fatorized into 2s, 3s, 5s, and 7s
-// According to CUFFT manual, such dimension would warranty fast FFT
+/*! Good dimension is defined as one that can be fatorized into 2s, 3s, 5s, and 7s
+  According to CUFFT manual, such dimension would warranty fast FFT
+*/
 {
   if (num==2 || num==3 || num==5 || num==7)
     return false;
@@ -124,6 +125,9 @@ bool notGoodDimension(unsigned num)
 }
 
 unsigned findOptimalDimension(unsigned inSize, int step)
+/*!
+  "step" can be positive or negative
+*/
 {
   unsigned outSize = inSize;
   while (notGoodDimension(outSize))
@@ -304,3 +308,152 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   // result is returned in "raw"
 }
 
+
+unsigned output_ny, output_nz, output_nx;
+bool bCrop;
+CImg<> complexOTF;
+double deskewFactor;
+unsigned deskewedXdim;
+CPUBuffer rotMatrix;
+cufftHandle rfftplanGPU, rfftplanInvGPU;
+GPUBuffer d_interpOTF(0);
+
+unsigned get_output_nx()
+{
+  return deskewedXdim; //output_nx;
+}
+
+unsigned get_output_ny()
+{
+  return output_ny;
+}
+unsigned get_output_nz()
+{
+  return output_nz;
+}
+
+int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
+                      float dr, float dz, // raw image pixel sizes
+                      float dr_psf, float dz_psf, // PSF image pixel sizes
+                      float deskewAngle, // deskew
+                      float rotationAngle,
+                      int outputWidth,
+                      char * OTF_file_name)
+{
+  // Find the optimal dimensions nearest to the originals to meet CUFFT demands
+  bCrop = false;
+  output_ny = findOptimalDimension(ny);
+  if (output_ny != ny) {
+    printf("output ny=%d\n", output_ny);
+    bCrop = true;
+  }
+
+  output_nz = findOptimalDimension(nz);
+  if (output_nz != nz) {
+    printf("output nz=%d\n", output_nz);
+    bCrop = true;
+  }
+
+  // only if no deskewing is happening do we want to change image width here
+  output_nx = nx;
+  if (!fabs(deskewAngle) > 0.0) {
+    output_nx = findOptimalDimension(nx);
+    if (output_nx != nx) {
+      printf("new nx=%d\n", output_nx);
+      bCrop = true;
+    }
+  }
+
+  // Load OTF and obtain OTF dimensions and pixel sizes, etc:
+  try {
+    complexOTF.assign(OTF_file_name);
+  }
+  catch (CImgIOException &e) {
+    std::cerr << e.what() << std::endl; //OTF_file_name << " cannot be opened\n";
+    return 0;
+  }
+  unsigned nr_otf = complexOTF.height();
+  unsigned nz_otf = complexOTF.width() / 2;
+  float dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
+  float dkz_otf = 1/(nz_otf * dz_psf);
+
+  // Obtain deskew factor and new x dimension if deskew is run:
+  deskewFactor = 0.;
+  deskewedXdim = output_nx;
+  if (fabs(deskewAngle) > 0.0) {
+    if (deskewAngle <0) deskewAngle += 180.;
+    deskewFactor = cos(deskewAngle * M_PI/180.) * dz / dr;
+    if (outputWidth ==0)
+      deskewedXdim += floor(output_nz * dz * 
+                            fabs(cos(deskewAngle * M_PI/180.)) / dr)/4.; // TODO /4.
+    else
+      deskewedXdim = outputWidth; // use user-provided output width if available
+
+    deskewedXdim = findOptimalDimension(deskewedXdim);
+    // update z step size: (this is fine even though dz is a function parameter)
+    dz *= sin(deskewAngle * M_PI/180.);
+  }
+
+  // Construct rotation matrix:
+  if (fabs(rotationAngle) > 0.0) {
+    rotMatrix.resize(4*sizeof(float));
+    rotationAngle *= M_PI/180;
+    float stretch = dr / dz;
+    float *p = (float *)rotMatrix.getPtr();
+    p[0] = cos(rotationAngle) * stretch;
+    p[1] = sin(rotationAngle) * stretch;
+    p[2] = -sin(rotationAngle);
+    p[3] = cos(rotationAngle);
+  }
+
+  // Create reusable cuFFT plans
+  cufftResult cuFFTErr = cufftPlan3d(&rfftplanGPU, output_nz, output_ny, deskewedXdim, CUFFT_R2C);
+  if (cuFFTErr != CUFFT_SUCCESS) {
+    std::cerr << "cufftPlan3d() c2r failed\n";
+    return 0;
+  }
+  cuFFTErr = cufftPlan3d(&rfftplanInvGPU, output_nz, output_ny, deskewedXdim, CUFFT_C2R);
+  if (cuFFTErr != CUFFT_SUCCESS) {
+    std::cerr << "cufftPlan3d() c2r failed\n";
+    return 0;
+  }
+
+  // Pass some constants to CUDA device:
+  float dkx = 1.0/(dr * deskewedXdim);
+  float dky = 1.0/(dr * output_ny);
+  float dkz = 1.0/(dz * output_nz);
+  float eps = std::numeric_limits<float>::epsilon();
+  transferConstants(deskewedXdim, output_ny, output_nz, nr_otf, nz_otf,
+                    dkx/dkr_otf, dky/dkr_otf, dkz/dkz_otf,
+                    eps, complexOTF.data());
+
+  // make a 3D interpolated OTF array:
+  d_interpOTF.resize(output_nz * output_ny * (deskewedXdim+2) * sizeof(float));
+  // catch exception here
+  makeOTFarray(d_interpOTF, deskewedXdim, output_ny, output_nz);
+}
+
+int RL_interface(const unsigned short * const raw_data,
+                 int nx, int ny, int nz,
+                 float * const result,
+                 float background,
+                 int nIters,
+                 int extraShift
+                 )
+{
+  CImg<> raw_image(raw_data, nx, ny, nz);
+
+  if (bCrop)
+    raw_image.crop(0, 0, 0, 0, output_nx-1, output_ny-1, output_nz-1, 0);
+
+  // Finally do calculation including deskewing, decon, rotation:
+  CImg<> raw_deskewed;
+  RichardsonLucy_GPU(raw_image, background, d_interpOTF, nIters,
+                     deskewFactor, deskewedXdim, extraShift, rotMatrix,
+                     rfftplanGPU, rfftplanInvGPU, raw_deskewed);
+
+  // Copy deconvolved data, stored in raw_image, to "result" for return:
+  memcpy(result, raw_image.data(), raw_image.size() * sizeof(float));
+
+  return 1;
+}

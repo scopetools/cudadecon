@@ -1,14 +1,8 @@
 
-// #include <IMInclude.h>
-
-
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 
 #include "linearDecon.h"
-// extern "C" {
-// #include <clapack.h>  // clapack_sgetrf(), clapack_sgetri()
-// }
 
 std::complex<float> otfinterpolate(std::complex<float> * otf, float kx, float ky, float kz, int nzotf, int nrotf)
 // Use sub-pixel coordinates (kx,ky,kz) to linearly interpolate a rotationally-averaged 3D OTF ("otf").
@@ -103,39 +97,8 @@ int wienerfilter(CImg<> & g, float dkx, float dky, float dkz,
   return 0;
 }
 
-void apodize(int napodize, CImg<> &image)
-{
-  float diff,fact;
-  int k,l;
-
-  int nx = image.width();
-  int ny = image.height();
-  if (nx-ny == 2) // most likely there're extra 2 columns in this case
-    nx -= 2;
-
-  for (int z=0; z<image.depth(); z++) {
-    for (k=0; k<nx; k++) {
-      diff = (image(k, ny-1, z) - image(k, 0, z)) * 0.5;
-      for (l=0; l<napodize; l++) {
-        fact = 1. - sin(((l+0.5)/napodize)*M_PI*0.5);
-        image(k, l, z) += diff*fact;
-        image(k, ny-1-l, z) -= diff*fact;
-      }
-    }
-    for (l=0; l<ny; l++) {
-      diff = (image(nx-1, l, z) - image(0, l, z) ) * 0.5;
-      for(k=0; k<napodize; k++) {
-        fact = 1 - sin(((k+0.5)/napodize)*M_PI*0.5);
-        image(k, l, z) += diff*fact;
-        image(nx-1-k, l, z) -= diff*fact; 
-      }
-    }
-  }
-}
-
 int main(int argc, char *argv[])
 {
-  // int istream_no, ostream_no, otfstream_no;
   int napodize = 10;
   float background;
   float NA=1.2;
@@ -144,15 +107,12 @@ int main(int argc, char *argv[])
   float wiener;
 
   int RL_iters=0;
-  bool bCPU = false;
   bool bSaveDeskewedRaw = false;
-  // bool bPSF = false;
   float deskewAngle=0.0;
   float rotationAngle=0.0;
   unsigned outputWidth;
   int extraShift=0;
 
-  // IMAlPrt(0);       /* suppress printout of file header info */
 
   TIFFSetWarningHandler(NULL);
 
@@ -164,11 +124,10 @@ int main(int argc, char *argv[])
     ("drpsf", po::value<float>(&dr_psf)->default_value(.104), "PSF x-y pixel size (um)")
     ("dzpsf,Z", po::value<float>(&dz_psf)->default_value(.1), "PSF z step (um)")
     ("wavelength,l", po::value<float>(&imgParams.wave)->default_value(.525), "emission wavelength (um)")
-    ("wiener,W", po::value<float>(&wiener)->default_value(1e-2), "Wiener constant (regularization factor)")
+    ("wiener,W", po::value<float>(&wiener)->default_value(-1.0), "Wiener constant (regularization factor); if this value is postive then do Wiener filter instead of R-L")
     ("background,b", po::value<float>(&background)->default_value(90.f), "user-supplied background")
     ("NA,n", po::value<float>(&NA)->default_value(1.2), "numerical aperture")
     ("RL,i", po::value<int>(&RL_iters)->default_value(15), "run Richardson-Lucy how-many iterations")
-    ("CPU,C", po::bool_switch(&bCPU)->default_value(false), "use CPU code to run R-L")
     ("deskew,D", po::value<float>(&deskewAngle)->default_value(0.0), "Deskew angle; if not 0.0 then perform deskewing before deconv")
     ("width,w", po::value<unsigned>(&outputWidth)->default_value(0), "If deskewed, the output image's width")
     ("shift,x", po::value<int>(&extraShift)->default_value(0), "If deskewed, the output image's extra shift in X (positive->left")
@@ -206,7 +165,7 @@ int main(int argc, char *argv[])
   float dkx, dky, dkz, rdistcutoff;
   fftwf_plan rfftplan=NULL, rfftplan_inv=NULL;
   CPUBuffer /*deskewMatrix,*/ rotMatrix;
-  double deskewFactor;
+  double deskewFactor=0;
   bool bCrop = false;
   unsigned new_ny, new_nz, new_nx;
   int deskewedXdim;
@@ -306,7 +265,7 @@ int main(int argc, char *argv[])
         p[3] = cos(rotationAngle);
       }
 
-      if (bCPU) {
+      if (wiener >0) {
         raw_imageFFT.assign(deskewedXdim+2, new_ny, new_nz);
 
         if (!fftwf_init_threads()) { /* one-time initialization required to use threads */
@@ -314,12 +273,10 @@ int main(int argc, char *argv[])
         }
 
         fftwf_plan_with_nthreads(8);
-
         rfftplan = fftwf_plan_dft_r2c_3d(new_nz, new_ny, deskewedXdim,
                                          raw_image.data(),
                                          (fftwf_complex *) raw_imageFFT.data(),
                                          FFTW_ESTIMATE);
-
         rfftplan_inv = fftwf_plan_dft_c2r_3d(new_nz, new_ny, deskewedXdim,
                                              (fftwf_complex *) raw_imageFFT.data(),
                                              raw_image.data(),
@@ -362,27 +319,7 @@ int main(int argc, char *argv[])
       // but here raw data's x dimension is still just "new_nx"
     }
 
-    if (RL_iters) {
-      if (bCPU) {
-        raw_image -= background;
-        raw_image.max(0.f); // background subtraction earlier could have caused negative pixels
-        RichardsonLucy(raw_image, imgParams.dr, imgParams.dz,
-                       complexOTF, dkr_otf, dkz_otf,
-                       rdistcutoff, RL_iters,
-                       rfftplan, rfftplan_inv, raw_imageFFT);
-      }
-      else
-        RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
-                           deskewFactor, deskewedXdim, extraShift, rotMatrix,
-                           rfftplanGPU, rfftplanInvGPU, raw_deskewed);
-    }
-    else if (rotMatrix.getSize()) {// do only rotation
-      std::cout << rotMatrix.getSize() << std::endl;
-      RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
-                         deskewFactor, deskewedXdim, extraShift, rotMatrix,
-                         rfftplanGPU, rfftplanInvGPU, raw_deskewed);
-    }
-    else { // plain 1-step Wiener filtering
+    if (wiener >0) { // plain 1-step Wiener filtering
       raw_image -= background;
       fftwf_execute_dft_r2c(rfftplan, raw_image.data(), (fftwf_complex *) raw_imageFFT.data());
 
@@ -394,6 +331,30 @@ int main(int argc, char *argv[])
 
       fftwf_execute_dft_c2r(rfftplan_inv, (fftwf_complex *) raw_imageFFT.data(), raw_image.data());
       raw_image /= raw_image.size();
+    }
+    else if (RL_iters) {
+      // if (bCPU) {
+      //   raw_image -= background;
+      //   raw_image.max(0.f); // background subtraction earlier could have caused negative pixels
+      //   RichardsonLucy(raw_image, imgParams.dr, imgParams.dz,
+      //                  complexOTF, dkr_otf, dkz_otf,
+      //                  rdistcutoff, RL_iters,
+      //                  rfftplan, rfftplan_inv, raw_imageFFT);
+      // }
+      // else
+      RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
+                         deskewFactor, deskewedXdim, extraShift, rotMatrix,
+                         rfftplanGPU, rfftplanInvGPU, raw_deskewed);
+    }
+    else if (rotMatrix.getSize()) {// do only rotation
+      std::cout << rotMatrix.getSize() << std::endl;
+      RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
+                         deskewFactor, deskewedXdim, extraShift, rotMatrix,
+                         rfftplanGPU, rfftplanInvGPU, raw_deskewed);
+    }
+    else {
+      std::cerr << "Nothing is performed\n";
+      break;
     }
 
     raw_image.save(makeOutputFilePath(*it).c_str());

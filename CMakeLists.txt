@@ -28,28 +28,6 @@ else()
   set(CMAKE_CXX_FLAGS "-Wall -fopenmp")
 endif()
 
-# message(STATUS ${CMAKE_CXX_FLAGS})
-# message(STATUS ${CMAKE_CXX_FLAGS_RELEASE})
-# message(STATUS ${CMAKE_CXX_FLAGS_DEBUG})
-# message(STATUS ${CMAKE_CXX_FLAGS_RELWITHDEBINFO})
-
-IF(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-  if (CMAKE_COMPILER_IS_GNUCC)
-    execute_process(COMMAND gcc -dumpversion
-    OUTPUT_VARIABLE GCC_VER)
-    if (GCC_VER VERSION_GREATER 4.6.3)
-      set ( CMAKE_C_COMPILER /opt/bin/gcc )
-      set ( CMAKE_CXX_COMPILER /opt/bin/g++ )
-    endif()
-    message (STATUS "gcc used: " ${CMAKE_C_COMPILER} )
-  endif()
-  set ( CUDA_TOOLKIT_ROOT_DIR /opt/cuda-5.0 )
-endif()
-
-if (GCC_VER VERSION_GREATER 4.6.3)
-endif()
-
-
 find_package(CUDA REQUIRED)
 
 if (WIN32)
@@ -57,8 +35,6 @@ if (WIN32)
   set ( TIFF_INCLUDE_DIR c:/libtiff )
 endif(WIN32)
 find_package(TIFF REQUIRED)
-
-# message(STATUS "${TIFF_LIBRARIES}")
 
 if(WIN32)
   find_package( Boost )
@@ -68,10 +44,6 @@ endif(WIN32)
 
 set(CUDA_NVCC_FLAGS "-O2;-gencode=arch=compute_20,code=sm_20;-gencode=arch=compute_30,code=sm_30;-gencode=arch=compute_35,code=sm_35")
 #--ptxas-options=-v;
-
-if (GCC_VER VERSION_GREATER 4.6.3)
-  set (CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS};--compiler-bindir=/opt/bin)
-endif()
 
 add_subdirectory(Buffers)
 
@@ -92,13 +64,20 @@ else(WIN32)
   include_directories( ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc )
 endif()
 
-# message(STATUS "${CUDA_NVCC_FLAGS}")
 
 CUDA_ADD_EXECUTABLE(
 	cudaDeconv
 	linearDecon.cpp
 	RL-Biggs-Andrews.cpp
 	boostfs.cpp
+	RLgpuImpl.cu
+	geometryTransform.cu
+  )
+
+CUDA_ADD_EXECUTABLE(
+	RL_interface_driver
+	RL_interface_driver.cpp
+	RL-Biggs-Andrews.cpp
 	RLgpuImpl.cu
 	geometryTransform.cu
   )
@@ -113,6 +92,12 @@ add_executable(otfviewer OTF_TIFF_viewer.cpp)
 if(WIN32)
 target_link_libraries(
   cudaDeconv
+  Buffer
+  libtiff
+  libfftwf-3.3
+  )
+target_link_libraries(
+  RL_interface_driver	
   Buffer
   libtiff
   libfftwf-3.3
@@ -155,4 +140,5 @@ target_link_libraries(
 endif(WIN32)
 
 CUDA_ADD_CUFFT_TO_TARGET(cudaDeconv)
+CUDA_ADD_CUFFT_TO_TARGET(RL_interface_driver)
 

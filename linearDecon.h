@@ -33,11 +33,11 @@ struct ImgParams {
 };
 
 
-std::complex<float> otfinterpolate(std::complex<float> * otf, float kx, float ky, float kz, int nzotf, int nrotf);
-void RichardsonLucy(CImg<> & raw, float dr, float dz, 
-                      CImg<> & otf, float dkr_otf, float dkz_otf, 
-                      float rcutoff, int nIter,
-                      fftwf_plan rfftplan, fftwf_plan rfftplan_inv, CImg<> &fft);
+// std::complex<float> otfinterpolate(std::complex<float> * otf, float kx, float ky, float kz, int nzotf, int nrotf);
+// void RichardsonLucy(CImg<> & raw, float dr, float dz, 
+//                       CImg<> & otf, float dkr_otf, float dkz_otf, 
+//                       float rcutoff, int nIter,
+//                       fftwf_plan rfftplan, fftwf_plan rfftplan_inv, CImg<> &fft);
 
 void RichardsonLucy_GPU(CImg<> & raw, float background,
                         GPUBuffer& otf, int nIter,
@@ -91,5 +91,38 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
 std::string makeOutputFilePath(std::string inputFileName, std::string subdir="GPUdecon",
                                std::string insert="_decon");
 void makeDeskewedDir(std::string subdirname);
+
+extern "C" {
+
+//! Call RL_interface_init() as the first step
+/*!
+ * nx, ny, and nz: raw image dimensions
+ * dr: raw image pixel size
+ * dz: raw image Z step
+ * dr_psf: PSF pixel size
+ * dz_psf: PSF Z step
+ * deskewAngle: deskewing angle; usually -32.8 on Bi-chang scope and 32.8 on Wes scope
+ * rotationAngle: if 0 then no final rotation is done; otherwise set to the same as deskewAngle
+ * outputWidth: if set to 0, then calculate the output width because of deskewing; otherwise use this value as the output width
+ * OTF_file_name: file name of OTF
+*/
+  int RL_interface_init(int nx, int ny, int nz, float dr, float dz, float dr_psf, float dz_psf, float deskewAngle, float rotationAngle, int outputWidth, char * OTF_file_name);
+
+//! RL_interface() to run deconvolution
+/*!
+ * raw_data: uint16 pointer to raw data buffer
+ * nx, ny, and nz: raw image dimensions
+ * result: float pointer to pre-allocated result buffer; the results' dimension can be different than raw_data's; see RL_interface_driver.cpp for an example
+ * background: camera dark current (~100)
+ * nIters: how many iterations to run
+ * extraShift: in pixels; sometimes an extra shift in X is needed to center the deskewed image better
+*/
+  int RL_interface(const unsigned short * const raw_data, int nx, int ny, int nz, float * const result, float background, int nIters, int extraShift);
+
+//! To retrieve the calculated output dimensions; can be then used to allocate result buffer
+  unsigned get_output_nx();
+  unsigned get_output_ny();
+  unsigned get_output_nz();
+}
 
 #endif
