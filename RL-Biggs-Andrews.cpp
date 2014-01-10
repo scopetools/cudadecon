@@ -359,4 +359,6 @@ int RL_interface(const unsigned short * const raw_data,
 void RL_cleanup()
 {
   d_interpOTF.resize(0);
+  cufftDestroy(rfftplanGPU);
+  cufftDestroy(rfftplanInvGPU);
 }
