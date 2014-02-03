@@ -81,11 +81,6 @@ CUDA_ADD_EXECUTABLE(
 	geometryTransform.cu
   )
 
-CUDA_ADD_EXECUTABLE(
-	RL_interface_driver
-	RL_interface_driver.cpp
-  )
-
 add_dependencies(
   cudaDeconv
   Buffer
@@ -94,71 +89,74 @@ add_dependencies(
 add_dependencies(
   libcudaDeconv
   Buffer
-)
-
-add_dependencies(
-  RL_interface_driver
-  libcudaDeconv
 )
 
 add_executable(radialft radialft-nonSIM.cpp)
 add_executable(otfviewer OTF_TIFF_viewer.cpp)
 
 if(WIN32)
-target_link_libraries(
-  cudaDeconv
-  Buffer
-  libtiff
-  libfftwf-3.3
-)
-target_link_libraries(
-  libcudaDeconv
-  Buffer
-  libtiff
-  libfftwf-3.3
-)
-target_link_libraries(
-  RL_interface_driver
-  libcudaDeconv
-  Buffer
-  libtiff
-  libfftwf-3.3
-)
-target_link_libraries(
-  radialft
-  libtiff
-  libfftwf-3.3
-)
-target_link_libraries(
-  otfviewer
-  libtiff
-)
+  target_link_libraries(
+	cudaDeconv
+	Buffer
+	libtiff
+	libfftwf-3.3
+	)
+  target_link_libraries(
+	libcudaDeconv
+	Buffer
+	libtiff
+	libfftwf-3.3
+	)
+  CUDA_ADD_EXECUTABLE(
+	RL_interface_driver
+	RL_interface_driver.cpp
+	)
+  add_dependencies(
+	RL_interface_driver
+	libcudaDeconv
+	)
+  target_link_libraries(
+	RL_interface_driver
+	libcudaDeconv
+	Buffer
+	libtiff
+	libfftwf-3.3
+	)
+  target_link_libraries(
+	radialft
+	libtiff
+	libfftwf-3.3
+	)
+  target_link_libraries(
+	otfviewer
+	libtiff
+	)
 else(WIN32)
-target_link_libraries(
-  cudaDeconv
-  Buffer
-  fftw3f
-  fftw3f_threads
-  X11
-  ${Boost_PROGRAM_OPTIONS_LIBRARY}
-  ${Boost_FILESYSTEM_LIBRARY}
-  ${Boost_REGEX_LIBRARY}
-  ${Boost_SYSTEM_LIBRARY}
-  ${TIFF_LIBRARIES}
-  )
-target_link_libraries(
-  radialft
-  fftw3f
-  fftw3f_threads
-  X11
-  ${Boost_PROGRAM_OPTIONS_LIBRARY}
-  ${TIFF_LIBRARIES}
-  )
-target_link_libraries(
-  otfviewer
-  ${TIFF_LIBRARIES}
-  X11
-  )
+  target_link_libraries(
+	cudaDeconv
+	Buffer
+	fftw3f
+	fftw3f_threads
+	X11
+	${Boost_PROGRAM_OPTIONS_LIBRARY}
+	${Boost_FILESYSTEM_LIBRARY}
+	${Boost_REGEX_LIBRARY}
+	${Boost_SYSTEM_LIBRARY}
+	${TIFF_LIBRARIES}
+	)
+  target_link_libraries(
+	radialft
+	fftw3f
+	fftw3f_threads
+	X11
+	${Boost_PROGRAM_OPTIONS_LIBRARY}
+	${TIFF_LIBRARIES}
+	)
+  target_link_libraries(
+	otfviewer
+	${TIFF_LIBRARIES}
+	X11
+	)
 endif(WIN32)
 
 CUDA_ADD_CUFFT_TO_TARGET(cudaDeconv)

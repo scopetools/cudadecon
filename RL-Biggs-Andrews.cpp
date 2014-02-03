@@ -73,6 +73,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
   if (nIter > 0) {
     // background subtraction (including thresholding by 0):
+    printf("background=%f\n", background);
     backgroundSubtraction_GPU(X_k, nx, ny, nz, background);
     // Calculate sum for bleach correction:
     double intensity_overall = meanAboveBackground_GPU(X_k, nx, ny, nz);
@@ -113,25 +114,25 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   GPUBuffer G_kminus2(nz * nxy * sizeof(float), 0);
   GPUBuffer CC(nz * nxy * sizeof(float), 0);
 
-  // testing using 2D texture for OTF interpolation
-//   CImg<> realpart(otf.width()/2, otf.height()), imagpart(realpart);
-// #pragma omp parallel for  
-//   cimg_forXY(realpart, x, y) {
-//     realpart(x, y) = otf(2*x  , y);
-//     imagpart(x, y) = otf(2*x+1, y);
-//   }
+/*  testing using 2D texture for OTF interpolation
+  CImg<> realpart(otf.width()/2, otf.height()), imagpart(realpart);
+#pragma omp parallel for  
+  cimg_forXY(realpart, x, y) {
+    realpart(x, y) = otf(2*x  , y);
+    imagpart(x, y) = otf(2*x+1, y);
+  }
 
-//   prepareOTFtexture(realpart.data(), imagpart.data(), realpart.width(), realpart.height());
+  prepareOTFtexture(realpart.data(), imagpart.data(), realpart.width(), realpart.height());
   
-  // CPUBuffer interpOTF(d_interpOTF); //.getSize());
-  // // d_interpOTF.set(&interpOTF, 0, interpOTF.getSize(), 0);
+  CPUBuffer interpOTF(d_interpOTF); //.getSize());
+  // d_interpOTF.set(&interpOTF, 0, interpOTF.getSize(), 0);
 
-  // CImg<float> otfarr((float *) interpOTF.getPtr(), nz*2, nx/2+1);
-  // otfarr.save("interpOTF.tif");
+  CImg<float> otfarr((float *) interpOTF.getPtr(), nz*2, nx/2+1);
+  otfarr.save("interpOTF.tif");
 
-  // return;
-  //debugging code ends
-
+  return;
+  debugging code ends
+*/
   // Allocate GPU buffer for temp FFT result
   GPUBuffer fftGPUbuf(nz * nxy2 * sizeof(float), 0);
 
@@ -162,11 +163,19 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     // b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
     CC = Y_k;
     filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF, false);
+
+    // if (k==0) {
+    //   CPUBuffer CC_cpu(CC);
+    //   CImg<> CCimg((float *) CC_cpu.getPtr(), nx, ny, nz, 1, true);
+    //   CCimg.save_tiff("afterFilter0.tif");
+    // }
+
     calcLRcore(CC, rawGPUbuf, nx, ny, nz);
 
     // c. Determine next iteration image & apply positivity constraint
     // X_kminus1 = X_k;
     filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF, true);
+
     updateCurrEstimate(X_k, CC, Y_k, nx, ny, nz);
 
     // G_kminus2 = G_kminus1;

@@ -132,6 +132,16 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
 // "img" is of dimension (nx, ny, nz) and of float type
 // "otf" is of dimension (const_nzotf, const_nrotf) and of complex type
 {
+  //
+  // Rescale KERNEL
+  //
+  int nThreads = 1024;
+  int NXblock = (int) ceil( ((float)(nx*ny*nz)) / nThreads );
+  scale_kernel<<<NXblock, nThreads>>>((float *) img.getPtr(), 1./(nx*ny*nz));
+#ifndef NDEBUG
+  std::cout<< "scale_kernel(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
+
   cufftResult cuFFTErr = cufftExecR2C(rfftplan, (cufftReal *) img.getPtr(),
                                       (cuFloatComplex *) fftBuf.getPtr());
 
@@ -142,9 +152,9 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
   //
   // KERNEL 1
   //
-  int nThreads = 1024;
+
   int arraySize = nz * ny * (nx/2+1);
-  int NXblock = (int) ceil( arraySize / (float) nThreads );
+  NXblock = (int) ceil( arraySize / (float) nThreads );
   dim3 grid(NXblock);
   dim3 block(nThreads);
 
@@ -156,6 +166,9 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
     filter_kernel<<<grid, block>>>((cuFloatComplex*) fftBuf.getPtr(),
                                    (cuFloatComplex*) otfArray.getPtr(),
                                    arraySize);
+#ifndef NDEBUG
+  std::cout<< "filter_kernel(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
 
   cuFFTErr = cufftExecC2R(rfftplanInv, (cuFloatComplex*)fftBuf.getPtr(), (cufftReal *) img.getPtr());
 
@@ -164,12 +177,6 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
     throw std::runtime_error("cufft failed.");
   }
 
-  //
-  // Rescale KERNEL
-  //
-  nThreads = 1024;
-  NXblock = (int) ceil( ((float)(nx*ny*nz)) / nThreads );
-  scale_kernel<<<NXblock, nThreads>>>((float *) img.getPtr(), 1./(nx*ny*nz));
 }
 
 __device__ cuFloatComplex dev_otfinterpolate(// cuFloatComplex * d_otf, 
@@ -292,12 +299,12 @@ __host__ void calcLRcore(GPUBuffer &reblurred, GPUBuffer &raw, int nx, int ny, i
 }
 
 __global__ void LRcore_kernel(float * img1, float * img2)
-// Calculate img2/img1; results returned in img1
+//! Calculate img2/img1; results returned in img1
 {
   int ind = blockIdx.x * blockDim.x + threadIdx.x;
   
   if (ind < const_nxyz) {
-    img1[ind] = img1[ind] > const_eps ? img1[ind] : const_eps;
+    img1[ind] = fabs(img1[ind]) > const_eps ? img1[ind] : const_eps;
     img1[ind] = img2[ind]/img1[ind];
   }
 }
