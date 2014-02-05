@@ -28,6 +28,8 @@ __global__ void innerProduct_kernel(float * img1, float * img2,
 __global__ void updatePrediction_kernel(float * Y_k, float * X_k, float *X_km1, float lambda);
 __global__ void summation_kernel(float * img, double * intRes, int n);
 __global__ void sumAboveThresh_kernel(float * img, double * intRes, unsigned * counter, float thresh, int n);
+__global__ void apodize_x_kernel(int napodize, int nx, int ny, float* image);
+__global__ void apodize_y_kernel(int napodize, int nx, int ny, float* image);
 
 // Utility class used to avoid linker errors with extern
 // unsized shared memory arrays with templated type
@@ -304,8 +306,10 @@ __global__ void LRcore_kernel(float * img1, float * img2)
   int ind = blockIdx.x * blockDim.x + threadIdx.x;
   
   if (ind < const_nxyz) {
-    img1[ind] = fabs(img1[ind]) > const_eps ? img1[ind] : const_eps;
-    img1[ind] = img2[ind]/img1[ind];
+    img1[ind] = fabs(img1[ind]) > 0 ? img1[ind] : const_eps;
+    // img1[ind] = img1[ind] > const_eps ? img1[ind] : 
+    //   (img1[ind] > 0 ? const_eps : img2[ind]);
+    img1[ind] = img2[ind]/img1[ind] + const_eps;
   }
 }
 
@@ -637,4 +641,48 @@ __host__ void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale)
 #ifndef NDEBUG
   std::cout<< "rescale_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
 #endif
+}
+
+__host__ void apodize_GPU(GPUBuffer* image, int nx, int ny, int nz, int napodize)
+{
+  int blockSize = 64;
+  dim3 grid;
+  grid.x = (int)(ceil((float)nx / blockSize));
+  grid.y = nz;
+  grid.z = 1;
+
+  apodize_x_kernel<<<grid, blockSize>>>(napodize, nx, ny, ((float*)image->getPtr()));
+
+  grid.x = (int)(ceil((float)ny / blockSize));
+  apodize_y_kernel<<<grid, blockSize>>>(napodize, nx, ny, ((float*)image->getPtr()));
+}
+
+__global__ void apodize_x_kernel(int napodize, int nx, int ny, float* image)
+{
+  int k = blockDim.x * blockIdx.x + threadIdx.x;
+  if (k < nx) {
+    int section_offset = blockIdx.y * nx * ny;
+    float diff = (image[section_offset + (ny - 1) * nx + k] - image[section_offset + k]) / 2.0;
+    for (int l = 0; l < napodize; ++l) {
+      float fact = 1.0 - sin((((float)l + 0.5) / (float)napodize) *
+          M_PI * 0.5);
+      image[section_offset + l * nx + k] += diff * fact;
+      image[section_offset + (ny - 1 - l) * nx + k] -=  diff * fact;
+    }
+  }
+}
+
+__global__ void apodize_y_kernel(int napodize, int nx, int ny, float* image)
+{
+  int l = blockDim.x * blockIdx.x + threadIdx.x;
+  if (l < ny) {
+    int section_offset = blockIdx.y * nx * ny;
+    float diff = (image[section_offset + l * nx + nx - 1] - image[section_offset + l * nx]) / 2.0;
+    for (int k = 0; k < napodize; ++k) {
+      float fact = 1.0 - sin(((k + 0.5) / (float)napodize) * M_PI *
+          0.5);
+      image[section_offset + l * nx + k] += diff * fact;
+      image[section_offset + l * nx + nx - 1 - k] -= diff * fact;
+    }
+  }
 }

@@ -40,6 +40,7 @@ static bool bFirstTime = true;
 void RichardsonLucy_GPU(CImg<> & raw, float background, 
                         GPUBuffer & d_interpOTF, int nIter,
                         double deskewFactor, int deskewedNx, int extraShift,
+                        int napodize,
                         CPUBuffer &rotationMatrix, cufftHandle rfftplanGPU, 
                         cufftHandle rfftplanInvGPU, CImg<> & raw_deskewed)
 {
@@ -72,6 +73,13 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 #endif
 
   if (nIter > 0) {
+    apodize_GPU(&X_k, nx, ny, nz, napodize);
+    {
+      CPUBuffer Xk_cpu(X_k);
+      CImg<> CCimg((float *) Xk_cpu.getPtr(), nx, ny, nz, 1, true);
+      CCimg.save_tiff("afterApodize.tif");
+    }
+
     // background subtraction (including thresholding by 0):
     printf("background=%f\n", background);
     backgroundSubtraction_GPU(X_k, nx, ny, nz, background);
@@ -356,7 +364,7 @@ int RL_interface(const unsigned short * const raw_data,
   // Finally do calculation including deskewing, decon, rotation:
   CImg<> raw_deskewed;
   RichardsonLucy_GPU(raw_image, background, d_interpOTF, nIters,
-                     deskewFactor, deskewedXdim, extraShift, rotMatrix,
+                     deskewFactor, deskewedXdim, extraShift, 15, rotMatrix,
                      rfftplanGPU, rfftplanInvGPU, raw_deskewed);
 
   // Copy deconvolved data, stored in raw_image, to "result" for return:

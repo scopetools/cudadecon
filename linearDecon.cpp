@@ -99,7 +99,7 @@ int wienerfilter(CImg<> & g, float dkx, float dky, float dkz,
 
 int main(int argc, char *argv[])
 {
-  int napodize = 10;
+  int napodize;
   float background;
   float NA=1.2;
   ImgParams imgParams;
@@ -126,6 +126,7 @@ int main(int argc, char *argv[])
     ("wavelength,l", po::value<float>(&imgParams.wave)->default_value(.525), "emission wavelength (um)")
     ("wiener,W", po::value<float>(&wiener)->default_value(-1.0), "Wiener constant (regularization factor); if this value is postive then do Wiener filter instead of R-L")
     ("background,b", po::value<float>(&background)->default_value(90.f), "user-supplied background")
+    ("napodize,a", po::value<int>(&napodize)->default_value(15), "number of pixels to soften edge with")
     ("NA,n", po::value<float>(&NA)->default_value(1.2), "numerical aperture")
     ("RL,i", po::value<int>(&RL_iters)->default_value(15), "run Richardson-Lucy how-many iterations")
     ("deskew,D", po::value<float>(&deskewAngle)->default_value(0.0), "Deskew angle; if not 0.0 then perform deskewing before deconv")
@@ -343,13 +344,13 @@ int main(int argc, char *argv[])
       // }
       // else
       RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
-                         deskewFactor, deskewedXdim, extraShift, rotMatrix,
+                         deskewFactor, deskewedXdim, extraShift, napodize, rotMatrix,
                          rfftplanGPU, rfftplanInvGPU, raw_deskewed);
     }
     else if (rotMatrix.getSize()) {// do only rotation
       std::cout << rotMatrix.getSize() << std::endl;
       RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
-                         deskewFactor, deskewedXdim, extraShift, rotMatrix,
+                         deskewFactor, deskewedXdim, extraShift, napodize, rotMatrix,
                          rfftplanGPU, rfftplanInvGPU, raw_deskewed);
     }
     else {
