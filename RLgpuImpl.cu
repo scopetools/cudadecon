@@ -4,12 +4,12 @@
 #include <GPUBuffer.h>
 #include <cufft.h>
 
-__constant__ int const_nx;
-__constant__ int const_ny;
-__constant__ int const_nz;
+__constant__ unsigned const_nx;
+__constant__ unsigned const_ny;
+__constant__ unsigned const_nz;
 __constant__ unsigned const_nxyz;
-__constant__ int const_nrotf;
-__constant__ int const_nzotf;
+__constant__ unsigned const_nrotf;
+__constant__ unsigned const_nzotf;
 
 __constant__ float const_kxscale;
 __constant__ float const_kyscale;
@@ -51,8 +51,8 @@ struct SharedMemory
 };
 
 
-texture<float, cudaTextureType2D, cudaReadModeElementType> texRef1, texRef2;
-cudaArray* d_realpart, *d_imagpart;  // used for OTF texture
+// texture<float, cudaTextureType2D, cudaReadModeElementType> texRef1, texRef2;
+// cudaArray* d_realpart, *d_imagpart;  // used for OTF texture
 
 
 __host__ void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
@@ -73,39 +73,39 @@ __host__ void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
   cutilSafeCall(cudaMemcpyToSymbol(const_otf, h_otf, nrotf*nzotf*2*sizeof(float)));
 }
 
-__host__ void prepareOTFtexture(float * realpart, float * imagpart, int nx, int ny)
-{
-  // Allocate CUDA array in device memory
-  cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
+// __host__ void prepareOTFtexture(float * realpart, float * imagpart, int nx, int ny)
+// {
+//   // Allocate CUDA array in device memory
+//   cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
 
-  cudaMallocArray(&d_realpart, &channelDesc, nx, ny);
-  cudaMallocArray(&d_imagpart, &channelDesc, nx, ny);
+//   cudaMallocArray(&d_realpart, &channelDesc, nx, ny);
+//   cudaMallocArray(&d_imagpart, &channelDesc, nx, ny);
 
-  // Copy to device memory
-  cudaMemcpyToArray(d_realpart, 0, 0, realpart,
-                    nx * ny * sizeof(float),
-                    cudaMemcpyHostToDevice);
-  cudaMemcpyToArray(d_imagpart, 0, 0, imagpart,
-                    nx * ny * sizeof(float),
-                    cudaMemcpyHostToDevice);
+//   // Copy to device memory
+//   cudaMemcpyToArray(d_realpart, 0, 0, realpart,
+//                     nx * ny * sizeof(float),
+//                     cudaMemcpyHostToDevice);
+//   cudaMemcpyToArray(d_imagpart, 0, 0, imagpart,
+//                     nx * ny * sizeof(float),
+//                     cudaMemcpyHostToDevice);
 
-  // Set texture reference parameters
-  texRef1.addressMode[0] = cudaAddressModeClamp;
-  texRef1.addressMode[1] = cudaAddressModeClamp;
-  texRef1.filterMode = cudaFilterModeLinear;
-  texRef1.normalized = true;
-  texRef2.addressMode[0] = cudaAddressModeClamp;
-  texRef2.addressMode[1] = cudaAddressModeClamp;
-  texRef2.filterMode = cudaFilterModeLinear;
-  texRef2.normalized = true;
-  // Bind the arrays to the texture reference
-  cudaBindTextureToArray(texRef1, d_realpart, channelDesc);
-  cudaBindTextureToArray(texRef2, d_imagpart, channelDesc);
-}
+//   // Set texture reference parameters
+//   texRef1.addressMode[0] = cudaAddressModeClamp;
+//   texRef1.addressMode[1] = cudaAddressModeClamp;
+//   texRef1.filterMode = cudaFilterModeLinear;
+//   texRef1.normalized = true;
+//   texRef2.addressMode[0] = cudaAddressModeClamp;
+//   texRef2.addressMode[1] = cudaAddressModeClamp;
+//   texRef2.filterMode = cudaFilterModeLinear;
+//   texRef2.normalized = true;
+//   // Bind the arrays to the texture reference
+//   cudaBindTextureToArray(texRef1, d_realpart, channelDesc);
+//   cudaBindTextureToArray(texRef2, d_imagpart, channelDesc);
+// }
 
 __global__ void bgsubtr_kernel(float * img, int size, float background)
 {
-  int ind = blockIdx.x * blockDim.x + threadIdx.x;
+  unsigned ind = (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
 
   if (ind < size) {
     img[ind] -= background;
@@ -113,12 +113,16 @@ __global__ void bgsubtr_kernel(float * img, int size, float background)
   }
 }
 
-__host__ void backgroundSubtraction_GPU(GPUBuffer &img, int nx, int ny, int nz, float background)
+__host__ void backgroundSubtraction_GPU(GPUBuffer &img, int nx, int ny, int nz, float background, unsigned maxGridXdim)
 {
-  int nThreads = 1024;
-  int NXblock = (int) ceil( nx*ny*nz /(float) nThreads );
-  dim3 grid(NXblock, 1, 1);
-  dim3 block(nThreads, 1, 1);
+  unsigned nThreads = 1024;
+  unsigned NXblock = ceil( nx*ny*nz /(float) nThreads );
+  unsigned NYblock = 1;
+  if (NXblock > maxGridXdim)
+    NYblock = NXblock = ceil(sqrt(NXblock));
+
+  dim3 grid(NXblock, NYblock);
+  dim3 block(nThreads);
 
   bgsubtr_kernel<<<grid, block>>>((float *) img.getPtr(), nx*ny*nz, background);
 #ifndef NDEBUG
@@ -130,16 +134,21 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
                         // GPUBuffer &otf,
                         cufftHandle & rfftplan, cufftHandle & rfftplanInv,
                         GPUBuffer &fftBuf,
-                        GPUBuffer &otfArray, bool bConj)
+                        GPUBuffer &otfArray, bool bConj, unsigned maxGridXdim)
 // "img" is of dimension (nx, ny, nz) and of float type
 // "otf" is of dimension (const_nzotf, const_nrotf) and of complex type
 {
   //
   // Rescale KERNEL
   //
-  int nThreads = 1024;
-  int NXblock = (int) ceil( ((float)(nx*ny*nz)) / nThreads );
-  scale_kernel<<<NXblock, nThreads>>>((float *) img.getPtr(), 1./(nx*ny*nz));
+  unsigned nThreads = 1024;
+  unsigned NXblock = ceil( ((float)(nx*ny*nz)) / nThreads );
+  unsigned NYblock = 1;
+  if (NXblock > maxGridXdim)
+    NXblock = NYblock = ceil(sqrt(NXblock));
+
+  dim3 gridDim(NXblock, NYblock);
+  scale_kernel<<<gridDim, nThreads>>>((float *) img.getPtr(), 1./(nx*ny*nz));
 #ifndef NDEBUG
   std::cout<< "scale_kernel(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
 #endif
@@ -155,8 +164,8 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
   // KERNEL 1
   //
 
-  int arraySize = nz * ny * (nx/2+1);
-  NXblock = (int) ceil( arraySize / (float) nThreads );
+  unsigned arraySize = nz * ny * (nx/2+1);
+  NXblock = ceil( arraySize / (float) nThreads );
   dim3 grid(NXblock);
   dim3 block(nThreads);
 
@@ -231,7 +240,7 @@ __device__ cuFloatComplex dev_otfinterpolate(// cuFloatComplex * d_otf,
 
 __global__ void filter_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF, int size)
 {
-  int ind = blockIdx.x * blockDim.x + threadIdx.x;
+  unsigned ind = blockIdx.x * blockDim.x + threadIdx.x;
 
   if ( ind < size ) {
     cuFloatComplex otf_val = devOTF[ind];
@@ -241,7 +250,7 @@ __global__ void filter_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF, in
 
 __global__ void filterConj_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF, int size)
 {
-  int ind = blockIdx.x * blockDim.x + threadIdx.x;
+  unsigned ind = blockIdx.x * blockDim.x + threadIdx.x;
 
   if ( ind < size ) {
     cuFloatComplex otf_val = devOTF[ind];
@@ -253,8 +262,8 @@ __global__ void filterConj_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF
 
 __global__ void makeOTFarray_kernel(cuFloatComplex *result)
 {
-  int kx = blockIdx.x * blockDim.x + threadIdx.x;
-  // x>>1 is equivalent to x/2 when x is interger
+  unsigned kx = blockIdx.x * blockDim.x + threadIdx.x;
+  // x>>1 is equivalent to x/2 when x is integer
   int ky = blockIdx.y > const_ny>>1 ? blockIdx.y - const_ny : blockIdx.y;
   int kz = blockIdx.z > const_nz>>1 ? blockIdx.z - const_nz : blockIdx.z;
 
@@ -270,7 +279,7 @@ __host__ void makeOTFarray(GPUBuffer &otfarray, int nx, int ny, int nz)
 {
   unsigned nThreads=128;
   dim3 block(nThreads, 1, 1);
-  unsigned blockNx = (int) ceil( (nx/2+1) / (float) nThreads );
+  unsigned blockNx = ceil( (nx/2+1) / (float) nThreads );
   dim3 grid(blockNx, ny, nz);
 
   makeOTFarray_kernel<<<grid, block>>>( (cuFloatComplex *) otfarray.getPtr());
@@ -281,29 +290,36 @@ __host__ void makeOTFarray(GPUBuffer &otfarray, int nx, int ny, int nz)
 
 __global__ void scale_kernel(float * img, double factor)
 {
-  unsigned ind = blockIdx.x * blockDim.x + threadIdx.x;
+  unsigned ind = (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
   if (ind < const_nxyz)
     img[ind] *= factor;
 }
 
 
-__host__ void calcLRcore(GPUBuffer &reblurred, GPUBuffer &raw, int nx, int ny, int nz)
+__host__ void calcLRcore(GPUBuffer &reblurred, GPUBuffer &raw, int nx, int ny, int nz, unsigned maxGridXdim)
 // calculate raw image divided by reblurred, a key step in R-L;
 // Both input, "reblurred" and "raw", are of dimension (nx, ny, nz) and of floating type;
 // "reblurred" is updated upon return.
 {
-  int nThreads = 1024;
-  int NXblock = (int) ceil( ((float) (nx*ny*nz)) /nThreads );
-  dim3 grid(NXblock, 1, 1);
-  dim3 block(nThreads, 1, 1);
+  unsigned nThreads = 1024;
+  unsigned NXBlocks = ceil( ((float) (nx*ny*nz)) /nThreads );
+  unsigned NYBlocks = 1;
+  if (NXBlocks > maxGridXdim)
+    NYBlocks = NXBlocks = ceil(sqrt(NXBlocks));
+
+  dim3 grid(NXBlocks, NYBlocks);
+  dim3 block(nThreads);
 
   LRcore_kernel<<<grid, block>>>((float *) reblurred.getPtr(), (float *) raw.getPtr());
+#ifndef NDEBUG
+  std::cout<< "calcLRcore(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
 }
 
 __global__ void LRcore_kernel(float * img1, float * img2)
 //! Calculate img2/img1; results returned in img1
 {
-  int ind = blockIdx.x * blockDim.x + threadIdx.x;
+  unsigned ind = (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
   
   if (ind < const_nxyz) {
     img1[ind] = fabs(img1[ind]) > 0 ? img1[ind] : const_eps;
@@ -314,24 +330,31 @@ __global__ void LRcore_kernel(float * img1, float * img2)
 }
 
 __host__ void updateCurrEstimate(GPUBuffer &X_k, GPUBuffer &CC, GPUBuffer &Y_k,
-                                 int nx, int ny, int nz)
+                                 int nx, int ny, int nz, unsigned maxGridXdim)
 // calculate updated current estimate: Y_k * CC plus positivity constraint
 // All inputs are of dimension (nx+2, ny, nz) and of floating type;
 // "X_k" is updated upon return.
 {
-  int nThreads = 1024;
-  int NXblock = (int) ceil( ((float) (nx*ny*nz)) / nThreads );
-  dim3 grid(NXblock, 1, 1);
-  dim3 block(nThreads, 1, 1);
+  unsigned nThreads = 1024;
+  unsigned NXBlocks = ceil( ((float) (nx*ny*nz)) /nThreads );
+  unsigned NYBlocks = 1;
+  if (NXBlocks > maxGridXdim)
+    NYBlocks = NXBlocks = ceil(sqrt(NXBlocks));
+
+  dim3 grid(NXBlocks, NYBlocks);
+  dim3 block(nThreads);
 
   currEstimate_kernel<<<grid, block>>>((float *) X_k.getPtr(),
                                        (float *) CC.getPtr(),
                                        (float *) Y_k.getPtr());
+#ifndef NDEBUG
+  std::cout<< "updateCurrEstimate(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
 }
 
 __global__ void currEstimate_kernel(float * img1, float * img2, float * img3)
 {
-  int ind = blockIdx.x * blockDim.x + threadIdx.x;
+  unsigned ind = (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
   
   if (ind < const_nxyz) {
     img1[ind] = img2[ind] * img3[ind];
@@ -340,25 +363,33 @@ __global__ void currEstimate_kernel(float * img1, float * img2, float * img3)
 }
 
 __host__ void calcCurrPrevDiff(GPUBuffer &X_k, GPUBuffer &Y_k, GPUBuffer &G_kminus1,
-                               int nx, int ny, int nz)
+                               int nx, int ny, int nz, unsigned maxGridXdim)
 // calculate X_k - Y_k and assign the result to G_kminus1;
 // All inputs are of dimension (nx+2, ny, nz) and of floating type;
 // "X_k" is updated upon return.
 {
-  int nThreads = 1024; //128;
-  int NXblock = (int) ceil( ((float) (nx*ny*nz)) / nThreads );
-  dim3 grid(NXblock, 1, 1);
-  dim3 block(nThreads, 1, 1);
+  unsigned nThreads = 1024;
+
+  unsigned NXBlocks = ceil( ((float) (nx*ny*nz)) /nThreads );
+  unsigned NYBlocks = 1;
+  if (NXBlocks > maxGridXdim)
+    NYBlocks = NXBlocks = ceil(sqrt(NXBlocks));
+
+  dim3 grid(NXBlocks, NYBlocks);
+  dim3 block(nThreads);
 
   currPrevDiff_kernel<<<grid, block>>>((float *) X_k.getPtr(),
                                        (float *) Y_k.getPtr(),
                                        (float *) G_kminus1.getPtr());
+#ifndef NDEBUG
+  std::cout<< "calcCurrPrevDiff(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
 }
 
 __global__ void currPrevDiff_kernel(float * img1, float * img2, float * img3)
 {
   // compute x, y, z indices based on block and thread indices
-  int ind = blockIdx.x * blockDim.x + threadIdx.x;
+  unsigned ind = (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
   
   if (ind < const_nxyz)
     img3[ind] = img1[ind] - img2[ind];
@@ -369,8 +400,8 @@ __host__ double calcAccelFactor(GPUBuffer &G_km1, GPUBuffer &G_km2,
 // (G_km1 dot G_km2) / (G_km2 dot G_km2)
 // All inputs are of dimension (nx, ny, nz) and of floating type;
 {
-  int nThreads = 1024; // Maximum number of threads per block for C2070, M2090, or Quadro 4000
-  int nBlocks = (int) ceil( ((float) (nx*ny*nz)) / nThreads/2 );
+  unsigned nThreads = 1024; // Maximum number of threads per block for C2070, M2090, or Quadro 4000
+  unsigned nBlocks = ceil( ((float) (nx*ny*nz)) / nThreads/2 );
 
   // Used for holding partial reduction results; one for each thread block:
   GPUBuffer devBuf1(nBlocks * sizeof(double) * 2, 0);
@@ -385,7 +416,7 @@ __host__ double calcAccelFactor(GPUBuffer &G_km1, GPUBuffer &G_km2,
 
   double numerator=0, denom=0;
   double *ptr = (double *) h_numer_denom.getPtr();
-  for (int i=0; i<nBlocks; i++) {
+  for (unsigned i=0; i<nBlocks; i++) {
     numerator += *ptr;
     denom += *(ptr + nBlocks);
     ptr++;
@@ -460,54 +491,65 @@ __global__ void innerProduct_kernel(float * img1, float * img2,
 }
 
 __host__ void updatePrediction(GPUBuffer &Y_k, GPUBuffer &X_k, GPUBuffer &X_kminus1,
-                               double lambda, int nx, int ny, int nz)
+                               double lambda, int nx, int ny, int nz, unsigned maxGridXdim)
 {
   // Y_k = X_k + lambda * (X_k - X_kminus1)
-  int nxyz = nx*ny*nz;
-  int nThreads = 1024; // Maximum number of threads per block for C2070, M20990, or Quadro 4000
-  int nBlocks = (int) ceil( ((float) nxyz) / nThreads );
+  unsigned nThreads = 1024; // Maximum number of threads per block for C2070, M20990, or Quadro 4000
+  unsigned NXblock = ceil( nx*ny*nz /(float) nThreads );
+  unsigned NYblock = 1;
+  if (NXblock > maxGridXdim)
+    NYblock = NXblock = ceil(sqrt(NXblock));
 
-  updatePrediction_kernel<<<nBlocks, nThreads>>>((float *) Y_k.getPtr(),
-                                                 (float *) X_k.getPtr(),
-                                                 (float *) X_kminus1.getPtr(),
-                                                 lambda);
+  dim3 grid(NXblock, NYblock);
+  dim3 block(nThreads);
+
+  updatePrediction_kernel<<<grid, block>>>((float *) Y_k.getPtr(),
+                                           (float *) X_k.getPtr(),
+                                           (float *) X_kminus1.getPtr(),
+                                           lambda);
+#ifndef NDEBUG
+  std::cout<< "updatePrediction(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
 }
 
 __global__ void updatePrediction_kernel(float * Y_k, float * X_k, float *X_km1, float lambda)
 {
-  unsigned ind = blockIdx.x * blockDim.x + threadIdx.x;
+  unsigned ind = (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
   if (ind < const_nxyz) {
     Y_k[ind] = X_k[ind] + lambda * (X_k[ind] - X_km1[ind]);
     Y_k[ind] = (Y_k[ind] > 0) ? Y_k[ind] : 0;
   }
 }
 
-__host__ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz)
+__host__ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz, unsigned maxGridXdim)
 {
   unsigned nThreads = 1024;
-  unsigned nBlocks = (unsigned) ceil( nx*ny*nz /(float) nThreads/2 );
+  unsigned nXblocks = ceil( nx*ny*nz /(float) nThreads/2 );
+  unsigned nYblocks = 1;
+  if (nXblocks > maxGridXdim)
+    nYblocks = nXblocks = ceil(sqrt(nXblocks));
+
   unsigned smemSize = nThreads * sizeof(double);
 
   // used for holding intermediate reduction results; one for each thread block
-  GPUBuffer d_intres(nBlocks * sizeof(double), 0);
+  GPUBuffer d_intres(nYblocks * nXblocks * sizeof(double), 0);
 
-  summation_kernel<<<nBlocks, nThreads, smemSize>>>((float *) img.getPtr(),
-                                                    (double *) d_intres.getPtr(), nx*ny*nz);
+  summation_kernel<<<dim3(nXblocks, nYblocks), nThreads, smemSize>>>
+    ((float *) img.getPtr(), (double *) d_intres.getPtr(), nx*ny*nz);
   // download intermediate results to host:
   CPUBuffer intRes(d_intres);
   double sum=0;
   double *p=(double *)intRes.getPtr();
-  for (int i=0; i<nBlocks; i++)
+  for (unsigned i=0; i<nXblocks*nYblocks; i++)
     sum += *p++;
 
   float mean = sum/(nx*ny*nz);
 
-  GPUBuffer d_counter(nBlocks * sizeof(unsigned), 0);
+  GPUBuffer d_counter(nXblocks * nYblocks * sizeof(unsigned), 0);
   smemSize = nThreads * (sizeof(double) + sizeof(unsigned));
-  sumAboveThresh_kernel<<<nBlocks, nThreads, smemSize>>>((float *) img.getPtr(),
-                                                         (double *) d_intres.getPtr(),
-                                                         (unsigned *) d_counter.getPtr(),
-                                                         mean, nx*ny*nz);
+  sumAboveThresh_kernel<<<dim3(nXblocks, nYblocks), nThreads, smemSize>>>
+    ((float *) img.getPtr(), (double *) d_intres.getPtr(),
+     (unsigned *) d_counter.getPtr(), mean, nx*ny*nz);
   
   // download intermediate results to host:
   CPUBuffer counter(d_counter);
@@ -516,7 +558,7 @@ __host__ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz)
   unsigned count = 0;
   p=(double *)intRes.getPtr();
   unsigned *pc = (unsigned *) counter.getPtr();
-  for (int i=0; i<nBlocks; i++) {
+  for (unsigned i=0; i<nXblocks*nYblocks; i++) {
     sum += *p++;
     count += *pc++;
   }
@@ -533,7 +575,7 @@ __global__ void summation_kernel(float * img, double * intRes, int n)
   double *sdata = SharedMemory<double>();
 
   unsigned tid = threadIdx.x;
-  unsigned ind = blockIdx.x * blockDim.x*2 + threadIdx.x;
+  unsigned ind = (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x*2 + threadIdx.x;
 
   double mySum= (ind < n) ? img[ind] : 0;
 
@@ -581,7 +623,7 @@ __global__ void sumAboveThresh_kernel(float * img, double * intRes, unsigned * c
   unsigned *count = (unsigned *) (sdata + blockDim.x);
 
   unsigned tid = threadIdx.x;
-  unsigned ind = blockIdx.x * blockDim.x*2 + threadIdx.x;
+  unsigned ind = (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x*2 + threadIdx.x;
 
   double mySum= 0;
   unsigned myCount = 0;
@@ -633,11 +675,15 @@ __global__ void sumAboveThresh_kernel(float * img, double * intRes, unsigned * c
   }
 }
 
-__host__ void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale)
+__host__ void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale, unsigned maxGridXdim)
 {
   unsigned nThreads = 1024;
-  unsigned nBlocks = (unsigned) ceil( nx*ny*nz / (float) nThreads );
-  scale_kernel<<<nBlocks, nThreads>>>((float *) img.getPtr(), scale);
+  unsigned NXBlocks = ceil( nx*ny*nz / (float) nThreads );
+  unsigned NYBlocks = 1;
+  if (NXBlocks > maxGridXdim)
+    NYBlocks = NXBlocks = ceil(sqrt(NXBlocks));
+
+  scale_kernel<<<dim3(NXBlocks, NYBlocks), nThreads>>>((float *) img.getPtr(), scale);
 #ifndef NDEBUG
   std::cout<< "rescale_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
 #endif
@@ -645,23 +691,23 @@ __host__ void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale)
 
 __host__ void apodize_GPU(GPUBuffer* image, int nx, int ny, int nz, int napodize)
 {
-  int blockSize = 64;
+  unsigned blockSize = 64;
   dim3 grid;
-  grid.x = (int)(ceil((float)nx / blockSize));
+  grid.x = ceil((float)nx / blockSize);
   grid.y = nz;
   grid.z = 1;
 
   apodize_x_kernel<<<grid, blockSize>>>(napodize, nx, ny, ((float*)image->getPtr()));
 
-  grid.x = (int)(ceil((float)ny / blockSize));
+  grid.x = ceil((float)ny / blockSize);
   apodize_y_kernel<<<grid, blockSize>>>(napodize, nx, ny, ((float*)image->getPtr()));
 }
 
 __global__ void apodize_x_kernel(int napodize, int nx, int ny, float* image)
 {
-  int k = blockDim.x * blockIdx.x + threadIdx.x;
+  unsigned k = blockDim.x * blockIdx.x + threadIdx.x;
   if (k < nx) {
-    int section_offset = blockIdx.y * nx * ny;
+    unsigned section_offset = blockIdx.y * nx * ny;
     float diff = (image[section_offset + (ny - 1) * nx + k] - image[section_offset + k]) / 2.0;
     for (int l = 0; l < napodize; ++l) {
       float fact = 1.0 - sin((((float)l + 0.5) / (float)napodize) *
@@ -676,7 +722,7 @@ __global__ void apodize_y_kernel(int napodize, int nx, int ny, float* image)
 {
   int l = blockDim.x * blockIdx.x + threadIdx.x;
   if (l < ny) {
-    int section_offset = blockIdx.y * nx * ny;
+    unsigned section_offset = blockIdx.y * nx * ny;
     float diff = (image[section_offset + l * nx + nx - 1] - image[section_offset + l * nx]) / 2.0;
     for (int k = 0; k < napodize; ++k) {
       float fact = 1.0 - sin(((k + 0.5) / (float)napodize) * M_PI *

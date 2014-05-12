@@ -42,7 +42,8 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         double deskewFactor, int deskewedNx, int extraShift,
                         int napodize,
                         CPUBuffer &rotationMatrix, cufftHandle rfftplanGPU, 
-                        cufftHandle rfftplanInvGPU, CImg<> & raw_deskewed)
+                        cufftHandle rfftplanInvGPU, CImg<> & raw_deskewed,
+                        cudaDeviceProp *devProp)
 {
   // "raw" contains the raw image, also used as the initial guess X_0
   unsigned int nx = raw.width();
@@ -82,15 +83,15 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
     // background subtraction (including thresholding by 0):
     printf("background=%f\n", background);
-    backgroundSubtraction_GPU(X_k, nx, ny, nz, background);
+    backgroundSubtraction_GPU(X_k, nx, ny, nz, background, devProp->maxGridSize[2]);
     // Calculate sum for bleach correction:
-    double intensity_overall = meanAboveBackground_GPU(X_k, nx, ny, nz);
+    double intensity_overall = meanAboveBackground_GPU(X_k, nx, ny, nz, devProp->maxGridSize[2]);
     if (bFirstTime) {
       intensity_overall0 = intensity_overall;
       bFirstTime = false;
     }
     else
-      rescale_GPU(X_k, nx, ny, nz, intensity_overall0/intensity_overall);
+      rescale_GPU(X_k, nx, ny, nz, intensity_overall0/intensity_overall, devProp->maxGridSize[2]);
 #ifndef NDEBUG
     printf("intensity_overall=%lf\n", intensity_overall);
 #endif
@@ -157,7 +158,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 #ifndef NDEBUG
       printf("labmda = %lf\n", lambda);
 #endif
-      updatePrediction(Y_k, X_k, X_kminus1, lambda, nx, ny, nz);
+      updatePrediction(Y_k, X_k, X_kminus1, lambda, nx, ny, nz, devProp->maxGridSize[2]);
     }
     else 
       Y_k = X_k;
@@ -170,7 +171,8 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     
     // b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
     CC = Y_k;
-    filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF, false);
+    filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
+              false, devProp->maxGridSize[2]);
 
     // if (k==0) {
     //   CPUBuffer CC_cpu(CC);
@@ -178,16 +180,17 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     //   CCimg.save_tiff("afterFilter0.tif");
     // }
 
-    calcLRcore(CC, rawGPUbuf, nx, ny, nz);
+    calcLRcore(CC, rawGPUbuf, nx, ny, nz, devProp->maxGridSize[2]);
 
     // c. Determine next iteration image & apply positivity constraint
     // X_kminus1 = X_k;
-    filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF, true);
+    filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
+              true, devProp->maxGridSize[2]);
 
-    updateCurrEstimate(X_k, CC, Y_k, nx, ny, nz);
+    updateCurrEstimate(X_k, CC, Y_k, nx, ny, nz, devProp->maxGridSize[2]);
 
     // G_kminus2 = G_kminus1;
-    calcCurrPrevDiff(X_k, Y_k, G_kminus1, nx, ny, nz);
+    calcCurrPrevDiff(X_k, Y_k, G_kminus1, nx, ny, nz, devProp->maxGridSize[2]);
   }
 
   // Rotate decon result if requested:
@@ -361,11 +364,14 @@ int RL_interface(const unsigned short * const raw_data,
   if (bCrop)
     raw_image.crop(0, 0, 0, 0, output_nx-1, output_ny-1, output_nz-1, 0);
 
+  cudaDeviceProp deviceProp;
+  cudaGetDeviceProperties(&deviceProp, 0);
+
   // Finally do calculation including deskewing, decon, rotation:
   CImg<> raw_deskewed;
   RichardsonLucy_GPU(raw_image, background, d_interpOTF, nIters,
                      deskewFactor, deskewedXdim, extraShift, 15, rotMatrix,
-                     rfftplanGPU, rfftplanInvGPU, raw_deskewed);
+                     rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp);
 
   // Copy deconvolved data, stored in raw_image, to "result" for return:
   memcpy(result, raw_image.data(), raw_image.size() * sizeof(float));

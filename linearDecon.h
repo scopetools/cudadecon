@@ -44,7 +44,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         int napodize,
                         CPUBuffer &rotationMatrix,
                         cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU,
-                        CImg<> & raw_deskewed);
+                        CImg<> & raw_deskewed, cudaDeviceProp* devprop);
 
 void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
                        float kxscale, float kyscale, float kzscale,
@@ -53,26 +53,26 @@ unsigned findOptimalDimension(unsigned inSize, int step=-1);
 // void prepareOTFtexture(float * realpart, float * imagpart, int nx, int ny);
 void makeOTFarray(GPUBuffer &otfarray, int nx, int ny, int nz);
 
-void backgroundSubtraction_GPU(GPUBuffer &img, int nx, int ny, int nz, float background);
+void backgroundSubtraction_GPU(GPUBuffer &img, int nx, int ny, int nz, float background, unsigned maxGridXdim);
 
 void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
                cufftHandle & rfftplan, cufftHandle & rfftplanInv,
                GPUBuffer &fftBuf,
-               GPUBuffer &otf, bool bConj);
+               GPUBuffer &otf, bool bConj, unsigned maxGridXdim);
 
-void calcLRcore(GPUBuffer &reblurred, GPUBuffer &raw, int nx, int ny, int nz);
+void calcLRcore(GPUBuffer &reblurred, GPUBuffer &raw, int nx, int ny, int nz, unsigned maxGridXdim);
 
 void updateCurrEstimate(GPUBuffer &X_k, GPUBuffer &CC, GPUBuffer &Y_k,
-                        int nx, int ny, int nz);
+                        int nx, int ny, int nz, unsigned maxGridXdim);
 
 void calcCurrPrevDiff(GPUBuffer &X_k, GPUBuffer &Y_k, GPUBuffer &G_kminus1,
-                      int nx, int ny, int nz);
+                      int nx, int ny, int nz, unsigned maxGridXdim);
 
 double calcAccelFactor(GPUBuffer &G_km1, GPUBuffer &G_km2,
                        int nx, int ny, int nz, float eps);
 
 void updatePrediction(GPUBuffer &Y_k, GPUBuffer &X_k, GPUBuffer &X_kminus1,
-                      double lambda, int nx, int ny, int nz);
+                      double lambda, int nx, int ny, int nz, unsigned maxGridXdim);
 
 
 void deskew_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
@@ -84,8 +84,8 @@ void rotate_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
 void cropGPU(GPUBuffer &inBuf, int nx, int ny, int nz,
              int new_nx, int new_ny, int new_nz,
              GPUBuffer &outBuf);
-double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz);
-void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale);
+double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz, unsigned maxGridXdim);
+void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale, unsigned maxGridXdim);
 void apodize_GPU(GPUBuffer* image, int nx, int ny, int nz, int napodize);
 
 

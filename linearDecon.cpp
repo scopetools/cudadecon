@@ -173,6 +173,9 @@ int main(int argc, char *argv[])
   cufftHandle rfftplanGPU, rfftplanInvGPU;
   GPUBuffer d_interpOTF(0);
 
+  cudaDeviceProp deviceProp;
+  cudaGetDeviceProperties(&deviceProp, 0);
+
   // Loop over all matching input TIFFs:
   for (std::vector<std::string>::iterator it=all_matching_files.begin();
        it != all_matching_files.end(); it++) {
@@ -237,7 +240,7 @@ int main(int argc, char *argv[])
         deskewFactor = cos(deskewAngle * M_PI/180.) * imgParams.dz / imgParams.dr;
         if (outputWidth ==0)
           deskewedXdim += floor(new_nz * imgParams.dz * 
-                                fabs(cos(deskewAngle * M_PI/180.)) / imgParams.dr)/4.; // TODO /4.
+                                fabs(cos(deskewAngle * M_PI/180.)) / imgParams.dr); // TODO /4.
         else
           deskewedXdim = outputWidth; // use user-provided output width if available
 
@@ -345,13 +348,13 @@ int main(int argc, char *argv[])
       // else
       RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
                          deskewFactor, deskewedXdim, extraShift, napodize, rotMatrix,
-                         rfftplanGPU, rfftplanInvGPU, raw_deskewed);
+                         rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp);
     }
     else if (rotMatrix.getSize()) {// do only rotation
       std::cout << rotMatrix.getSize() << std::endl;
       RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
                          deskewFactor, deskewedXdim, extraShift, napodize, rotMatrix,
-                         rfftplanGPU, rfftplanInvGPU, raw_deskewed);
+                         rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp);
     }
     else {
       std::cerr << "Nothing is performed\n";
