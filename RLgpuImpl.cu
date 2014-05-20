@@ -4,6 +4,11 @@
 #include <GPUBuffer.h>
 #include <cufft.h>
 
+#ifdef _WIN32
+#define  _USE_MATH_DEFINES
+#include <math.h>
+#endif
+
 __constant__ unsigned const_nx;
 __constant__ unsigned const_ny;
 __constant__ unsigned const_nz;
