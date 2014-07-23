@@ -18,7 +18,7 @@ set(SCI_GROUP_WRITE GROUP_WRITE)
 set(SCI_WORLD_FILE_PERMS WORLD_READ)
 set(SCI_WORLD_PROGRAM_PERMS WORLD_READ WORLD_EXECUTE)
 
-message(STATUS "Build type is '${CMAKE_BUILD_TYPE}'")
+# message(STATUS "Build type is '${CMAKE_BUILD_TYPE}'")
 
 if (WIN32)
   find_package(openmp)
@@ -27,6 +27,9 @@ if (WIN32)
 else()
   set(CMAKE_CXX_FLAGS "-Wall -fopenmp")
 endif()
+
+### on WIN32, /EHsc is already included by default
+### message(STATUS "CXX_FLAGS is '${CMAKE_CXX_FLAGS}'")
 
 find_package(CUDA REQUIRED)
 
