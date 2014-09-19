@@ -1,7 +1,3 @@
-
-#include <boost/program_options.hpp>
-namespace po = boost::program_options;
-
 #include "linearDecon.h"
 #include <exception>
 
@@ -113,7 +109,10 @@ int main(int argc, char *argv[])
   float rotationAngle=0.0;
   unsigned outputWidth;
   int extraShift=0;
-
+  std::vector<int> final_CropTo_boundaries;
+  bool bSaveUshort = false;
+  std::vector<bool> bDoMaxIntProj;
+  std::vector< CImg<> > MIprojections;
 
   TIFFSetWarningHandler(NULL);
 
@@ -135,6 +134,11 @@ int main(int argc, char *argv[])
     ("shift,x", po::value<int>(&extraShift)->default_value(0), "If deskewed, the output image's extra shift in X (positive->left")
     ("rotate,R", po::value<float>(&rotationAngle)->default_value(0.0), "rotation angle; if not 0.0 then perform rotation around y axis after deconv")
     ("saveDeskewedRaw,S", po::bool_switch(&bSaveDeskewedRaw)->default_value(false), "save deskewed raw data to files")
+    // ("crop,C", po::value< std::vector<int> >(&final_CropTo_boundaries)->multitoken(), "takes 6 integers separated by space: x1 x2 y1 y2 z1 z2; crop final image size to [x1:x2, y1:y2, z1:z2]")
+    // ("MIP,M", po::value< std::vector<bool> >(&bDoMaxIntProj)->multitoken(), "takes 3 binary numbers separated by space to indicate whether save a max-intensity projection along x, y, or z axis")
+    ("crop,C", fixed_tokens_value< std::vector<int> >(&final_CropTo_boundaries, 6, 6), "takes 6 integers separated by space: x1 x2 y1 y2 z1 z2; crop final image size to [x1:x2, y1:y2, z1:z2]")
+    ("MIP,M", fixed_tokens_value< std::vector<bool> >(&bDoMaxIntProj, 3, 3), "takes 3 binary numbers separated by space to indicate whether save a max-intensity projection along x, y, or z axis")
+    ("uint16,u", po::bool_switch(&bSaveUshort)->implicit_value(true), "whether to save result in uint16 format; this should be used only if no actual decon is performed")
     ("input-dir", po::value<std::string>(&datafolder)->required(), "input folder name")
     ("otf-file", po::value<std::string>(&otffiles)->required(), "OTF file")
     ("filename-pattern", po::value<std::string>(&filenamePattern)->required(), "pattern in file names")
@@ -145,7 +149,7 @@ int main(int argc, char *argv[])
   p.add("filename-pattern", 1);
   p.add("otf-file", 1);
 
-/* Parse commandline option */
+// Parse commandline option:
   po::variables_map varsmap;
   try {
     store(po::command_line_parser(argc, argv).
@@ -157,24 +161,28 @@ int main(int argc, char *argv[])
 
     notify(varsmap);
 
+    // if (varsmap.count("crop")) {
+    //   if (final_CropTo_boundaries.size() != 6)
+    //     throw std::runtime_error("Exactly 6 integers are required for the -C or --crop flag!");
+    //   std::copy(final_CropTo_boundaries.begin(), final_CropTo_boundaries.end(), std::ostream_iterator<int>(std::cout, ", "));
+    //   std::cout << std::endl;
+    // }
+    // std::cout << bDoMaxIntProj.size() << std::endl;
   }
   catch (std::exception &e) {
-    std::cout << "\n!!Error occurred: " << e.what();
+    std::cout << "\n!!Error occurred: " << e.what() << std::endl;
     return 0;
   }
-  // Gather all files in 'datafolder' and matching the file name pattern:
-  std::vector< std::string > all_matching_files = 
-    gatherMatchingFiles(datafolder, filenamePattern);
 
   CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed;
   float dkr_otf, dkz_otf;
   float dkx, dky, dkz, rdistcutoff;
   fftwf_plan rfftplan=NULL, rfftplan_inv=NULL;
-  CPUBuffer /*deskewMatrix,*/ rotMatrix;
+  CPUBuffer rotMatrix;
   double deskewFactor=0;
   bool bCrop = false;
   unsigned new_ny, new_nz, new_nx;
-  int deskewedXdim;
+  int deskewedXdim = 0;
   cufftHandle rfftplanGPU, rfftplanInvGPU;
   GPUBuffer d_interpOTF(0);
 
@@ -183,6 +191,10 @@ int main(int argc, char *argv[])
 
   // Loop over all matching input TIFFs:
   try {
+    // Gather all files in 'datafolder' and matching the file name pattern:
+    std::vector< std::string > all_matching_files = 
+      gatherMatchingFiles(datafolder, filenamePattern);
+
     for (std::vector<std::string>::iterator it=all_matching_files.begin();
          it != all_matching_files.end(); it++) {
 
@@ -343,22 +355,7 @@ int main(int argc, char *argv[])
         fftwf_execute_dft_c2r(rfftplan_inv, (fftwf_complex *) raw_imageFFT.data(), raw_image.data());
         raw_image /= raw_image.size();
       }
-      else if (RL_iters) {
-        // if (bCPU) {
-        //   raw_image -= background;
-        //   raw_image.max(0.f); // background subtraction earlier could have caused negative pixels
-        //   RichardsonLucy(raw_image, imgParams.dr, imgParams.dz,
-        //                  complexOTF, dkr_otf, dkz_otf,
-        //                  rdistcutoff, RL_iters,
-        //                  rfftplan, rfftplan_inv, raw_imageFFT);
-        // }
-        // else
-        RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
-                           deskewFactor, deskewedXdim, extraShift, napodize, rotMatrix,
-                           rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp);
-      }
-      else if (rotMatrix.getSize()) {// do only rotation
-        std::cout << rotMatrix.getSize() << std::endl;
+      else if (RL_iters || raw_deskewed.size() || rotMatrix.getSize()) {
         RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
                            deskewFactor, deskewedXdim, extraShift, napodize, rotMatrix,
                            rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp);
@@ -368,9 +365,53 @@ int main(int argc, char *argv[])
         break;
       }
 
-      raw_image.save(makeOutputFilePath(*it).c_str());
-      if (bSaveDeskewedRaw)
-        raw_deskewed.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
+      if (! final_CropTo_boundaries.empty()) {
+        raw_image.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],
+                       final_CropTo_boundaries[4], 0,
+                       final_CropTo_boundaries[1], final_CropTo_boundaries[3],
+                       final_CropTo_boundaries[5], 0);
+        if (raw_deskewed.size())
+          raw_deskewed.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],
+                            final_CropTo_boundaries[4], 0,
+                            final_CropTo_boundaries[1], final_CropTo_boundaries[3],
+                            final_CropTo_boundaries[5], 0);
+      }
+
+      if (bSaveDeskewedRaw) {
+        if (! bSaveUshort)
+          raw_deskewed.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
+        else {
+          CImg<unsigned short> uint16Img(raw_deskewed);
+          uint16Img.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
+          }
+      }
+      if (RL_iters || rotMatrix.getSize()) {
+        if (! bSaveUshort)
+          raw_image.save(makeOutputFilePath(*it).c_str());
+        else {
+          CImg<unsigned short> uint16Img(raw_image);
+          uint16Img.save(makeOutputFilePath(*it).c_str());
+          }
+      }
+
+      if (it == all_matching_files.begin() && bDoMaxIntProj.size())
+        makeDeskewedDir("GPUdecon/MIPs");
+
+      if (bDoMaxIntProj.size() == 3) {
+        if (bDoMaxIntProj[0]) {
+          CImg<> proj = MaxIntProj(raw_image, 0);
+          proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str());
+        }
+        if (bDoMaxIntProj[1]) {
+          CImg<> proj = MaxIntProj(raw_image, 1);
+          proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str());
+        }
+        if (bDoMaxIntProj[2]) {
+          CImg<> proj = MaxIntProj(raw_image, 2);
+          proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str());
+        }
+      }
+
     } // iteration over all_matching_files
   } // try {} block
   catch (std::exception &e) {
@@ -378,4 +419,45 @@ int main(int argc, char *argv[])
     return 0;
   }
   return 0; 
+}
+
+
+CImg<> MaxIntProj(CImg<> &input, int axis)
+{
+  CImg <> out;
+
+  if (axis==0) {
+    CImg<> maxvals(input.height(), input.depth());
+    maxvals = -1e10;
+#pragma omp parallel for
+    cimg_forYZ(input, y, z) for (int x=0; x<input.width(); x++) {
+      if (input(x, y, z) > maxvals(y, z))
+        maxvals(y, z) = input(x, y, z);
+    }
+    return maxvals;
+  }
+
+  if (axis==1) {
+    CImg<> maxvals(input.width(), input.depth());
+    maxvals = -1e10;
+#pragma omp parallel for
+    cimg_forXZ(input, x, z) for (int y=0; y<input.height(); y++) {
+      if (input(x, y, z) > maxvals(x, z))
+        maxvals(x, z) = input(x, y, z);
+    }
+    return maxvals;
+  }
+
+  if (axis==2) {
+    CImg<> maxvals(input.width(), input.height());
+    maxvals = -1e10;
+#pragma omp parallel for
+    cimg_forXY(input, x, y) for (int z=0; z<input.depth(); z++) {
+      if (input(x, y, z) > maxvals(x, y))
+        maxvals(x, y) = input(x, y, z);
+    }
+    return maxvals;
+  }
+
+  
 }

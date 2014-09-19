@@ -73,13 +73,8 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   printf("%f msecs\n", stopwatch.getTime());
 #endif
 
-  if (nIter > 0) {
+  if (nIter > 0 || raw_deskewed.size()>0 || rotationMatrix.getSize()) {
     apodize_GPU(&X_k, nx, ny, nz, napodize);
-    {
-      CPUBuffer Xk_cpu(X_k);
-      CImg<> CCimg((float *) Xk_cpu.getPtr(), nx, ny, nz, 1, true);
-      CCimg.save_tiff("afterApodize.tif");
-    }
 
     // background subtraction (including thresholding by 0):
     printf("background=%f\n", background);
@@ -113,6 +108,11 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
       raw.clear();
       raw.assign(nx, ny, nz, 1);
       cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
+
+      if (raw_deskewed.size()>0) {
+        cutilSafeCall(cudaMemcpy(raw_deskewed.data(), X_k.getPtr(),
+                                 nz*nxy*sizeof(float), cudaMemcpyDeviceToHost));
+      }
     }
   }
 
@@ -218,10 +218,6 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   printf("%f msecs\n", stopwatch.getTime());
 #endif
 
-  if (raw_deskewed.size()>0) {
-    cutilSafeCall(cudaMemcpy(raw_deskewed.data(), rawGPUbuf.getPtr(),
-                             nz*nxy*sizeof(float), cudaMemcpyDeviceToHost));
-  }
   // result is returned in "raw"
 }
 

@@ -32,6 +32,58 @@ struct ImgParams {
 };
 
 
+#include <boost/program_options.hpp>
+namespace po = boost::program_options;
+
+//! class fixed_tokens_typed_value
+/*!
+  For multi-token options, this class allows defining fixed number of arguments
+*/
+template< typename T, typename charT = char >
+class fixed_tokens_typed_value : public po::typed_value< T, charT > {
+   unsigned _min, _max;
+
+   typedef po::typed_value< T, charT > base;
+
+ public:
+
+   fixed_tokens_typed_value( T * storeTo, unsigned min, unsigned max ) 
+     : _min(min), _max(max), base( storeTo ) {
+       base::multitoken();
+   }
+
+   virtual base* min_tokens( unsigned min ) {
+       _min = min;
+       return this;
+   }
+   unsigned min_tokens() const {return _min;}
+
+   virtual base* max_tokens( unsigned max ) {
+       _max = max;
+       return this;
+   }
+   unsigned max_tokens() const {return _max;}
+
+   base* zero_tokens() {
+       _min = _max = 0;
+       base::zero_tokens();
+       return this;
+   }
+};
+
+template< typename T >
+fixed_tokens_typed_value< T > 
+fixed_tokens_value(unsigned min, unsigned max) {
+    return fixed_tokens_typed_value< T >(0, min, max ); }
+
+template< typename T >
+fixed_tokens_typed_value< T > *
+fixed_tokens_value(T * t, unsigned min, unsigned max) {
+    fixed_tokens_typed_value< T >* r = new
+                   fixed_tokens_typed_value< T >(t, min, max);
+    return r; }
+
+
 // std::complex<float> otfinterpolate(std::complex<float> * otf, float kx, float ky, float kz, int nzotf, int nrotf);
 // void RichardsonLucy(CImg<> & raw, float dr, float dz, 
 //                       CImg<> & otf, float dkr_otf, float dkz_otf, 
@@ -45,6 +97,8 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         CPUBuffer &rotationMatrix,
                         cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU,
                         CImg<> & raw_deskewed, cudaDeviceProp* devprop);
+
+CImg<> MaxIntProj(CImg<> &input, int axis);
 
 void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
                        float kxscale, float kyscale, float kzscale,
