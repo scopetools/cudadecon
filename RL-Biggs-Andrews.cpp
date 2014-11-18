@@ -94,7 +94,6 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     if (fabs(deskewFactor) > 0.0) { //then deskew raw data along x-axis first:
 
       GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), 0);
-  
       deskew_GPU(X_k, nx, ny, nz, deskewFactor, deskewedRaw, deskewedNx, extraShift);
 
       // update raw (i.e., X_k) and its dimension variables.
@@ -112,6 +111,8 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
       if (raw_deskewed.size()>0) {
         cutilSafeCall(cudaMemcpy(raw_deskewed.data(), X_k.getPtr(),
                                  nz*nxy*sizeof(float), cudaMemcpyDeviceToHost));
+        if (nIter == 0)	
+          return;
       }
     }
   }
