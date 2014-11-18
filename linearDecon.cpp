@@ -378,12 +378,12 @@ int main(int argc, char *argv[])
       }
 
       if (bSaveDeskewedRaw) {
-        if (! bSaveUshort)
+      /*  if (! bSaveUshort)
           raw_deskewed.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
-        else {
+        else { */
           CImg<unsigned short> uint16Img(raw_deskewed);
           uint16Img.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
-          }
+      //    }
       }
       if (RL_iters || rotMatrix.getSize()) {
         if (! bSaveUshort)
