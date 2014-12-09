@@ -106,12 +106,13 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
       cutilSafeCall(cudaHostUnregister(raw.data()));
       raw.clear();
       raw.assign(nx, ny, nz, 1);
-      cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
+      if (nIter > 0)
+        cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
 
       if (raw_deskewed.size()>0) {
         cutilSafeCall(cudaMemcpy(raw_deskewed.data(), X_k.getPtr(),
                                  nz*nxy*sizeof(float), cudaMemcpyDeviceToHost));
-        if (nIter == 0)	
+        if (nIter == 0)
           return;
       }
     }
@@ -213,7 +214,8 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                              cudaMemcpyDeviceToHost));
   }
 
-  cutilSafeCall(cudaHostUnregister(raw.data()));
+  if (nIter > 0)
+    cutilSafeCall(cudaHostUnregister(raw.data()));
 
 #ifndef NDEBUG
   printf("%f msecs\n", stopwatch.getTime());
