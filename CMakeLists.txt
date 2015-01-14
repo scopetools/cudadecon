@@ -19,20 +19,33 @@ set(SCI_GROUP_WRITE GROUP_WRITE)
 set(SCI_WORLD_FILE_PERMS WORLD_READ)
 set(SCI_WORLD_PROGRAM_PERMS WORLD_READ WORLD_EXECUTE)
 
-if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-  set(CMAKE_BUILD_TYPE "RelWithDebInfo")
+# If no CMAKE_BUILD_TYPE is specified on command line, Windows and Unix
+# give different treatments. On Windows, CMAKE_BUILD_TYPE is defaulted to
+# "Debug"; on Unix, it's some empty string that cannot be legally placed in
+# a IF statement to do string compare like "STREQUAL". Hence the following
+# 2-step verification. The goal is that if no Release is specified in
+# the command line, we want the compiler flag to be almost identical to the
+# ones used for Release except for -DNDEBUG
+if ( NOT CMAKE_BUILD_TYPE )
+  set(CMAKE_BUILD_TYPE "Debug")
 endif()
-message(STATUS "Build type is '${CMAKE_BUILD_TYPE}'")
+
+if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+  set(CMAKE_BUILD_TYPE "Release")
+  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS}")
+  if (WIN32)
+	  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MD")
+  endif()
+endif()
+
+# message(STATUS "2 Build type is '${CMAKE_BUILD_TYPE}'")
 
 if (NOT APPLE)
-  find_package(openmp)
+  find_package(OpenMP)
   set( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${OpenMP_CXX_FLAGS}" )
 endif()
 
-if (WIN32)
-  # set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /EHsc")
-  set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELWITHDEBINFO} /U NDEBUG")
-else()
+if (NOT WIN32)
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall")
 endif()
 
@@ -46,11 +59,13 @@ find_package(CUDA REQUIRED)
 if (WIN32)
   set (FFTW3_ROOT_DIR C:/fftw3)
   set (FFTW3F_LIBRARY libfftwf-3.3)
+  find_package(FFTW3 COMPONENTS single)
   set (TIFF_LIBRARY c:/libtiff)
   set (TIFF_INCLUDE_DIR c:/libtiff)
+else()
+  find_package(FFTW3 COMPONENTS single threads)
 endif()
-
-find_package(FFTW3 COMPONENTS single) # threads)
+  
 find_package(TIFF REQUIRED)
 
 if (WIN32)
