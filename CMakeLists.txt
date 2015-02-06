@@ -58,7 +58,7 @@ find_package(CUDA REQUIRED)
 
 if (WIN32)
   set (FFTW3_ROOT_DIR C:/fftw3)
-  set (FFTW3F_LIBRARY libfftwf-3.3)
+  set (FFTW3F_LIBRARY libfftw3f-3)
   find_package(FFTW3 COMPONENTS single)
   set (TIFF_LIBRARY c:/libtiff)
   set (TIFF_INCLUDE_DIR c:/libtiff)
