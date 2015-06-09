@@ -1,5 +1,5 @@
 #include <GPUBuffer.h>
-#include <helper_cuda.h> //checkCudaErrors()
+//#include <helper_cuda.h> //checkCudaErrors()
 
 
 __global__ void deskew_kernel(float *in, int nx, int ny, int nz,

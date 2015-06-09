@@ -110,6 +110,12 @@ else()
   include_directories( ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc )
 endif()
 
+set(CMAKE_VERBOSE_MAKEFILE true)
+
+set(CMAKE_CXX_LINK_EXECUTABLE
+  "${CUDA_NVCC_EXECUTABLE} <LINK_FLAGS> <OBJECTS>  -o <TARGET> <LINK_LIBRARIES>")
+
+
 # CUDA_ADD_LIBRARY(
 #   libcudaDeconv
 #   SHARED
@@ -117,6 +123,7 @@ endif()
 #   RLgpuImpl.cu
 #   geometryTransform.cu
 #   )
+
 
 CUDA_ADD_EXECUTABLE(
   cudaDeconv

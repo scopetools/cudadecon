@@ -56,8 +56,8 @@ struct SharedMemory
 };
 
 
-// texture<float, cudaTextureType2D, cudaReadModeElementType> texRef1, texRef2;
-// cudaArray* d_realpart, *d_imagpart;  // used for OTF texture
+texture<float, cudaTextureType2D, cudaReadModeElementType> texRef1, texRef2;
+cudaArray* d_realpart, *d_imagpart;  // used for OTF texture
 
 
 __host__ void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
@@ -78,35 +78,35 @@ __host__ void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
   cutilSafeCall(cudaMemcpyToSymbol(const_otf, h_otf, nrotf*nzotf*2*sizeof(float)));
 }
 
-// __host__ void prepareOTFtexture(float * realpart, float * imagpart, int nx, int ny)
-// {
-//   // Allocate CUDA array in device memory
-//   cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
+__host__ void prepareOTFtexture(float * realpart, float * imagpart, int nx, int ny)
+{
+  // Allocate CUDA array in device memory
+  cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc<float>();
 
-//   cudaMallocArray(&d_realpart, &channelDesc, nx, ny);
-//   cudaMallocArray(&d_imagpart, &channelDesc, nx, ny);
+  cudaMallocArray(&d_realpart, &channelDesc, nx, ny);
+  cudaMallocArray(&d_imagpart, &channelDesc, nx, ny);
 
-//   // Copy to device memory
-//   cudaMemcpyToArray(d_realpart, 0, 0, realpart,
-//                     nx * ny * sizeof(float),
-//                     cudaMemcpyHostToDevice);
-//   cudaMemcpyToArray(d_imagpart, 0, 0, imagpart,
-//                     nx * ny * sizeof(float),
-//                     cudaMemcpyHostToDevice);
+  // Copy to device memory
+  cudaMemcpyToArray(d_realpart, 0, 0, realpart,
+                    nx * ny * sizeof(float),
+                    cudaMemcpyHostToDevice);
+  cudaMemcpyToArray(d_imagpart, 0, 0, imagpart,
+                    nx * ny * sizeof(float),
+                    cudaMemcpyHostToDevice);
 
-//   // Set texture reference parameters
-//   texRef1.addressMode[0] = cudaAddressModeClamp;
-//   texRef1.addressMode[1] = cudaAddressModeClamp;
-//   texRef1.filterMode = cudaFilterModeLinear;
-//   texRef1.normalized = true;
-//   texRef2.addressMode[0] = cudaAddressModeClamp;
-//   texRef2.addressMode[1] = cudaAddressModeClamp;
-//   texRef2.filterMode = cudaFilterModeLinear;
-//   texRef2.normalized = true;
-//   // Bind the arrays to the texture reference
-//   cudaBindTextureToArray(texRef1, d_realpart, channelDesc);
-//   cudaBindTextureToArray(texRef2, d_imagpart, channelDesc);
-// }
+  // Set texture reference parameters
+  texRef1.addressMode[0] = cudaAddressModeClamp;
+  texRef1.addressMode[1] = cudaAddressModeClamp;
+  texRef1.filterMode = cudaFilterModeLinear;
+  texRef1.normalized = true;
+  texRef2.addressMode[0] = cudaAddressModeClamp;
+  texRef2.addressMode[1] = cudaAddressModeClamp;
+  texRef2.filterMode = cudaFilterModeLinear;
+  texRef2.normalized = true;
+  // Bind the arrays to the texture reference
+  cudaBindTextureToArray(texRef1, d_realpart, channelDesc);
+  cudaBindTextureToArray(texRef2, d_imagpart, channelDesc);
+}
 
 __global__ void bgsubtr_kernel(float * img, int size, float background)
 {
@@ -131,7 +131,8 @@ __host__ void backgroundSubtraction_GPU(GPUBuffer &img, int nx, int ny, int nz, 
 
   bgsubtr_kernel<<<grid, block>>>((float *) img.getPtr(), nx*ny*nz, background);
 #ifndef NDEBUG
-  std::cout<< "backgroundSubtraction_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+  // std::cout<< "backgroundSubtraction_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+  printf("backgroundSubtraction_GPU(): %s\n", cudaGetErrorString(cudaGetLastError()));
 #endif
 }
 
@@ -162,8 +163,9 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
                                       (cuFloatComplex *) fftBuf.getPtr());
 
   if (cuFFTErr != CUFFT_SUCCESS) {
-    std::cout << "Line:" << __LINE__ << std::endl;
-    throw std::runtime_error("cufft failed.");
+    // std::cout << "Line:" << __LINE__ << std::endl;
+    // printf("Line: %d\n", __LINE__);
+    // throw std::runtime_error("cufft failed.");
   }
   //
   // KERNEL 1
@@ -189,8 +191,9 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
   cuFFTErr = cufftExecC2R(rfftplanInv, (cuFloatComplex*)fftBuf.getPtr(), (cufftReal *) img.getPtr());
 
   if (cuFFTErr != CUFFT_SUCCESS) {
-    std::cout << "Line:" << __LINE__ ;
-    throw std::runtime_error("cufft failed.");
+    // std::cout << "Line:" << __LINE__ ;
+    // printf("Line: %d\n", __LINE__);
+    // throw std::runtime_error("cufft failed.");
   }
 
 }
@@ -568,9 +571,9 @@ __host__ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz, 
     count += *pc++;
   }
 
-#ifndef NDEBUG
+//#ifndef NDEBUG
   printf("mean=%f, sum=%lf, count=%d\n", mean, sum, count);
-#endif
+//#endif
   return sum/count;
 }
 

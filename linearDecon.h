@@ -7,7 +7,9 @@
 #include <complex>
 #include <vector>
 
+#ifndef __clang__
 #include <omp.h>
+#endif
 
 #include <fftw3.h>
 
