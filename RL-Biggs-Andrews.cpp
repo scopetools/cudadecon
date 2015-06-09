@@ -4,7 +4,7 @@
 #include <algorithm>  // max(), min()
 #include <limits>  // epsilon()
 
-#include <helper_timer.h>
+//#include <helper_timer.h>
 
 bool notGoodDimension(unsigned num)
 /*! Good dimension is defined as one that can be fatorized into 2s, 3s, 5s, and 7s
@@ -40,7 +40,7 @@ static bool bFirstTime = true;
 void RichardsonLucy_GPU(CImg<> & raw, float background, 
                         GPUBuffer & d_interpOTF, int nIter,
                         double deskewFactor, int deskewedNx, int extraShift,
-                        int napodize,
+                        int napodize, int nZblend,
                         CPUBuffer &rotationMatrix, cufftHandle rfftplanGPU, 
                         cufftHandle rfftplanInvGPU, CImg<> & raw_deskewed,
                         cudaDeviceProp *devProp)
@@ -110,16 +110,21 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
         cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
 
       if (raw_deskewed.size()>0) {
+// save deskewed raw data into "raw_deskewed"; if no decon iteration is requested, then return immediately.
         cutilSafeCall(cudaMemcpy(raw_deskewed.data(), X_k.getPtr(),
                                  nz*nxy*sizeof(float), cudaMemcpyDeviceToHost));
         if (nIter == 0)
           return;
       }
     }
+
+    if (nZblend > 0)
+      zBlend_GPU(X_k, nx, ny, nz, nZblend);
   }
 
   GPUBuffer rawGPUbuf(X_k);  // make a copy of raw image
   GPUBuffer X_kminus1(nz * nxy * sizeof(float), 0);
+    std::cout << "Line:" << __LINE__ << std::endl;
   GPUBuffer Y_k(nz * nxy * sizeof(float), 0);
   GPUBuffer G_kminus1(nz * nxy * sizeof(float), 0);
   GPUBuffer G_kminus2(nz * nxy * sizeof(float), 0);
@@ -272,7 +277,7 @@ int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
 
   // only if no deskewing is happening do we want to change image width here
   output_nx = nx;
-  if (!fabs(deskewAngle) > 0.0) {
+  if ( ! (fabs(deskewAngle) > 0.0) ){
     output_nx = findOptimalDimension(nx);
     if (output_nx != nx) {
       printf("new nx=%d\n", output_nx);
@@ -369,7 +374,7 @@ int RL_interface(const unsigned short * const raw_data,
   // Finally do calculation including deskewing, decon, rotation:
   CImg<> raw_deskewed;
   RichardsonLucy_GPU(raw_image, background, d_interpOTF, nIters,
-                     deskewFactor, deskewedXdim, extraShift, 15, rotMatrix,
+                     deskewFactor, deskewedXdim, extraShift, 15, 10, rotMatrix,
                      rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp);
 
   // Copy deconvolved data, stored in raw_image, to "result" for return:

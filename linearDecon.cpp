@@ -96,7 +96,7 @@ int wienerfilter(CImg<> & g, float dkx, float dky, float dkz,
 
 int main(int argc, char *argv[])
 {
-  int napodize;
+  int napodize, nZblend;
   float background;
   float NA=1.2;
   ImgParams imgParams;
@@ -126,7 +126,8 @@ int main(int argc, char *argv[])
     ("wavelength,l", po::value<float>(&imgParams.wave)->default_value(.525), "emission wavelength (um)")
     ("wiener,W", po::value<float>(&wiener)->default_value(-1.0), "Wiener constant (regularization factor); if this value is postive then do Wiener filter instead of R-L")
     ("background,b", po::value<float>(&background)->default_value(90.f), "user-supplied background")
-    ("napodize,a", po::value<int>(&napodize)->default_value(15), "number of pixels to soften edge with")
+    ("napodize,e", po::value<int>(&napodize)->default_value(15), "number of pixels to soften edge with")
+    ("nzblend,E", po::value<int>(&nZblend)->default_value(0), "number of top and bottom sections to blend in to reduce axial ringing")
     ("NA,n", po::value<float>(&NA)->default_value(1.2), "numerical aperture")
     ("RL,i", po::value<int>(&RL_iters)->default_value(15), "run Richardson-Lucy how-many iterations")
     ("deskew,D", po::value<float>(&deskewAngle)->default_value(0.0), "Deskew angle; if not 0.0 then perform deskewing before deconv")
@@ -230,7 +231,7 @@ int main(int argc, char *argv[])
 
           // only if no deskewing is happening do we want to change image width here
           new_nx = nx;
-          if (!fabs(deskewAngle) > 0.0) {
+          if ( !(fabs(deskewAngle) > 0.0) ) {
             new_nx = findOptimalDimension(nx);
             if (new_nx != nx) {
               printf("new nx=%d\n", new_nx);
@@ -356,8 +357,8 @@ int main(int argc, char *argv[])
         raw_image /= raw_image.size();
       }
       else if (RL_iters || raw_deskewed.size() || rotMatrix.getSize()) {
-        RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters,
-                           deskewFactor, deskewedXdim, extraShift, napodize, rotMatrix,
+        RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters, deskewFactor,
+                           deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
                            rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp);
       }
       else {
@@ -436,8 +437,7 @@ CImg<> MaxIntProj(CImg<> &input, int axis)
     }
     return maxvals;
   }
-
-  if (axis==1) {
+  else if (axis==1) {
     CImg<> maxvals(input.width(), input.depth());
     maxvals = -1e10;
 #pragma omp parallel for
@@ -448,7 +448,7 @@ CImg<> MaxIntProj(CImg<> &input, int axis)
     return maxvals;
   }
 
-  if (axis==2) {
+  else if (axis==2) {
     CImg<> maxvals(input.width(), input.height());
     maxvals = -1e10;
 #pragma omp parallel for
@@ -458,6 +458,8 @@ CImg<> MaxIntProj(CImg<> &input, int axis)
     }
     return maxvals;
   }
-
-  
+  else {
+    throw std::runtime_error("unknown axis number in MaxIntProj()");
+  }
+  return out;
 }

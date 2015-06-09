@@ -7,7 +7,9 @@
 #include <complex>
 #include <vector>
 
+#ifndef __clang__
 #include <omp.h>
+#endif
 
 #include <fftw3.h>
 
@@ -93,7 +95,7 @@ fixed_tokens_value(T * t, unsigned min, unsigned max) {
 void RichardsonLucy_GPU(CImg<> & raw, float background,
                         GPUBuffer& otf, int nIter,
                         double deskewFactor, int deskewedNx, int extraShift,
-                        int napodize,
+                        int napodize, int nZblend,
                         CPUBuffer &rotationMatrix,
                         cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU,
                         CImg<> & raw_deskewed, cudaDeviceProp* devprop);
@@ -141,7 +143,7 @@ void cropGPU(GPUBuffer &inBuf, int nx, int ny, int nz,
 double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz, unsigned maxGridXdim);
 void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale, unsigned maxGridXdim);
 void apodize_GPU(GPUBuffer* image, int nx, int ny, int nz, int napodize);
-
+void zBlend_GPU(GPUBuffer & image, int nx, int ny, int nz, int nZblend);
 
 std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern);
 std::string makeOutputFilePath(std::string inputFileName, std::string subdir="GPUdecon",

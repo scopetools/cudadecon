@@ -35,6 +35,7 @@ __global__ void summation_kernel(float * img, double * intRes, int n);
 __global__ void sumAboveThresh_kernel(float * img, double * intRes, unsigned * counter, float thresh, int n);
 __global__ void apodize_x_kernel(int napodize, int nx, int ny, float* image);
 __global__ void apodize_y_kernel(int napodize, int nx, int ny, float* image);
+__global__ void zBlend_kernel(int nx, int ny, int nz, int nZblend, float *image);
 
 // Utility class used to avoid linker errors with extern
 // unsized shared memory arrays with templated type
@@ -715,10 +716,9 @@ __global__ void apodize_x_kernel(int napodize, int nx, int ny, float* image)
     unsigned section_offset = blockIdx.y * nx * ny;
     float diff = (image[section_offset + (ny - 1) * nx + k] - image[section_offset + k]) / 2.0;
     for (int l = 0; l < napodize; ++l) {
-      float fact = 1.0 - sin((((float)l + 0.5) / (float)napodize) *
-          M_PI * 0.5);
-      image[section_offset + l * nx + k] += diff * fact;
-      image[section_offset + (ny - 1 - l) * nx + k] -=  diff * fact;
+      float fact = diff * (1.0 - sin((((float)l + 0.5) / (float)napodize) * M_PI * 0.5));
+      image[section_offset + l * nx + k] += fact;
+      image[section_offset + (ny - 1 - l) * nx + k] -=  fact;
     }
   }
 }
@@ -730,10 +730,37 @@ __global__ void apodize_y_kernel(int napodize, int nx, int ny, float* image)
     unsigned section_offset = blockIdx.y * nx * ny;
     float diff = (image[section_offset + l * nx + nx - 1] - image[section_offset + l * nx]) / 2.0;
     for (int k = 0; k < napodize; ++k) {
-      float fact = 1.0 - sin(((k + 0.5) / (float)napodize) * M_PI *
-          0.5);
-      image[section_offset + l * nx + k] += diff * fact;
-      image[section_offset + l * nx + nx - 1 - k] -= diff * fact;
+      float fact = diff * (1.0 - sin(((k + 0.5) / (float)napodize) * M_PI * 0.5));
+      image[section_offset + l * nx + k] += fact;
+      image[section_offset + l * nx + nx - 1 - k] -= fact;
     }
+  }
+}
+
+__host__ void zBlend_GPU(GPUBuffer & image, int nx, int ny, int nz, int nZblend)
+{
+  dim3 block(32, 32);
+  dim3 grid;
+  grid.x = ceil((float)nx / 32);
+  grid.y = ceil((float)ny / 32);
+  grid.z = nZblend;
+
+  zBlend_kernel<<<grid, block>>>(nx, ny, nz, nZblend, ((float*)image.getPtr()));
+}
+
+__global__ void zBlend_kernel(int nx, int ny, int nz, int nZblend, float *image)
+{
+  unsigned xidx = blockDim.x * blockIdx.x + threadIdx.x;
+  unsigned yidx = blockDim.y * blockIdx.y + threadIdx.y;
+
+  unsigned zidx = blockDim.z;
+
+  if (xidx < nx && yidx < ny) {
+    unsigned nxy = nx*ny;
+    unsigned row_offset = yidx * nx;
+    float diff = image[(nz-1)*nxy + row_offset + xidx] -  image[row_offset + xidx];
+    float fact = diff * (1.0 - sin(((zidx + 0.5) / (float)nZblend) * M_PI * 0.5));
+    image[zidx*nxy + row_offset + xidx] += fact;
+    image[(nz-zidx-1)*nxy + row_offset + xidx] -= fact;
   }
 }
