@@ -82,7 +82,7 @@ endif()
 if(WIN32)
   find_package( Boost )
 else()
-  find_package( Boost REQUIRED COMPONENTS program_options filesystem regex system)
+  find_package( Boost REQUIRED COMPONENTS program_options filesystem system)
 endif(WIN32)
 
 
@@ -148,7 +148,7 @@ target_link_libraries(
   ${X11_X11_LIB}
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
   ${Boost_FILESYSTEM_LIBRARY}
-  ${Boost_REGEX_LIBRARY}
+#  ${Boost_REGEX_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
   )

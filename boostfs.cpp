@@ -1,5 +1,5 @@
 #include <boost/filesystem.hpp>
-#include <boost/regex.hpp>
+#include <regex>
 #include <iostream>
 #include <string>
 #include <algorithm> // sort
@@ -11,7 +11,7 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
   pattern.insert(0, ".*");  // '.' is the wildcard in Perl regexp; '*' just means "repeat".
   pattern.append(".*\\.tif");
 
-  const boost::regex my_filter(pattern);
+  const std::regex my_filter(pattern);
 
   std::vector< std::string > all_matching_files;
 
@@ -21,10 +21,10 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
     // Skip if not a file
     if( !boost::filesystem::is_regular_file( i->status() ) ) continue;
 
-    boost::smatch what;
+    std::smatch what;
 
     // Skip if no match
-    if( !boost::regex_match( i->path().string(), what, my_filter ) ) continue;
+    if( !std::regex_match( i->path().string(), what, my_filter ) ) continue;
 
     // File matches, store it
     all_matching_files.push_back( i->path().string() );
