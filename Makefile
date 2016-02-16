@@ -18,7 +18,7 @@ CXXFLAGS += -I/opt/local/include
 CXXFLAGS += -I$(CUDA_INC_DIR) -I/usr/local/cuda/samples/common/inc
 CXXFLAGS += -I/usr/X11/include
 CXXFLAGS += -std=c++11
-# CXXFLAGS      += -O3
+CXXFLAGS      += -O3
 #CXXFLAGS      += -g
 
 LDLIBS  = -lfftw3f -lfftw3f_threads -ltiff -lX11
@@ -35,7 +35,9 @@ endif
 	$(CXX) $(CXXFLAGS) -c $^ -o $@ 
 
 %.o: %.cu
-	$(NVCC) -v -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35 --compiler-options="-Wall -O3 -IBuffers" -c $^ 
+	$(NVCC) -gencode arch=compute_30,code=sm_30 -gencode arch=compute_35,code=sm_35 -gencode arch=compute_52,code=sm_52 --compiler-options="-Wall -O3 -IBuffers" -c $^ 
+# -v
+
 
 #  -gencode arch=compute_30,code=sm_30
 # -I$(CUDA_INC_DIR)
