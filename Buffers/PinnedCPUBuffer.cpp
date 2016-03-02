@@ -101,7 +101,7 @@ void PinnedCPUBuffer::setFrom(const GPUBuffer& src, size_t srcBegin,
       (char*)src.getPtr() + srcBegin, srcEnd - srcBegin,
       cudaMemcpyDeviceToHost, 0);
   if (err != cudaSuccess) {
-    std::cout << "Error code: " << err << std::endl;
+    std::cout << "Pinned CPUBuffer cudaMemcpy failed. Error code: " << err << std::endl;
     std::cout << cudaGetErrorString(err) << std::endl;
     throw std::runtime_error("cudaMemcpy failed.");
   }

@@ -115,6 +115,7 @@ class GPUBuffer : public Buffer {
     int device_;
     size_t size_;
     char* ptr_;
+	char* Hostptr_;
 };
 
 #endif

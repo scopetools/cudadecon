@@ -175,6 +175,11 @@ int main(int argc, char *argv[])
     return 0;
   }
 
+  cudaSetDeviceFlags(cudaDeviceMapHost);
+  size_t GPUfree;
+  size_t GPUtotal;
+  cudaMemGetInfo(&GPUfree, &GPUtotal);
+  std::cout << std::endl << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
   CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed;
   float dkr_otf, dkz_otf;
   float dkx, dky, dkz, rdistcutoff;
@@ -310,12 +315,12 @@ int main(int argc, char *argv[])
           // Create reusable cuFFT plans
           cufftResult cuFFTErr = cufftPlan3d(&rfftplanGPU, new_nz, new_ny, deskewedXdim, CUFFT_R2C);
           if (cuFFTErr != CUFFT_SUCCESS) {
-            std::cout << "Error code: " << cuFFTErr << std::endl;
+            std::cout << "cufftPlan3d() r2c failed. Error code: " << cuFFTErr << std::endl;
             throw std::runtime_error("cufftPlan3d() r2c failed.");
           }
           cuFFTErr = cufftPlan3d(&rfftplanInvGPU, new_nz, new_ny, deskewedXdim, CUFFT_C2R);
           if (cuFFTErr != CUFFT_SUCCESS) {
-            std::cout << "Error code: " << cuFFTErr << std::endl;
+            std::cout << "cufftPlan3d() c2r failed. Error code: " << cuFFTErr << std::endl;
             throw std::runtime_error("cufftPlan3d() c2r failed.");
           }
         }

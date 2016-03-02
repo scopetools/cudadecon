@@ -79,7 +79,7 @@ void CPUBuffer::setFrom(const GPUBuffer& src, size_t srcBegin,
       (char*)src.getPtr() + srcBegin, srcEnd - srcBegin,
       cudaMemcpyDeviceToHost);
   if (err != cudaSuccess) {
-    std::cout << "Error code: " << err << std::endl;
+    std::cout << "CPUBuffer cudaMemcpy failed. Error code: " << err << std::endl;
     std::cout << cudaGetErrorString(err) << std::endl;
     throw std::runtime_error("cudaMemcpy failed.");
   }

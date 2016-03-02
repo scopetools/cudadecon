@@ -3,18 +3,20 @@
 #include "CPUBuffer.h"
 #include "PinnedCPUBuffer.h"
 
+bool firstcall = true;
+
 GPUBuffer::GPUBuffer() :
-  device_(0), size_(0), ptr_(0)
+  device_(0), size_(0), ptr_(0), Hostptr_(0)
 {
 }
 
 GPUBuffer::GPUBuffer(int device) :
-  device_(device), size_(0), ptr_(0)
+  device_(device), size_(0), ptr_(0), Hostptr_(0)
 {
 }
 
 GPUBuffer::GPUBuffer(size_t size, int device) :
-  device_(device), size_(size), ptr_(0)
+device_(device), size_(size), ptr_(0), Hostptr_(0)
 {
   cudaError_t err = cudaSetDevice(device_);
   if (err != cudaSuccess) {
@@ -22,19 +24,30 @@ GPUBuffer::GPUBuffer(size_t size, int device) :
   }
   err = cudaMalloc((void**)&ptr_, size_);
   if (err != cudaSuccess) {
-    throw std::runtime_error("cudaMalloc failed.");
+	  err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped); // if device allocation fails, try to allocate on Host
+	  if (err != cudaSuccess) 
+		  throw std::runtime_error("cudaMalloc and cudaHostAlloc failed.");
+	  else {
+		  cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0);
+		  size_t free;
+		  size_t total;
+		  cudaMemGetInfo(&free, &total);
+		  if (firstcall)
+			  std::cout << "Want new " << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
+		  firstcall = false;
+	  }
   }
 }
 
 GPUBuffer::GPUBuffer(const GPUBuffer& toCopy) :
-  device_(toCopy.device_), size_(toCopy.size_), ptr_(0)
+device_(toCopy.device_), size_(toCopy.size_), ptr_(0), Hostptr_(0)
 {
   this->resize(size_);
   toCopy.set(this, 0, size_, 0);
 }
 
 GPUBuffer::GPUBuffer(const Buffer& toCopy, int device) :
-  device_(device), size_(toCopy.getSize()), ptr_(0)
+device_(device), size_(toCopy.getSize()), ptr_(0), Hostptr_(0)
 {
   this->resize(size_);
   toCopy.set(this, 0, size_, 0);
@@ -61,46 +74,75 @@ GPUBuffer& GPUBuffer::operator=(const CPUBuffer& rhs) {
 }
 
 GPUBuffer::~GPUBuffer() {
-  if (ptr_) {
-    cudaError_t err = cudaFree(ptr_);
-    if (err != cudaSuccess) {
-      std::cout << "Error code: " << err << std::endl;
-      std::cout << "ptr_: " << (long long int)ptr_ << std::endl;
-      throw std::runtime_error("cudaFree failed.");
-    }
-    ptr_ = 0;
-  }
+	if (Hostptr_){
+		cudaError_t err = cudaFreeHost(Hostptr_);
+		ptr_ = 0;
+		Hostptr_ = 0;
+	}
+	else
+		if (ptr_) {
+			cudaError_t err = cudaFree(ptr_);
+			if (err != cudaSuccess) {
+				std::cout << "sCudaFree failed. Error code: " << err << std::endl;
+				std::cout << "ptr_: " << (long long int)ptr_ << std::endl;
+				throw std::runtime_error("cudaFree failed.");
+			}
+			ptr_ = 0;
+		}
 }
 
 void GPUBuffer::resize(size_t newsize) {
-  if (ptr_) {
-    cudaError_t err = cudaFree(ptr_);
-    if (err != cudaSuccess) {
-      throw std::runtime_error("cudaFree failed.");
-    }
-    ptr_ = 0;
-  }
+	if (Hostptr_){
+		cudaError_t err = cudaFreeHost(Hostptr_);
+		ptr_ = 0;
+		Hostptr_ = 0;
+	}
+	else
+		if (ptr_) {
+		  cudaError_t err = cudaFree(ptr_);
+		  if (err != cudaSuccess) {
+		      throw std::runtime_error("cudaFree failed.");
+			  }
+		 ptr_ = 0;
+		}
   cudaError_t err = cudaSetDevice(device_);
   if (err != cudaSuccess) {
     throw std::runtime_error("cudaSetDevice failed.");
   }
   size_ = newsize;
   if (newsize > 0) {
-    err = cudaMalloc((void**)&ptr_, size_);
-    if (err != cudaSuccess) {
-      throw std::runtime_error("cudaMalloc failed.");
-    }
+	  err = cudaMalloc((void**)&ptr_, size_);
+	  if (err != cudaSuccess) {
+		  err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped); // if device allocation fails, try to allocate on Host
+		  if (err != cudaSuccess)
+			  throw std::runtime_error("cudaMalloc and cudaHostAlloc failed.");
+		  else {
+			  cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0);
+			  size_t free;
+			  size_t total;
+			  cudaMemGetInfo(&free, &total);
+			  if (firstcall)
+				  std::cout << "Want resize" << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
+			  firstcall = false;
+		  }
+	  }
   }
 }
 
 void GPUBuffer::setPtr(char* ptr, size_t size, int device)
 {
-  if (ptr_) {
-    cutilSafeCall(cudaFree(ptr_));
-  }
+	if (Hostptr_){
+		std::cout << "setPtr Line:" << __LINE__ << std::endl;
+		cutilSafeCall(cudaFreeHost(Hostptr_));
+	}
+	else
+	  if (ptr_)
+		cutilSafeCall(cudaFree(ptr_));
+  
   ptr_ = ptr;
   size_ = size;
   device_ = device;
+
 }
 
 void GPUBuffer::set(Buffer* dest, size_t srcBegin, size_t srcEnd,

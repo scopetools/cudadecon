@@ -122,6 +122,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
       zBlend_GPU(X_k, nx, ny, nz, nZblend);
   }
 
+
   GPUBuffer rawGPUbuf(X_k);  // make a copy of raw image
   GPUBuffer X_kminus1(nz * nxy * sizeof(float), 0);
     std::cout << "Line:" << __LINE__ << std::endl;

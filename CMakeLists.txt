@@ -1,5 +1,6 @@
 
 cmake_minimum_required (VERSION 2.6)
+cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
 
 project (cudaDeconv)
 
@@ -28,6 +29,10 @@ set(SCI_WORLD_PROGRAM_PERMS WORLD_READ WORLD_EXECUTE)
 # ones used for Release except for -DNDEBUG
 if ( NOT CMAKE_BUILD_TYPE )
   set(CMAKE_BUILD_TYPE "Debug")
+endif()
+
+if (WIN32)
+	message(STATUS "Win32")
 endif()
 
 if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
@@ -65,8 +70,8 @@ if (WIN32)
   set (FFTW3_ROOT_DIR C:/fftw3)
   set (FFTW3F_LIBRARY libfftw3f-3)
   find_package(FFTW3 COMPONENTS single)
-  set (TIFF_LIBRARY c:/libtiff)
-  set (TIFF_INCLUDE_DIR c:/libtiff)
+  set (TIFF_LIBRARY C:/libtiff/libtiff)
+  set (TIFF_INCLUDE_DIR C:/libtiff/libtiff)
 else()
   find_package(FFTW3 COMPONENTS single threads)
 endif()
@@ -90,8 +95,15 @@ else()
   find_package( Boost REQUIRED COMPONENTS program_options filesystem system)
 endif(WIN32)
 
-
-set(CUDA_NVCC_FLAGS "-O2;-gencode=arch=compute_20,code=sm_20;-gencode=arch=compute_30,code=sm_30;-gencode=arch=compute_35,code=sm_35")
+#set(CUDA_NVCC_FLAGS "-O2;-gencode=arch=compute_50,code=sm_50")
+set(CUDA_NVCC_FLAGS "-O2;\
+	-gencode=arch=compute_20,code=sm_20;\
+	-gencode=arch=compute_30,code=sm_30;\
+	-gencode=arch=compute_35,code=sm_35;\
+	-gencode=arch=compute_37,code=sm_37;\
+	-gencode=arch=compute_50,code=sm_50;\
+	-gencode=arch=compute_52,code=sm_52")
+	#specifies which compute capabilities are supported by the built .exe
 #--ptxas-options=-v;
 
 add_subdirectory(Buffers)
@@ -102,7 +114,7 @@ include_directories(
   ${CUDA_INCLUDE_DIRS}
   ${FFTW3_INCLUDE_DIR}
   ${X11_INCLUDE_DIR}
-  )
+   )
 
 
 if(WIN32)
