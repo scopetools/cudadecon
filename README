@@ -1,29 +1,46 @@
 DLL build instructions:
 
 1. Prerequisites:
-1.a. FFTW3 library installed in C:\fftw3
-1.b. TIFF library installed in C:\libtiff
-1.c. CMAKE v2.6 and later
-1.d. CUDA SDK
+1.a. Visual Studio Community (make sure it's supported by CUDA SDK.  I'm using VS Community 2013). Run Windows Updates.
+
+Run VS. Select Tools->Visual Studio Command Prompt
+
+At the command prompt, change to the Visual C++ installation directory. (The location depends on the system and the Visual Studio installation, but a typical location is C:\Program Files (x86)\Microsoft Visual Studio version\VC\.) For example, enter:
+
+cd "\Program Files (x86)\Microsoft Visual Studio 12.0\VC"
+
+To configure this Command Prompt window for 64-bit command-line builds that target x64 platforms, at the command prompt, enter:
+
+vcvarsall amd64
+
+
+1.b. Install CMAKE v2.6 and later
+
+1.c. Unzip FFTW3 library into C:\fftw3 then created the x64 .lib files:
+lib /machine:x64 /def:libfftw3-3.def
+lib /machine:x64 /def:libfftw3l-3.def
+lib /machine:x64 /def:libfftw3f-3.def
+
+
+1.d. Unzip Libtiff library into C:\libtiff, then build with :
+cmake -G "Visual Studio 12 2013 Win64"
+
+1.e. Install CUDA SDK (I'm using 7.5)
+
+1.f. Boost installed, and built with :
+bootstrap
+.\b2 address-model=64
+
+1.g. Make a subdirectory under where the source code (or this README) is located; call it "cmake".  Then copy \\dm11\betziglab\shaol\FindFFTW3.cmake into this folder
 
 2. Generate makefiles:
 2.a. Make a subdirectory under where the source code (or this README) is located; let's call it "build"
-2.b. Open a Windows SDK command prompt window and cd into the "build" directory just created
+2.b. From the VS command prompt window, cd into the "build" directory just created
 2.c. At the prompt type 
 
 cmake -D CMAKE_BUILD_TYPE=Release -G "NMake Makefiles" ..
 
-Make sure there's no error message. To generate makefiles from scratch, the entire content of "build" folder has to be deleted first.
+Make sure there's no error message. To generate makefiles from scratch, the entire content of "build" folder has to be deleted first. 
 
 3. Compile the libraries and executables:
-At the prompt, type the following in that order:
-nmake Buffer
-nmake libcudaDeconv
-nmake RL_interface_driver
-
-4. The DLL is created as libcudaDeconv.dll in the "build" folder, and RL_interface_driver.exe is an executable to test the DLL. Run it like this:
-
-RL_interface_driver.exe ..\cell3_ch0_stack0000_568nm_000000msec.tif ..\CBCotf.tif
-
-A new file called debug.tif will be generated.
-
+nmake 
