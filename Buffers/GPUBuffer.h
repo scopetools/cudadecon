@@ -50,13 +50,15 @@ class GPUBuffer : public Buffer {
     virtual size_t getSize() const { return size_; } ;
     virtual void* getPtr() { return ptr_; } ;
     virtual const void* getPtr() const { return ptr_; } ;
+    void * getHostptr() { return Hostptr_; };
+    const void* getHostptr() const { return Hostptr_; };
     /** Set the pointer managed by this GPUBuffer to ptr.  The memory
      * managed previously by this Buffer is released.
      * @param ptr Device pointer to GPU memory.
      * @param size Size of memory pointed to by ptr.
      * @param device Cuda device on which the memory pointed to by ptr
      * is located.*/
-    virtual void setPtr(char* ptr, size_t size, int device);
+    virtual void setPtr(char* ptr, char *Hostptr, size_t size, int device);
     /** Change the size of the GPUBuffer.  The data held by the buffer
      * becomes invalid, even when the size of the buffer is increased.
      * Setting the size of the buffer to zero frees all GPU memory.
@@ -115,7 +117,7 @@ class GPUBuffer : public Buffer {
     int device_;
     size_t size_;
     char* ptr_;
-	char* Hostptr_;
+    char* Hostptr_;
 };
 
 #endif

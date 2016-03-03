@@ -128,7 +128,7 @@ bool PinnedCPUBuffer::hasNaNs(bool verbose) const
 #ifndef _WIN32
       bool in = std::isnan(arr[i]);
 #else
-	  bool in = _isnan(arr[i]);
+      bool in = _isnan(arr[i]);
 #endif
       if (in) {
         std::cout << "NaN entry in array at: " << i << std::endl;

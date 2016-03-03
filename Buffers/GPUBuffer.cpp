@@ -24,18 +24,18 @@ device_(device), size_(size), ptr_(0), Hostptr_(0)
   }
   err = cudaMalloc((void**)&ptr_, size_);
   if (err != cudaSuccess) {
-	  err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped); // if device allocation fails, try to allocate on Host
-	  if (err != cudaSuccess) 
-		  throw std::runtime_error("cudaMalloc and cudaHostAlloc failed.");
-	  else {
-		  cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0);
-		  size_t free;
-		  size_t total;
-		  cudaMemGetInfo(&free, &total);
-		  if (firstcall)
-			  std::cout << "Want new " << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
-		  firstcall = false;
-	  }
+      err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped); // if device allocation fails, try to allocate on Host
+      if (err != cudaSuccess) 
+          throw std::runtime_error("cudaMalloc and cudaHostAlloc failed.");
+      else {
+          cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0);
+          size_t free;
+          size_t total;
+          cudaMemGetInfo(&free, &total);
+          if (firstcall)
+              std::cout << "Want new " << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
+          firstcall = false;
+      }
   }
 }
 
@@ -74,72 +74,83 @@ GPUBuffer& GPUBuffer::operator=(const CPUBuffer& rhs) {
 }
 
 GPUBuffer::~GPUBuffer() {
-	if (Hostptr_){
-		cudaError_t err = cudaFreeHost(Hostptr_);
-		ptr_ = 0;
-		Hostptr_ = 0;
-	}
-	else
-		if (ptr_) {
-			cudaError_t err = cudaFree(ptr_);
-			if (err != cudaSuccess) {
-				std::cout << "sCudaFree failed. Error code: " << err << std::endl;
-				std::cout << "ptr_: " << (long long int)ptr_ << std::endl;
-				throw std::runtime_error("cudaFree failed.");
-			}
-			ptr_ = 0;
-		}
+    if (Hostptr_){
+        cudaError_t err = cudaFreeHost(Hostptr_);
+        if (err != cudaSuccess) {
+          std::cout << "cudaFreeHost failed. Error code: " << err << std::endl;
+          std::cout << "Hostptr_: " << (long long int)Hostptr_ << std::endl;
+          throw std::runtime_error("cudaFreeHost failed.");
+        }
+        ptr_ = 0;
+        Hostptr_ = 0;
+    }
+    else
+        if (ptr_) {
+            cudaError_t err = cudaFree(ptr_);
+            if (err != cudaSuccess) {
+                std::cout << "CudaFree failed. Error code: " << err << std::endl;
+                std::cout << "ptr_: " << (long long int)ptr_ << std::endl;
+                throw std::runtime_error("cudaFree failed.");
+            }
+            ptr_ = 0;
+        }
 }
 
 void GPUBuffer::resize(size_t newsize) {
-	if (Hostptr_){
-		cudaError_t err = cudaFreeHost(Hostptr_);
-		ptr_ = 0;
-		Hostptr_ = 0;
-	}
-	else
-		if (ptr_) {
-		  cudaError_t err = cudaFree(ptr_);
-		  if (err != cudaSuccess) {
-		      throw std::runtime_error("cudaFree failed.");
-			  }
-		 ptr_ = 0;
-		}
+    if (Hostptr_){
+        cudaError_t err = cudaFreeHost(Hostptr_);
+        if (err != cudaSuccess) {
+          std::cout << "cudaFreeHost failed. Error code: " << err << std::endl;
+          std::cout << "Hostptr_: " << (long long int)Hostptr_ << std::endl;
+          throw std::runtime_error("cudaFreeHost failed.");
+        }
+        ptr_ = 0;
+        Hostptr_ = 0;
+    }
+    else
+        if (ptr_) {
+          cudaError_t err = cudaFree(ptr_);
+          if (err != cudaSuccess) {
+              throw std::runtime_error("cudaFree failed.");
+              }
+         ptr_ = 0;
+        }
   cudaError_t err = cudaSetDevice(device_);
   if (err != cudaSuccess) {
     throw std::runtime_error("cudaSetDevice failed.");
   }
   size_ = newsize;
   if (newsize > 0) {
-	  err = cudaMalloc((void**)&ptr_, size_);
-	  if (err != cudaSuccess) {
-		  err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped); // if device allocation fails, try to allocate on Host
-		  if (err != cudaSuccess)
-			  throw std::runtime_error("cudaMalloc and cudaHostAlloc failed.");
-		  else {
-			  cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0);
-			  size_t free;
-			  size_t total;
-			  cudaMemGetInfo(&free, &total);
-			  if (firstcall)
-				  std::cout << "Want resize" << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
-			  firstcall = false;
-		  }
-	  }
+      err = cudaMalloc((void**)&ptr_, size_);
+      if (err != cudaSuccess) {
+          err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped); // if device allocation fails, try to allocate on Host
+          if (err != cudaSuccess)
+              throw std::runtime_error("cudaMalloc and cudaHostAlloc failed.");
+          else {
+              cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0);
+              size_t free;
+              size_t total;
+              cudaMemGetInfo(&free, &total);
+              if (firstcall)
+                  std::cout << "Want resize" << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
+              firstcall = false;
+          }
+      }
   }
 }
 
-void GPUBuffer::setPtr(char* ptr, size_t size, int device)
+void GPUBuffer::setPtr(char* ptr, char* Hostptr, size_t size, int device)
 {
-	if (Hostptr_){
-		std::cout << "setPtr Line:" << __LINE__ << std::endl;
-		cutilSafeCall(cudaFreeHost(Hostptr_));
-	}
-	else
-	  if (ptr_)
-		cutilSafeCall(cudaFree(ptr_));
+    if (Hostptr_){
+        std::cout << "setPtr Line:" << __LINE__ << std::endl;
+        cutilSafeCall(cudaFreeHost(Hostptr_));
+    }
+    else
+      if (ptr_)
+        cutilSafeCall(cudaFree(ptr_));
   
   ptr_ = ptr;
+  Hostptr_ = Hostptr;
   size_ = size;
   device_ = device;
 
