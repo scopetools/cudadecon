@@ -332,6 +332,10 @@ __global__ void LRcore_kernel(float * img1, float * img2)
     // img1[ind] = img1[ind] > const_eps ? img1[ind] : 
     //   (img1[ind] > 0 ? const_eps : img2[ind]);
     img1[ind] = img2[ind]/img1[ind] + const_eps;
+    // The following thresholding is necessary for occasional very high
+    // DR data and incorrectly high background value specified (-b flag).
+    if (img1[ind] > 10) img1[ind] = 10;
+    if (img1[ind] < -10) img1[ind] = -10;
   }
 }
 

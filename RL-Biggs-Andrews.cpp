@@ -51,7 +51,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   unsigned int nz = raw.depth();
 
   unsigned int nxy = nx * ny;
-  unsigned int nxy2 = (nx+2)*ny;
+  unsigned int nxy2 = (nx/2+1)*2*ny; // can't use (nx+2) because nx can be odd number
 
 #ifndef NDEBUG
 #ifdef _WIN32
@@ -101,7 +101,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
       nx = deskewedNx;
       nxy = nx*ny;
-      nxy2 = (nx+2)*ny;
+      nxy2 = (nx/2+1)*2*ny;  // can't use (nx+2) because nx can be odd number
 
       cutilSafeCall(cudaHostUnregister(raw.data()));
       raw.clear();
