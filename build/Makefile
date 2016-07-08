@@ -1,24 +1,20 @@
 # @(#)makefile
 
 
-FFTWTHREAD   = -lfftw3f_threads -lpthread
-FFTWLIBS     = -lfftw3f
+# custom define CUDA_ROOT as needed
+CUDA_ROOT = /usr/local/cuda
+CUDA_INC_DIR = $(CUDA_ROOT)/include
+CUDA_LIB_FLAG = -L$(CUDA_ROOT)/lib64
 
 
-LDLIBS      = $(FFTWTHREAD) $(FFTWLIBS)
+NVCC = $(CUDA_ROOT)/bin/nvcc
 
-CUDA_INC_DIR = /usr/local/cuda/include
-CUDA_LIB_FLAG = -L/usr/local/cuda/lib64
-
-
-NVCC = /usr/local/cuda/bin/nvcc
-
-CXXFLAGS  = -Wall -DNDEBUG -I../../CImg-1.5.8 -I../Buffers
+CXXFLAGS  = -Wall -DNDEBUG -I../Buffers -I..
 CXXFLAGS += -I/opt/local/include
-CXXFLAGS += -I$(CUDA_INC_DIR) -I/usr/local/cuda/samples/common/inc
+CXXFLAGS += -I$(CUDA_INC_DIR) -I$(CUDA_ROOT)/samples/common/inc
 CXXFLAGS += -I/usr/X11/include
 CXXFLAGS += -std=c++11
-CXXFLAGS      += -O3
+CXXFLAGS      += -O2
 #CXXFLAGS      += -g
 
 LDLIBS  = -lfftw3f -lfftw3f_threads -ltiff -lX11
@@ -33,6 +29,8 @@ endif
 
 %.o: ../%.cpp
 	$(CXX) $(CXXFLAGS) -c $^ -o $@ 
+%.o: ../Buffers/%.cpp
+	$(CXX) $(CXXFLAGS) -c $^ -o $@ 
 
 %.o: ../%.cu
 	$(NVCC) -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 --compiler-options="-Wall -O3 -I../Buffers" -c $^ 
@@ -44,7 +42,8 @@ endif
 
 all: cudaDeconv radialft otfviewer
 
-cudaDeconv: linearDecon.o RL-Biggs-Andrews.o boostfs.o RLgpuImpl.o geometryTransform.o ../Buffers/Buffer.o  ../Buffers/CPUBuffer.o  ../Buffers/GPUBuffer.o  ../Buffers/PinnedCPUBuffer.o
+
+cudaDeconv: linearDecon.o RL-Biggs-Andrews.o boostfs.o RLgpuImpl.o geometryTransform.o Buffer.o CPUBuffer.o GPUBuffer.o PinnedCPUBuffer.o
 	$(NVCC) -v -o $@ $^ $(LDFLAGS) $(LDLIBS)
 
 radialft: radialft-nonSIM.o

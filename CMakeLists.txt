@@ -1,6 +1,6 @@
 
 cmake_minimum_required (VERSION 2.6)
-cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
+#cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
 
 project (cudaDeconv)
 
