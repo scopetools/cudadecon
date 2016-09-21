@@ -1,6 +1,17 @@
+######################################################################
+#
+# This will make the following outputs : 
+#
+# cudaDeconv.exe
+# otfviewer.exe
+# radialft.exe
+# libcudaDeconv.dll
+#
+######################################################################
+
 
 cmake_minimum_required (VERSION 2.6)
-#cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
+cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
 
 project (cudaDeconv)
 
@@ -27,12 +38,19 @@ set(SCI_WORLD_PROGRAM_PERMS WORLD_READ WORLD_EXECUTE)
 # 2-step verification. The goal is that if no Release is specified in
 # the command line, we want the compiler flag to be almost identical to the
 # ones used for Release except for -DNDEBUG
+
+######################################################################
+#
+# Set compilier
+#
+######################################################################
+
 if ( NOT CMAKE_BUILD_TYPE )
   set(CMAKE_BUILD_TYPE "Debug")
 endif()
 
 if (WIN32)
-	message(STATUS "Win32")
+	message(STATUS "Windows build environment.")
 endif()
 
 if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
@@ -64,16 +82,29 @@ message(STATUS "CXX_FLAGS is '${CMAKE_CXX_FLAGS}'")
 message(STATUS "CXX_FLAGS_DEBUG is '${CMAKE_CXX_FLAGS_DEBUG}'")
 message(STATUS "CXX_FLAGS_RELWITHDEBINFO is '${CMAKE_CXX_FLAGS_RELWITHDEBINFO}'")
 
+
+######################################################################
+#
+# Set packages
+#
+######################################################################
+
 find_package(CUDA REQUIRED)
+
 
 if (WIN32)
   set (FFTW3_ROOT_DIR C:/fftw3)
   set (FFTW3F_LIBRARY libfftw3f-3)
   find_package(FFTW3 COMPONENTS single)
-  # set (TIFF_LIBRARY C:/libtiff/libtiff)
-  # set (TIFF_INCLUDE_DIR C:/libtiff/libtiff)
-  set (TIFF_LIBRARY C:/libtiff)
-  set (TIFF_INCLUDE_DIR C:/libtiff)
+
+  if (EXISTS C:/libtiff/libtiff)
+	set (TIFF_LIBRARY C:/libtiff/libtiff)
+	set (TIFF_INCLUDE_DIR C:/libtiff/libtiff)
+  else()
+	set (TIFF_LIBRARY C:/libtiff)
+	set (TIFF_INCLUDE_DIR C:/libtiff)
+  endif()
+
 else()
   find_package(FFTW3 COMPONENTS single threads)
 endif()
@@ -83,9 +114,6 @@ find_package(TIFF REQUIRED)
 if (WIN32)
   set (TIFF_LIBRARIES libtiff)
 endif()
-
-# message(STATUS "TIFF_LIBRARY is '${TIFF_LIBRARY}'")
-# message(STATUS "TIFF_LIBRARIES is '${TIFF_LIBRARIES}'")
 
 if (NOT WIN32)
   find_package(X11)
@@ -106,7 +134,14 @@ set(CUDA_NVCC_FLAGS "-O2;\
 	-gencode=arch=compute_50,code=sm_50;\
 	-gencode=arch=compute_52,code=sm_52")
 	#specifies which compute capabilities are supported by the built .exe
+	#Need to add to these if different GPUs are targeted.
 #--ptxas-options=-v;
+
+######################################################################
+#
+# Add subdirectories
+#
+######################################################################
 
 add_subdirectory(Buffers)
 
@@ -129,13 +164,29 @@ else()
   include_directories( ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc )
 endif()
 
-# CUDA_ADD_LIBRARY(
-#   libcudaDeconv
-#   SHARED
-#   RL-Biggs-Andrews.cpp
-#   RLgpuImpl.cu
-#   geometryTransform.cu
-#   )
+######################################################################
+#
+# Add build outputs and their dependencies
+#
+######################################################################
+
+
+#####  libcudaDeconv.dll ###########################################
+
+ CUDA_ADD_LIBRARY(
+   libcudaDeconv
+   SHARED
+   RL-Biggs-Andrews.cpp
+   RLgpuImpl.cu
+   geometryTransform.cu
+   )
+
+add_dependencies(
+   libcudaDeconv
+   Buffer
+   )
+
+#####  cudaDeconv.exe ###########################################
 
 CUDA_ADD_EXECUTABLE(
   cudaDeconv
@@ -151,13 +202,32 @@ add_dependencies(
   Buffer
   )
 
-# add_dependencies(
-#   libcudaDeconv
-#   Buffer
-#   )
+  
+#####  RL_interface_driver.exe ###########################################
 
+CUDA_ADD_EXECUTABLE(
+  RL_interface_driver
+  RL_interface_driver.cpp
+  )
+
+target_link_libraries(
+  RL_interface_driver
+  libcudaDeconv
+  ${TIFF_LIBRARIES}
+  )
+
+#####  radialft.exe ###########################################
 add_executable(radialft radialft-nonSIM.cpp)
+
+#####  otfviewer.exe ###########################################
 add_executable(otfviewer OTF_TIFF_viewer.cpp)
+
+
+######################################################################
+#
+# Link libraries
+#
+######################################################################
 
 target_link_libraries(
   cudaDeconv
@@ -171,6 +241,7 @@ target_link_libraries(
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
   )
+
 target_link_libraries(
   radialft
   ${FFTW3F_LIBRARY}
@@ -179,12 +250,26 @@ target_link_libraries(
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
   ${TIFF_LIBRARIES}
   )
+
 target_link_libraries(
   otfviewer
   ${TIFF_LIBRARIES}
   ${X11_X11_LIB}
   )
 
+target_link_libraries(
+  libcudaDeconv
+  Buffer
+  ${FFTW3F_LIBRARY}
+  ${FFTW3F_THREADS_LIBRARY}
+  ${X11_X11_LIB}
+  ${Boost_PROGRAM_OPTIONS_LIBRARY}
+  ${Boost_FILESYSTEM_LIBRARY}
+#  ${Boost_REGEX_LIBRARY}
+  ${Boost_SYSTEM_LIBRARY}
+  ${TIFF_LIBRARIES}
+  )
+
 CUDA_ADD_CUFFT_TO_TARGET(cudaDeconv)
-# CUDA_ADD_CUFFT_TO_TARGET(libcudaDeconv)
+CUDA_ADD_CUFFT_TO_TARGET(libcudaDeconv)
 

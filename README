@@ -44,3 +44,16 @@ Make sure there's no error message. To generate makefiles from scratch, the enti
 
 3. Compile the libraries and executables:
 nmake 
+
+4. To generate the .sln files for Visual Studio (so that you have a nice IDE to view the source files), you can create a folder, call it "VS", then run this command within "VS":
+cmake .. -G "Visual Studio 12 Wind64"
+
+
+********************* Notes ***************
+
+* GPU based resources have a d_ prefix in their name such as : GPUBuffer & d_interpOTF
+
+* transferConstants() is a function to send small data values from host to GPU device.  
+* The link between the function arguments of "transferConstants()" and the globals like : __constant__ unsigned const_nzotf; are found in RLgpuImpl.cu with calls like : cutilSafeCall(cudaMemcpyToSymbol(const_nzotf, &nzotf, sizeof(int)));
+ 
+* RL is based upon the built-in Matlab version : deconvlucy.m (see http://ecco2.jpl.nasa.gov/opendap/hyrax/matlab/images/images/deconvlucy.m)
