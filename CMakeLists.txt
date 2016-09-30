@@ -133,7 +133,7 @@ set(CUDA_NVCC_FLAGS "-O2;\
 	-gencode=arch=compute_37,code=sm_37;\
 	-gencode=arch=compute_50,code=sm_50;\
 	-gencode=arch=compute_52,code=sm_52")
-	#specifies which compute capabilities are supported by the built .exe
+	#specifies which compute capabilities are supported by the built .exe http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#gpu-feature-list 
 	#Need to add to these if different GPUs are targeted.
 #--ptxas-options=-v;
 
