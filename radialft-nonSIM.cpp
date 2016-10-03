@@ -57,8 +57,8 @@ int main(int argc, char **argv)
 
   po::options_description progopts;
   progopts.add_options()
-    ("na", po::value<float>(&NA)->default_value(1.4), "NA of detection objective")
-    ("nimm", po::value<float>(&NIMM)->default_value(1.515), "refractive index of immersion medium")
+    ("na", po::value<float>(&NA)->default_value(1.25), "NA of detection objective")
+    ("nimm", po::value<float>(&NIMM)->default_value(1.3), "refractive index of immersion medium")
     ("xyres", po::value<float>(&dr)->default_value(.104), "x-y pixel size")
     ("zres", po::value<float>(&dz)->default_value(.104), "z pixel size")
     ("wavelength", po::value<int>(&lambdanm)->default_value(530), "emission wavelength in nm")
@@ -66,7 +66,7 @@ int main(int argc, char **argv)
      "for all kz, extrapolate using pixels kr=1 to this pixel to get value for kr=0")
     ("krmax", po::value<int>(&krmax)->default_value(0),
      "pixels outside this limit will be zeroed (overwriting estimated value from NA and NIMM)")
-    ("nocleanup", po::value<bool>(&bDoCleanup)->implicit_value(false), "elect not to do clean-up outside OTF support")
+    ("nocleanup", po::bool_switch(&bDoCleanup)->implicit_value(false), "elect not to do clean-up outside OTF support")
     ("background", po::value<float>(&background), "use user-supplied background instead of the estimated")
     ("input-file", po::value<std::string>(&ifiles)->required(), "input file")
     ("output-file", po::value<std::string>(&ofiles)->required(), "output file")
@@ -103,6 +103,7 @@ int main(int argc, char **argv)
     std::cin >> ofiles;
   }
 
+  printf ("bDoCleanup=%i\n", bDoCleanup);
   TIFFSetWarningHandler(NULL);
 
   CImg<> rawtiff(ifiles.c_str());
@@ -166,12 +167,18 @@ int main(int argc, char **argv)
     cleanup(avg_output, nx, nz, dkr, dkz, 1.0, lambdanm, krmax, NA, NIMM);
 
   if (interpkr > 0)
+    try {
     while (!fixorigin(avg_output, nx, nz, interpkr)) {
       interpkr --;
-      if (interpkr < 5)
-        throw std::runtime_error("#pixels < 5 used in kr=0 extrapolation");
-    }
-  printf("%d\n", interpkr);
+      if (interpkr < 4)
+        throw std::runtime_error("#pixels < 4 used in kr=0 extrapolation");
+    }}
+  catch (std::exception &e) {
+    std::cout << "\n!!Error occurred: " << e.what() << std::endl;
+    return false;
+  }
+
+//  printf("%d\n", interpkr);
   rescale(avg_output, nx, nz);
 
   /* For side bands, combine bandre's and bandim's into bandplus */
@@ -377,7 +384,7 @@ void cleanup(std::complex<float> *otfkxkz, int nx, int nz, float dkr, float dkz,
   if (krmax_user*dkr<krmax && krmax_user!=0)
     krmax = krmax_user*dkr;
 
-  printf("krmax=%f\n", krmax);
+  printf("krmax=%f, lambda=%f\n", krmax, lamda);
   for (ix=0; ix<icleanup; ix++) {
     kr = ix * dkr;
     if ( kr <= krmax ) {
@@ -400,6 +407,8 @@ bool fixorigin(std::complex<float> *otfkxkz, int nx, int nz, int kx2)
 {
   // linear fit the value at kx=0 using kx in [1, kx2]
   double mean_kx = (kx2+1)/2.; // the mean of [1, 2, ..., n] is (n+1)/2
+
+  printf("In fixorigin(), kx2=%d\n", nx, nz, kx2);
 
   for (int z=0; z<nz; z++) {
     std::complex<double> mean_val=0;
