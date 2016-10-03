@@ -132,7 +132,7 @@ void GPUBuffer::resize(size_t newsize) {
               size_t total;
               cudaMemGetInfo(&free, &total);
               if (firstcall)
-                  std::cout << "Want resize" << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
+                  std::cout << "Resizing buffer. " << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
               firstcall = false;
           }
       }
