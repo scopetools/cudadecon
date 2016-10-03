@@ -1,6 +1,12 @@
 #include "linearDecon.h"
 #include <exception>
 
+// Disable silly warnings on some Microsoft VC++ compilers.
+#pragma warning(disable : 4244) // Disregard loss of data from float to int.
+#pragma warning(disable : 4267) // Disregard loss of data from size_t to unsigned int.
+#pragma warning(disable : 4305) // Disregard loss of data from double to float.
+
+
 std::complex<float> otfinterpolate(std::complex<float> * otf, float kx, float ky, float kz, int nzotf, int nrotf)
 // Use sub-pixel coordinates (kx,ky,kz) to linearly interpolate a rotationally-averaged 3D OTF ("otf").
 // otf has 2 dimensions: fast dimension is kz with length "nzotf" while the slow dimension is kr.
@@ -103,8 +109,11 @@ int main(int argc, char *argv[])
   float dz_psf, dr_psf;
   float wiener;
 
+  int myGPUdevice;
   int RL_iters=0;
   bool bSaveDeskewedRaw = false;
+  bool bAdjustResolution = false;
+  bool bDevQuery = false;
   float deskewAngle=0.0;
   float rotationAngle=0.0;
   unsigned outputWidth;
@@ -143,6 +152,9 @@ int main(int argc, char *argv[])
     ("input-dir", po::value<std::string>(&datafolder)->required(), "input folder name")
     ("otf-file", po::value<std::string>(&otffiles)->required(), "OTF file")
     ("filename-pattern", po::value<std::string>(&filenamePattern)->required(), "pattern in file names")
+	("DoNotAdjustResForFFT,a", po::bool_switch(&bAdjustResolution)->default_value(false), "Don't change data resolution size. Otherwise data is cropped to perform faster FFT: factorable into 2,3,5,7)")
+	("DevQuery,q", po::bool_switch(&bDevQuery)->default_value(false), "Write out device information")
+	("GPUdevice", po::value<int>(&myGPUdevice)->default_value(0), "index of GPU device to use. (0=first device)")
     ("help,h", "produce help message")
     ;
   po::positional_options_description p;
@@ -150,36 +162,75 @@ int main(int argc, char *argv[])
   p.add("filename-pattern", 1);
   p.add("otf-file", 1);
 
-// Parse commandline option:
+  // Parse commandline option:
   po::variables_map varsmap;
   try {
-    store(po::command_line_parser(argc, argv).
-          options(progopts).positional(p).run(), varsmap);
-    if (varsmap.count("help")) {
-      std::cout << progopts << "\n";
-      return 0;
-    }
+	  store(po::command_line_parser(argc, argv).
+		  options(progopts).positional(p).run(), varsmap);
+	  if (varsmap.count("help")) {
+		  std::cout << progopts << "\n";
+		  return 0;
+	  }
 
-    notify(varsmap);
+	  notify(varsmap);
 
-    // if (varsmap.count("crop")) {
-    //   if (final_CropTo_boundaries.size() != 6)
-    //     throw std::runtime_error("Exactly 6 integers are required for the -C or --crop flag!");
-    //   std::copy(final_CropTo_boundaries.begin(), final_CropTo_boundaries.end(), std::ostream_iterator<int>(std::cout, ", "));
-    //   std::cout << std::endl;
-    // }
-    // std::cout << bDoMaxIntProj.size() << std::endl;
+	  // if (varsmap.count("crop")) {
+	  //   if (final_CropTo_boundaries.size() != 6)
+	  //     throw std::runtime_error("Exactly 6 integers are required for the -C or --crop flag!");
+	  //   std::copy(final_CropTo_boundaries.begin(), final_CropTo_boundaries.end(), std::ostream_iterator<int>(std::cout, ", "));
+	  //   std::cout << std::endl;
+	  // }
+	  // std::cout << bDoMaxIntProj.size() << std::endl;
   }
   catch (std::exception &e) {
     std::cout << "\n!!Error occurred: " << e.what() << std::endl;
     return 0;
   }
 
+  //Check to see if we have a proper GPU device
+  int deviceCount = 0;
+  cudaError_t error_id = cudaGetDeviceCount(&deviceCount);
+
+  if (error_id != cudaSuccess)
+  {
+	  printf("cudaGetDeviceCount returned %d\n-> %s\n", (int)error_id, cudaGetErrorString(error_id));
+	  printf("Result = FAIL\n");
+	  exit(EXIT_FAILURE);
+  }
+  if (deviceCount == 0)
+  	  printf("There are no available device(s) that support CUDA\n");
+  
+  if (bDevQuery) {
+	  // This function call returns 0 if there are no CUDA capable devices.
+	  if (deviceCount != 0)
+		  printf("Detected %d CUDA Capable device(s)\n", deviceCount);
+
+	  int dev, driverVersion = 0, runtimeVersion = 0;
+
+	  for (dev = 0; dev < deviceCount; ++dev)
+	  {
+		  cudaSetDevice(dev);
+		  cudaDeviceProp mydeviceProp;
+		  cudaGetDeviceProperties(&mydeviceProp, dev);
+		  printf("\nDevice %d: \"%s\"\n", dev, mydeviceProp.name);
+
+		  cudaDriverGetVersion(&driverVersion);
+		  cudaRuntimeGetVersion(&runtimeVersion);
+		  printf("  CUDA Driver Version / Runtime Version          %d.%d / %d.%d\n", driverVersion / 1000, (driverVersion % 100) / 10, runtimeVersion / 1000, (runtimeVersion % 100) / 10);
+		  printf("  CUDA Capability Major/Minor version number:    %d.%d\n", mydeviceProp.major, mydeviceProp.minor);
+		  printf("  Total amount of global memory:                 %.0f MBytes (%llu bytes)\n",
+			  (float)mydeviceProp.totalGlobalMem / 1048576.0f, (unsigned long long) mydeviceProp.totalGlobalMem);
+	  }
+	  cudaSetDevice(myGPUdevice);
+  }
+
+
   cudaSetDeviceFlags(cudaDeviceMapHost);
   size_t GPUfree;
   size_t GPUtotal;
   cudaMemGetInfo(&GPUfree, &GPUtotal);
   std::cout << std::endl << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
+
   CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed;
   float dkr_otf, dkz_otf;
   float dkx, dky, dkz, rdistcutoff;
@@ -194,6 +245,8 @@ int main(int argc, char *argv[])
 
   cudaDeviceProp deviceProp;
   cudaGetDeviceProperties(&deviceProp, 0);
+
+  
 
   // Loop over all matching input TIFFs:
   try {
@@ -221,34 +274,35 @@ int main(int argc, char *argv[])
 
         printf("Original image size: nz=%d, ny=%d, nx=%d\n", nz, ny, nx);
 
-        if (RL_iters>0) {
-          new_ny = findOptimalDimension(ny);
-          if (new_ny != ny) {
-            printf("new ny=%d\n", new_ny);
-            bCrop = true;
-          }
+		if (RL_iters > 0 && !bAdjustResolution) {
+			new_ny = findOptimalDimension(ny);
+			if (new_ny != ny) {
+				printf("new ny=%d\n", new_ny);
+				bCrop = true;
+			}
 
-          new_nz = findOptimalDimension(nz);
-          if (new_nz != nz) {
-            printf("new nz=%d\n", new_nz);
-            bCrop = true;
-          }
+			new_nz = findOptimalDimension(nz);
+			if (new_nz != nz) {
+				printf("new nz=%d\n", new_nz);
+				bCrop = true;
+			}
 
-          // only if no deskewing is happening do we want to change image width here
-          new_nx = nx;
-          if ( !(fabs(deskewAngle) > 0.0) ) {
-            new_nx = findOptimalDimension(nx);
-            if (new_nx != nx) {
-              printf("new nx=%d\n", new_nx);
-              bCrop = true;
-            }
-          }
-        }
-        else {
-          new_nx = nx;
-          new_ny = ny;
-          new_nz = nz;
-        }
+			// only if no deskewing is happening do we want to change image width here
+			new_nx = nx;
+			if (!(fabs(deskewAngle) > 0.0)) {
+				new_nx = findOptimalDimension(nx);
+				if (new_nx != nx) {
+					printf("new nx=%d\n", new_nx);
+					bCrop = true;
+				}
+			}
+		}
+		else {
+			new_nx = nx;
+			new_ny = ny;
+			new_nz = nz;
+		}
+		
 
         // Load OTF (assuming 3D rotationally averaged OTF):
         complexOTF.assign(otffiles.c_str());
@@ -269,7 +323,8 @@ int main(int argc, char *argv[])
           else
             deskewedXdim = outputWidth; // use user-provided output width if available
 
-          deskewedXdim = findOptimalDimension(deskewedXdim);
+		  if (bAdjustResolution)
+			deskewedXdim = findOptimalDimension(deskewedXdim);
 
           // update z step size:
           imgParams.dz *= sin(deskewAngle * M_PI/180.);
@@ -316,11 +371,15 @@ int main(int argc, char *argv[])
           cufftResult cuFFTErr = cufftPlan3d(&rfftplanGPU, new_nz, new_ny, deskewedXdim, CUFFT_R2C);
           if (cuFFTErr != CUFFT_SUCCESS) {
             std::cout << "cufftPlan3d() r2c failed. Error code: " << cuFFTErr << std::endl;
+			cudaMemGetInfo(&GPUfree, &GPUtotal);
+			std::cout << std::endl << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
             throw std::runtime_error("cufftPlan3d() r2c failed.");
           }
           cuFFTErr = cufftPlan3d(&rfftplanInvGPU, new_nz, new_ny, deskewedXdim, CUFFT_C2R);
           if (cuFFTErr != CUFFT_SUCCESS) {
             std::cout << "cufftPlan3d() c2r failed. Error code: " << cuFFTErr << std::endl;
+			cudaMemGetInfo(&GPUfree, &GPUtotal);
+			std::cout << std::endl << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
             throw std::runtime_error("cufftPlan3d() c2r failed.");
           }
         }

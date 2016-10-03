@@ -1,9 +1,17 @@
+To get this. Please use Subversion (aka SVN.  If on windows, use TortoiseSVN) and perform a check out of :
+https://subversion.int.janelia.org/betziglab/projects/
+to :
+C:\CudaDecon
+
+
 DLL build instructions:
 
 1. Prerequisites:
 1.a. Visual Studio Community (make sure it's supported by CUDA SDK.  I'm using VS Community 2013). Run Windows Updates.
+1.b. Install CMake Tools for Visual Studio.  This will give you color coded text when you make edits to CMakeLists.txt : http://cmaketools.codeplex.com/
 
-Run VS. Select Tools->Visual Studio Command Prompt
+Run Visual Studio
+Select Tools->Visual Studio Command Prompt
 
 At the command prompt, change to the Visual C++ installation directory. (The location depends on the system and the Visual Studio installation, but a typical location is C:\Program Files (x86)\Microsoft Visual Studio version\VC\.) For example, enter:
 
@@ -31,7 +39,7 @@ cmake -G "Visual Studio 12 2013 Win64"
 bootstrap
 .\b2 address-model=64
 
-1.g. Make a subdirectory under where the source code (or this README) is located; call it "cmake".  Then copy \\dm11\betziglab\shaol\FindFFTW3.cmake into this folder
+1.g. Make a subdirectory under where the source code (or this README) is located; call it "cmake".  Then copy \\dm11\betziglab\shaol\FindFFTW3.cmake into this folder (FYI, you don't need to do this, since this is now in the SVN repo.)
 
 2. Generate makefiles:
 2.a. Make a subdirectory under where the source code (or this README) is located; let's call it "build"
@@ -52,7 +60,7 @@ cmake .. -G "Visual Studio 12 Wind64"
 
 ********************* Notes ***************
 
-* Compatible GPUs are specified in this "C:\CudaDecon\CMakeLists.txt" 
+* Compatible GPUs are specified in this "C:\CudaDecon\CMakeLists.txt".  This also sets up all of the linking to dependent libraries.  If you end up adding other code libraries, or changing versions, etc you will want to edit this file.
 
 * GPU based resources have a d_ prefix in their name such as : GPUBuffer & d_interpOTF
 

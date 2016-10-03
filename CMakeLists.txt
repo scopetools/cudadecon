@@ -125,16 +125,29 @@ else()
   find_package( Boost REQUIRED COMPONENTS program_options filesystem system)
 endif(WIN32)
 
-#set(CUDA_NVCC_FLAGS "-O2;-gencode=arch=compute_50,code=sm_50")
-set(CUDA_NVCC_FLAGS "-O2;\
-	-gencode=arch=compute_20,code=sm_20;\
-	-gencode=arch=compute_30,code=sm_30;\
-	-gencode=arch=compute_35,code=sm_35;\
-	-gencode=arch=compute_37,code=sm_37;\
-	-gencode=arch=compute_50,code=sm_50;\
-	-gencode=arch=compute_52,code=sm_52")
-	#specifies which compute capabilities are supported by the built .exe http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#gpu-feature-list 
-	#Need to add to these if different GPUs are targeted.
+message(STATUS "CUDA version : ${CUDA_VERSION}")
+if(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
+	set(CUDA_NVCC_FLAGS "-O2;\
+		-gencode=arch=compute_20,code=sm_20;\
+		-gencode=arch=compute_30,code=sm_30;\
+		-gencode=arch=compute_35,code=sm_35;\
+		-gencode=arch=compute_37,code=sm_37;\
+		-gencode=arch=compute_50,code=sm_50;\
+		-gencode=arch=compute_52,code=sm_52;\
+		-gencode=arch=compute_61,code=sm_61") # compute capability 6.1 only avaiable in CUDA 8.0 or greater
+	else()
+		set(CUDA_NVCC_FLAGS "-O2;\
+		-gencode=arch=compute_20,code=sm_20;\
+		-gencode=arch=compute_30,code=sm_30;\
+		-gencode=arch=compute_35,code=sm_35;\
+		-gencode=arch=compute_37,code=sm_37;\
+		-gencode=arch=compute_50,code=sm_50;\
+		-gencode=arch=compute_52,code=sm_52")
+											  # compute capability 6.1 only avaiable in CUDA 8.0 or greater
+endif()
+
+# Specifies which compute capabilities are supported by the built .exe http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#gpu-feature-list 
+# Need to add to these if different GPUs are targeted.
 #--ptxas-options=-v;
 
 ######################################################################
