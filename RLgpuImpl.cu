@@ -9,6 +9,11 @@
 #include <math.h>
 #endif
 
+// Disable silly warnings on some Microsoft VC++ compilers.
+#pragma warning(disable : 4244) // Disregard loss of data from float to int.
+#pragma warning(disable : 4267) // Disregard loss of data from size_t to unsigned int.
+#pragma warning(disable : 4305) // Disregard loss of data from double to float.
+
 __constant__ unsigned const_nx;
 __constant__ unsigned const_ny;
 __constant__ unsigned const_nz;
