@@ -330,11 +330,6 @@ int main(int argc, char *argv[])
           imgParams.dz *= sin(deskewAngle * M_PI/180.);
 
           printf("deskewFactor=%f, new nx=%d\n", deskewFactor, deskewedXdim);
-
-          if (bSaveDeskewedRaw) {
-            raw_deskewed.assign(deskewedXdim, new_ny, new_nz);
-            makeDeskewedDir("Deskewed");
-          }
         }
 
         // Construct rotation matrix:
@@ -401,6 +396,13 @@ int main(int argc, char *argv[])
         makeOTFarray(d_interpOTF, deskewedXdim, new_ny, new_nz);
       } // if (it == all_matching_files.begin())
 
+	  // initialize the raw_deskewed size everytime in case it is cropped on an earlier iteration
+	  if (bSaveDeskewedRaw && fabs(deskewAngle) > 0.0) {
+		  raw_deskewed.assign(deskewedXdim, new_ny, new_nz);
+		  makeDeskewedDir("Deskewed");
+	  }
+
+
       if (bCrop) {
         raw_image.crop(0, 0, 0, 0, new_nx-1, new_ny-1, new_nz-1, 0);
         // If deskew is to happen, it'll be performed inside RichardsonLucy_GPU() on GPU;
@@ -431,10 +433,10 @@ int main(int argc, char *argv[])
       }
 
       if (! final_CropTo_boundaries.empty()) {
-        raw_image.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],
-                       final_CropTo_boundaries[4], 0,
-                       final_CropTo_boundaries[1], final_CropTo_boundaries[3],
-                       final_CropTo_boundaries[5], 0);
+        raw_image.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],  // X, Y
+                       final_CropTo_boundaries[4], 0,							// Z, C
+                       final_CropTo_boundaries[1], final_CropTo_boundaries[3],	// X, Y
+                       final_CropTo_boundaries[5], 0);							// Z, C
         if (raw_deskewed.size())
           raw_deskewed.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],
                             final_CropTo_boundaries[4], 0,
