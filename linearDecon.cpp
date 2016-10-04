@@ -440,7 +440,7 @@ int main(int argc, char *argv[])
                        final_CropTo_boundaries[1], final_CropTo_boundaries[3],	// X, Y
                        final_CropTo_boundaries[5], 0);							// Z, C
 		if (raw_deskewed.size()) {
-			std::printf("raw_deskewed buffer uses %lu bytes", raw_deskewed.size()*sizeof(float));
+			// std::cout << std::endl << "The 'raw_deskewed' buffer uses " << raw_deskewed.size()*sizeof(float) << " bytes." << std::endl;
 			raw_deskewed.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],
 				final_CropTo_boundaries[4], 0,
 				final_CropTo_boundaries[1], final_CropTo_boundaries[3],
