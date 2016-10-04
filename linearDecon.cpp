@@ -397,9 +397,11 @@ int main(int argc, char *argv[])
       } // if (it == all_matching_files.begin())
 
 	  // initialize the raw_deskewed size everytime in case it is cropped on an earlier iteration
-	  if (bSaveDeskewedRaw && fabs(deskewAngle) > 0.0) {
+	  if (bSaveDeskewedRaw && (fabs(deskewAngle) > 0.0) ) {
 		  raw_deskewed.assign(deskewedXdim, new_ny, new_nz);
-		  makeDeskewedDir("Deskewed");
+
+		  if (it == all_matching_files.begin())
+			   makeDeskewedDir("Deskewed");
 	  }
 
 
@@ -437,11 +439,13 @@ int main(int argc, char *argv[])
                        final_CropTo_boundaries[4], 0,							// Z, C
                        final_CropTo_boundaries[1], final_CropTo_boundaries[3],	// X, Y
                        final_CropTo_boundaries[5], 0);							// Z, C
-        if (raw_deskewed.size())
-          raw_deskewed.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],
-                            final_CropTo_boundaries[4], 0,
-                            final_CropTo_boundaries[1], final_CropTo_boundaries[3],
-                            final_CropTo_boundaries[5], 0);
+		if (raw_deskewed.size()) {
+			std::printf("raw_deskewed buffer uses %lu bytes", raw_deskewed.size()*sizeof(float));
+			raw_deskewed.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],
+				final_CropTo_boundaries[4], 0,
+				final_CropTo_boundaries[1], final_CropTo_boundaries[3],
+				final_CropTo_boundaries[5], 0);
+		}
       }
 
       if (bSaveDeskewedRaw) {
