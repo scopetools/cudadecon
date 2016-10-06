@@ -112,7 +112,7 @@ int main(int argc, char *argv[])
   int myGPUdevice;
   int RL_iters=0;
   bool bSaveDeskewedRaw = false;
-  bool bAdjustResolution = false;
+  bool bDontAdjustResolution = false;
   bool bDevQuery = false;
   float deskewAngle=0.0;
   float rotationAngle=0.0;
@@ -152,7 +152,7 @@ int main(int argc, char *argv[])
     ("input-dir", po::value<std::string>(&datafolder)->required(), "input folder name")
     ("otf-file", po::value<std::string>(&otffiles)->required(), "OTF file")
     ("filename-pattern", po::value<std::string>(&filenamePattern)->required(), "pattern in file names")
-	("DoNotAdjustResForFFT,a", po::bool_switch(&bAdjustResolution)->default_value(false), "Don't change data resolution size. Otherwise data is cropped to perform faster FFT: factorable into 2,3,5,7)")
+	("DoNotAdjustResForFFT,a", po::bool_switch(&bDontAdjustResolution)->default_value(false), "Don't change data resolution size. Otherwise data is cropped to perform faster, more memory efficient FFT: size factorable into 2,3,5,7)")
 	("DevQuery,q", po::bool_switch(&bDevQuery)->default_value(false), "Write out device information")
 	("GPUdevice", po::value<int>(&myGPUdevice)->default_value(0), "index of GPU device to use. (0=first device)")
     ("help,h", "produce help message")
@@ -187,10 +187,11 @@ int main(int argc, char *argv[])
     return 0;
   }
 
-  //Check to see if we have a proper GPU device
+  bool bAdjustResolution = !bDontAdjustResolution;
+
+  //****************************Check to see if we have a proper GPU device***********************************
   int deviceCount = 0;
   cudaError_t error_id = cudaGetDeviceCount(&deviceCount);
-
   if (error_id != cudaSuccess)
   {
 	  printf("cudaGetDeviceCount returned %d\n-> %s\n", (int)error_id, cudaGetErrorString(error_id));
@@ -200,6 +201,7 @@ int main(int argc, char *argv[])
   if (deviceCount == 0)
   	  printf("There are no available device(s) that support CUDA\n");
   
+  //****************************Query GPU devices***********************************
   if (bDevQuery) {
 	  // This function call returns 0 if there are no CUDA capable devices.
 	  if (deviceCount != 0)
@@ -247,12 +249,11 @@ int main(int argc, char *argv[])
   cudaGetDeviceProperties(&deviceProp, 0);
 
   
-
-  // Loop over all matching input TIFFs:
+  //****************************Main processing***********************************
+  // Loop over all matching input TIFFs, :
   try {
     // Gather all files in 'datafolder' and matching the file name pattern:
-    std::vector< std::string > all_matching_files = 
-      gatherMatchingFiles(datafolder, filenamePattern);
+    std::vector< std::string > all_matching_files = gatherMatchingFiles(datafolder, filenamePattern);
 
     for (std::vector<std::string>::iterator it=all_matching_files.begin();
          it != all_matching_files.end(); it++) {
@@ -274,7 +275,8 @@ int main(int argc, char *argv[])
 
         printf("Original image size: nz=%d, ny=%d, nx=%d\n", nz, ny, nx);
 
-		if (RL_iters > 0 && !bAdjustResolution) {
+		//****************************Adjust resolution if desired***********************************
+		if (RL_iters > 0 && bAdjustResolution) {
 			new_ny = findOptimalDimension(ny);
 			if (new_ny != ny) {
 				printf("new ny=%d\n", new_ny);
@@ -303,15 +305,15 @@ int main(int argc, char *argv[])
 			new_nz = nz;
 		}
 		
-
-        // Load OTF (assuming 3D rotationally averaged OTF):
+		//****************************Load OTF to CPU RAM(assuming 3D rotationally averaged OTF)***********************************
         complexOTF.assign(otffiles.c_str());
         unsigned nr_otf = complexOTF.height();
         unsigned nz_otf = complexOTF.width() / 2;
         dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
         dkz_otf = 1/(nz_otf * dz_psf);
 
-        // Construct deskew matrix:
+        
+		//****************************Construct deskew matrix***********************************
         deskewedXdim = new_nx;
         if (fabs(deskewAngle) > 0.0) {
           if (deskewAngle <0) deskewAngle += 180.;
@@ -323,6 +325,7 @@ int main(int argc, char *argv[])
           else
             deskewedXdim = outputWidth; // use user-provided output width if available
 
+		  // Adjust resolution to optimal FFT size if desired
 		  if (bAdjustResolution)
 			deskewedXdim = findOptimalDimension(deskewedXdim);
 
@@ -332,7 +335,9 @@ int main(int argc, char *argv[])
           printf("deskewFactor=%f, new nx=%d\n", deskewFactor, deskewedXdim);
         }
 
-        // Construct rotation matrix:
+
+
+		//****************************Construct rotation matrix***********************************
         if (fabs(rotationAngle) > 0.0) {
           rotMatrix.resize(4*sizeof(float));
           rotationAngle *= M_PI/180;
@@ -344,7 +349,10 @@ int main(int argc, char *argv[])
           p[3] = cos(rotationAngle);
         }
 
-        if (wiener >0) {
+        
+		
+		if (wiener >0) {
+			//****************************Wiener filter instead of RL (not usually used.):***********************************
           raw_imageFFT.assign(deskewedXdim+2, new_ny, new_nz);
 
           if (!fftwf_init_threads()) { /* one-time initialization required to use threads */
@@ -362,7 +370,10 @@ int main(int argc, char *argv[])
                                                FFTW_ESTIMATE);
         }
         else if (RL_iters>0) {
-          // Create reusable cuFFT plans
+		//****************************RL decon***********************************
+
+		//****************************Create reusable cuFFT plans***********************************
+        // 
           cufftResult cuFFTErr = cufftPlan3d(&rfftplanGPU, new_nz, new_ny, deskewedXdim, CUFFT_R2C);
           if (cuFFTErr != CUFFT_SUCCESS) {
             std::cout << "cufftPlan3d() r2c failed. Error code: " << cuFFTErr << std::endl;
@@ -379,37 +390,44 @@ int main(int argc, char *argv[])
           }
         }
 
-        dkx = 1.0/(imgParams.dr * deskewedXdim);
+
+		//****************************Transfer a bunch of constants to device, including OTF array:***********************************
+		// 
+		dkx = 1.0/(imgParams.dr * deskewedXdim);
         dky = 1.0/(imgParams.dr * new_ny);
         dkz = 1.0/(imgParams.dz * new_nz);
         rdistcutoff = 2*NA/(imgParams.wave); // lateral resolution limit in 1/um
+		float eps = std::numeric_limits<float>::epsilon();
 
-        // transfer a bunch of constants to device, including OTF array:
-        float eps = std::numeric_limits<float>::epsilon();
         transferConstants(deskewedXdim, new_ny, new_nz,
                           complexOTF.height(), complexOTF.width()/2,
                           dkx/dkr_otf, dky/dkr_otf, dkz/dkz_otf,
                           eps, complexOTF.data());
 
-        // make a 3D interpolated OTF array:
-        d_interpOTF.resize(new_nz * new_ny * (deskewedXdim+2) * sizeof(float));
-        makeOTFarray(d_interpOTF, deskewedXdim, new_ny, new_nz);
-      } // if (it == all_matching_files.begin())
+        // make a 3D interpolated OTF array on GPU:
+        d_interpOTF.resize(new_nz * new_ny * (deskewedXdim+2) * sizeof(float)); // allocate memory
+        makeOTFarray(d_interpOTF, deskewedXdim, new_ny, new_nz);				// interpolate
+
+      } // end "if this is the first iteration" (it == all_matching_files.begin())
+
+
 
 	  // initialize the raw_deskewed size everytime in case it is cropped on an earlier iteration
 	  if (bSaveDeskewedRaw && (fabs(deskewAngle) > 0.0) ) {
 		  raw_deskewed.assign(deskewedXdim, new_ny, new_nz);
 
-		  if (it == all_matching_files.begin())
+		  if (it == all_matching_files.begin()) //make directory only on first call, and if we are saving Deskewed.
 			   makeDeskewedDir("Deskewed");
 	  }
 
 
-      if (bCrop) {
+
+	  // If deskew is to happen, it'll be performed inside RichardsonLucy_GPU() on GPU;
+	  // but here raw data's x dimension is still just "new_nx"
+      if (bCrop)
         raw_image.crop(0, 0, 0, 0, new_nx-1, new_ny-1, new_nz-1, 0);
-        // If deskew is to happen, it'll be performed inside RichardsonLucy_GPU() on GPU;
-        // but here raw data's x dimension is still just "new_nx"
-      }
+	  
+
 
       if (wiener >0) { // plain 1-step Wiener filtering
         raw_image -= background;
@@ -425,6 +443,9 @@ int main(int argc, char *argv[])
         raw_image /= raw_image.size();
       }
       else if (RL_iters || raw_deskewed.size() || rotMatrix.getSize()) {
+		  //*************************************************************************
+		  //****************************Run RL GPU***********************************
+		  //*************************************************************************
         RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters, deskewFactor,
                            deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
                            rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp);
@@ -434,7 +455,8 @@ int main(int argc, char *argv[])
         break;
       }
 
-      if (! final_CropTo_boundaries.empty()) {
+	  //****************************Crop***********************************
+	  if (! final_CropTo_boundaries.empty()) {
         raw_image.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],  // X, Y
                        final_CropTo_boundaries[4], 0,							// Z, C
                        final_CropTo_boundaries[1], final_CropTo_boundaries[3],	// X, Y
@@ -448,6 +470,9 @@ int main(int argc, char *argv[])
 		}
       }
 
+
+
+	  //****************************Save Deskewed Raw***********************************
       if (bSaveDeskewedRaw) {
        if (! bSaveUshort)
           raw_deskewed.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
@@ -456,6 +481,8 @@ int main(int argc, char *argv[])
           uint16Img.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
          }
       }
+
+	  //****************************Save Decon Image***********************************
       if (RL_iters || rotMatrix.getSize()) {
         if (! bSaveUshort)
           raw_image.save(makeOutputFilePath(*it).c_str());
@@ -465,6 +492,7 @@ int main(int argc, char *argv[])
           }
       }
 
+	  //****************************Save MIPs***********************************
       if (it == all_matching_files.begin() && bDoMaxIntProj.size())
         makeDeskewedDir("GPUdecon/MIPs");
 
