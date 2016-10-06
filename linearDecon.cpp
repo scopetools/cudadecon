@@ -128,34 +128,34 @@ int main(int argc, char *argv[])
   std::string datafolder, filenamePattern, otffiles;
   po::options_description progopts;
   progopts.add_options()
-    ("drdata", po::value<float>(&imgParams.dr)->default_value(.104), "image x-y pixel size (um)")
-    ("dzdata,z", po::value<float>(&imgParams.dz)->default_value(.25), "image z step (um)")
-    ("drpsf", po::value<float>(&dr_psf)->default_value(.104), "PSF x-y pixel size (um)")
-    ("dzpsf,Z", po::value<float>(&dz_psf)->default_value(.1), "PSF z step (um)")
-    ("wavelength,l", po::value<float>(&imgParams.wave)->default_value(.525), "emission wavelength (um)")
-    ("wiener,W", po::value<float>(&wiener)->default_value(-1.0), "Wiener constant (regularization factor); if this value is postive then do Wiener filter instead of R-L")
-    ("background,b", po::value<float>(&background)->default_value(90.f), "user-supplied background")
-    ("napodize,e", po::value<int>(&napodize)->default_value(15), "number of pixels to soften edge with")
-    ("nzblend,E", po::value<int>(&nZblend)->default_value(0), "number of top and bottom sections to blend in to reduce axial ringing")
-    ("NA,n", po::value<float>(&NA)->default_value(1.2), "numerical aperture")
-    ("RL,i", po::value<int>(&RL_iters)->default_value(15), "run Richardson-Lucy how-many iterations")
-    ("deskew,D", po::value<float>(&deskewAngle)->default_value(0.0), "Deskew angle; if not 0.0 then perform deskewing before deconv")
-    ("width,w", po::value<unsigned>(&outputWidth)->default_value(0), "If deskewed, the output image's width")
-    ("shift,x", po::value<int>(&extraShift)->default_value(0), "If deskewed, the output image's extra shift in X (positive->left")
-    ("rotate,R", po::value<float>(&rotationAngle)->default_value(0.0), "rotation angle; if not 0.0 then perform rotation around y axis after deconv")
-    ("saveDeskewedRaw,S", po::bool_switch(&bSaveDeskewedRaw)->default_value(false), "save deskewed raw data to files")
-    // ("crop,C", po::value< std::vector<int> >(&final_CropTo_boundaries)->multitoken(), "takes 6 integers separated by space: x1 x2 y1 y2 z1 z2; crop final image size to [x1:x2, y1:y2, z1:z2]")
-    // ("MIP,M", po::value< std::vector<bool> >(&bDoMaxIntProj)->multitoken(), "takes 3 binary numbers separated by space to indicate whether save a max-intensity projection along x, y, or z axis")
-    ("crop,C", fixed_tokens_value< std::vector<int> >(&final_CropTo_boundaries, 6, 6), "takes 6 integers separated by space: x1 x2 y1 y2 z1 z2; crop final image size to [x1:x2, y1:y2, z1:z2]")
-    ("MIP,M", fixed_tokens_value< std::vector<bool> >(&bDoMaxIntProj, 3, 3), "takes 3 binary numbers separated by space to indicate whether save a max-intensity projection along x, y, or z axis")
-    ("uint16,u", po::bool_switch(&bSaveUshort)->implicit_value(true), "whether to save result in uint16 format; this should be used only if no actual decon is performed")
-    ("input-dir", po::value<std::string>(&datafolder)->required(), "input folder name")
+	  ("drdata", po::value<float>(&imgParams.dr)->default_value(.104), "Image x-y pixel size (um)")
+	  ("dzdata,z", po::value<float>(&imgParams.dz)->default_value(.25), "Image z step (um)")
+	  ("drpsf", po::value<float>(&dr_psf)->default_value(.104), "PSF x-y pixel size (um)")
+	  ("dzpsf,Z", po::value<float>(&dz_psf)->default_value(.1), "PSF z step (um)")
+	  ("wavelength,l", po::value<float>(&imgParams.wave)->default_value(.525), "Emission wavelength (um)")
+	  ("wiener,W", po::value<float>(&wiener)->default_value(-1.0), "Wiener constant (regularization factor); if this value is postive then do Wiener filter instead of R-L")
+	  ("background,b", po::value<float>(&background)->default_value(90.f), "User-supplied background")
+	  ("napodize,e", po::value<int>(&napodize)->default_value(15), "# of pixels to soften edge with")
+	  ("nzblend,E", po::value<int>(&nZblend)->default_value(0), "# of top and bottom sections to blend in to reduce axial ringing")
+	  ("NA,n", po::value<float>(&NA)->default_value(1.2), "Numerical aperture")
+	  ("RL,i", po::value<int>(&RL_iters)->default_value(15), "Run Richardson-Lucy, and set how many iterations")
+	  ("deskew,D", po::value<float>(&deskewAngle)->default_value(0.0), "Deskew angle; if not 0.0 then perform deskewing before deconv")
+	  ("width,w", po::value<unsigned>(&outputWidth)->default_value(0), "If deskewed, the output image's width")
+	  ("shift,x", po::value<int>(&extraShift)->default_value(0), "If deskewed, the output image's extra shift in X (positive->left")
+	  ("rotate,R", po::value<float>(&rotationAngle)->default_value(0.0), "Rotation angle; if not 0.0 then perform rotation around y axis after deconv")
+	  ("saveDeskewedRaw,S", po::bool_switch(&bSaveDeskewedRaw)->default_value(false), "Save deskewed raw data to files")
+	  // ("crop,C", po::value< std::vector<int> >(&final_CropTo_boundaries)->multitoken(), "takes 6 integers separated by space: x1 x2 y1 y2 z1 z2; crop final image size to [x1:x2, y1:y2, z1:z2]")
+	  // ("MIP,M", po::value< std::vector<bool> >(&bDoMaxIntProj)->multitoken(), "takes 3 binary numbers separated by space to indicate whether save a max-intensity projection along x, y, or z axis")
+	  ("crop,C", fixed_tokens_value< std::vector<int> >(&final_CropTo_boundaries, 6, 6), "Crop final image size to [x1:x2, y1:y2, z1:z2]; takes 6 integers separated by space: x1 x2 y1 y2 z1 z2; ")
+	  ("MIP,M", fixed_tokens_value< std::vector<bool> >(&bDoMaxIntProj, 3, 3), "Save max-intensity projection along x, y, or z axis; takes 3 binary numbers separated by space: 0 0 1")
+    ("uint16,u", po::bool_switch(&bSaveUshort)->implicit_value(true), "Save result in uint16 format; should be used only if no actual decon is performed")
+    ("input-dir", po::value<std::string>(&datafolder)->required(), "Folder of input images")
     ("otf-file", po::value<std::string>(&otffiles)->required(), "OTF file")
-    ("filename-pattern", po::value<std::string>(&filenamePattern)->required(), "pattern in file names")
+    ("filename-pattern", po::value<std::string>(&filenamePattern)->required(), "File name pattern to find input images to process")
 	("DoNotAdjustResForFFT,a", po::bool_switch(&bDontAdjustResolution)->default_value(false), "Don't change data resolution size. Otherwise data is cropped to perform faster, more memory efficient FFT: size factorable into 2,3,5,7)")
-	("DevQuery,q", po::bool_switch(&bDevQuery)->default_value(false), "Write out device information")
-	("GPUdevice", po::value<int>(&myGPUdevice)->default_value(0), "index of GPU device to use. (0=first device)")
-    ("help,h", "produce help message")
+	("DevQuery,q", po::bool_switch(&bDevQuery)->default_value(false), "Show info and indices of available GPUs")
+	("GPUdevice", po::value<int>(&myGPUdevice)->default_value(0), "Index of GPU device to use (0=first device)")
+    ("help,h", "This help message.")
     ;
   po::positional_options_description p;
   p.add("input-dir", 1);
@@ -165,6 +165,11 @@ int main(int argc, char *argv[])
   // Parse commandline option:
   po::variables_map varsmap;
   try {
+	  if (argc == 1)  { //if no arguments, show help.
+		  std::cout << progopts << "\n";
+		  return 0;
+	  }
+
 	  store(po::command_line_parser(argc, argv).
 		  options(progopts).positional(p).run(), varsmap);
 	  if (varsmap.count("help")) {
