@@ -1,4 +1,6 @@
-2016-07-19 found and fixed a bug in cudaDecon (if deskewed X dimension is an odd number, then output is garbage because of incorrect FFT buffer allocation).
+2016-10-06
+* Fixed bug with "new nx" and "DoNotAdjustResForFFT" flag.
+
 
 2016-10-05 
 * Upgraded to CUDA 8.0.  Now supports compute capability 6.1 and the new Pascal GPUs (like GTX 1080). 
@@ -15,3 +17,7 @@ Running this command from an adminstrator command prompt should set the timeout 
 reg.exe ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v "TdrDelay" /t REG_DWORD /D "10" /f
 
 * If multiple GPUs, GPU device can be selected with --GPUdevice.  Devices can be enumerated with the --DevQuery flag, or by running the deviceQueryDrv.exe
+
+
+
+2016-07-19 found and fixed a bug in cudaDecon (if deskewed X dimension is an odd number, then output is garbage because of incorrect FFT buffer allocation).
