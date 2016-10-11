@@ -158,7 +158,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
   // R-L iteration
   for (int k = 0; k < nIter; k++) {
-    std::cout << "Iteration " << k << std::endl;
+    std::cout << "Iteration " << k << ". ";
     // a. Make an image predictions for the next iteration    
     if (k > 1) {
       lambda = calcAccelFactor(G_kminus1, G_kminus2, nx, ny, nz, eps);
@@ -171,27 +171,35 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     else 
       Y_k = X_k;
 
+	std::cout << "Copy to device. ";
     cutilSafeCall(cudaMemcpyAsync(X_kminus1.getPtr(), X_k.getPtr(), 
                                   X_k.getSize(), cudaMemcpyDeviceToDevice));
+	
     if (k>0)
       cutilSafeCall(cudaMemcpyAsync(G_kminus2.getPtr(), G_kminus1.getPtr(), 
                                     G_kminus1.getSize(), cudaMemcpyDeviceToDevice));
     
-    // b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
+	std::cout << "Filter1. ";
+	// b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
     CC = Y_k;
     filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
               false, devProp->maxGridSize[2]);
 
+	
     // if (k==0) {
     //   CPUBuffer CC_cpu(CC);
     //   CImg<> CCimg((float *) CC_cpu.getPtr(), nx, ny, nz, 1, true);
     //   CCimg.save_tiff("afterFilter0.tif");
     // }
+	std::cout << "LRcore. ";
 
     calcLRcore(CC, rawGPUbuf, nx, ny, nz, devProp->maxGridSize[2]);
 
+	
     // c. Determine next iteration image & apply positivity constraint
     // X_kminus1 = X_k;
+
+	std::cout << "Filter2. ";
     filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
               true, devProp->maxGridSize[2]);
 
@@ -199,6 +207,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
     // G_kminus2 = G_kminus1;
     calcCurrPrevDiff(X_k, Y_k, G_kminus1, nx, ny, nz, devProp->maxGridSize[2]);
+	std::cout << "Done. " << std::endl;
   }
 
   // Rotate decon result if requested:
