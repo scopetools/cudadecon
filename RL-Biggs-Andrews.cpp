@@ -171,7 +171,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     else 
       Y_k = X_k;
 
-	std::cout << "Copy to device. ";
+	std::cout << "Copy between device memory. ";
     cutilSafeCall(cudaMemcpyAsync(X_kminus1.getPtr(), X_k.getPtr(), 
                                   X_k.getSize(), cudaMemcpyDeviceToDevice));
 	

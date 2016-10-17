@@ -264,6 +264,7 @@ int main(int argc, char *argv[])
          it != all_matching_files.end(); it++) {
 
       std::cout<< *it << std::endl;
+	  std::cout << "Loading image... ";
       raw_image.assign(it->c_str());
 
       // If it's the first input file, initialize a bunch including:
@@ -311,7 +312,8 @@ int main(int argc, char *argv[])
 		}
 		
 		//****************************Load OTF to CPU RAM(assuming 3D rotationally averaged OTF)***********************************
-        complexOTF.assign(otffiles.c_str());
+		std::cout << "Loading OTF... "; 
+		complexOTF.assign(otffiles.c_str());
         unsigned nr_otf = complexOTF.height();
         unsigned nz_otf = complexOTF.width() / 2;
         dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
@@ -381,16 +383,16 @@ int main(int argc, char *argv[])
         // 
           cufftResult cuFFTErr = cufftPlan3d(&rfftplanGPU, new_nz, new_ny, deskewedXdim, CUFFT_R2C);
           if (cuFFTErr != CUFFT_SUCCESS) {
-			std::cout << "cufftPlan3d() r2c failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
+			  std::cerr << "cufftPlan3d() r2c failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
 			cudaMemGetInfo(&GPUfree, &GPUtotal);
-			std::cout << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
+			std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
             throw std::runtime_error("cufftPlan3d() r2c failed.");
           }
           cuFFTErr = cufftPlan3d(&rfftplanInvGPU, new_nz, new_ny, deskewedXdim, CUFFT_C2R);
           if (cuFFTErr != CUFFT_SUCCESS) {
-			  std::cout << "cufftPlan3d() c2r failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
+			  std::cerr << "cufftPlan3d() c2r failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
 			cudaMemGetInfo(&GPUfree, &GPUtotal);
-			std::cout << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
+			std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
             throw std::runtime_error("cufftPlan3d() c2r failed.");
           }
         }
