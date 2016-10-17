@@ -118,6 +118,7 @@
 #pragma warning(disable : 4305) // Disregard loss of data from double to float.
 #ifndef _CRT_SECURE_NO_DEPRECATE
 #define _CRT_SECURE_NO_DEPRECATE 1
+#endif
 #define _CRT_NONSTDC_NO_DEPRECATE 1
 #endif
 

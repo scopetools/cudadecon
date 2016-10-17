@@ -77,7 +77,7 @@ GPUBuffer::~GPUBuffer() {
     if (Hostptr_){
         cudaError_t err = cudaFreeHost(Hostptr_);
         if (err != cudaSuccess) {
-          std::cout << "cudaFreeHost failed. Error code: " << err << std::endl;
+			std::cout << "cudaFreeHost failed. Error code: " << err << ". " << cudaGetErrorString(err) << std::endl;
           std::cout << "Hostptr_: " << (long long int)Hostptr_ << std::endl;
           throw std::runtime_error("cudaFreeHost failed.");
         }
@@ -88,7 +88,7 @@ GPUBuffer::~GPUBuffer() {
         if (ptr_) {
             cudaError_t err = cudaFree(ptr_);
             if (err != cudaSuccess) {
-                std::cout << "CudaFree failed. Error code: " << err << std::endl;
+				std::cout << "CudaFree failed. Error code: " << err << ". " << cudaGetErrorString(err) << std::endl;
                 std::cout << "ptr_: " << (long long int)ptr_ << std::endl;
                 throw std::runtime_error("cudaFree failed.");
             }
@@ -100,7 +100,7 @@ void GPUBuffer::resize(size_t newsize) {
     if (Hostptr_){
         cudaError_t err = cudaFreeHost(Hostptr_);
         if (err != cudaSuccess) {
-          std::cout << "cudaFreeHost failed. Error code: " << err << std::endl;
+			std::cout << "cudaFreeHost failed. Error code: " << err << ". " << cudaGetErrorString(err) << std::endl;
           std::cout << "Hostptr_: " << (long long int)Hostptr_ << std::endl;
           throw std::runtime_error("cudaFreeHost failed.");
         }
