@@ -68,8 +68,8 @@ int main(int argc, char **argv)
      "pixels outside this limit will be zeroed (overwriting estimated value from NA and NIMM)")
     ("nocleanup", po::bool_switch(&bDoCleanup)->implicit_value(false), "elect not to do clean-up outside OTF support")
     ("background", po::value<float>(&background), "use user-supplied background instead of the estimated")
-    ("input-file", po::value<std::string>(&ifiles)->required(), "input file")
-    ("output-file", po::value<std::string>(&ofiles)->required(), "output file")
+    ("input-file", po::value<std::string>(&ifiles)->required(), "input PSF file")
+    ("output-file", po::value<std::string>(&ofiles)->required(), "output OTF file to write")
     ("help,h", "produce help message")
     ;
 
@@ -82,6 +82,11 @@ int main(int argc, char **argv)
 
   store(po::command_line_parser(argc, argv).
         options(progopts).positional(p).run(), varsmap);
+  
+  if (argc == 1)  { //if no arguments, show help.
+	  std::cout << progopts << "\n";
+	  return 0;
+  }
 
   if (varsmap.count("help")) {
     std::cout << progopts << "\n";

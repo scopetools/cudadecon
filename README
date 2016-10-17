@@ -13,14 +13,12 @@ DLL build instructions:
 Run Visual Studio
 Select Tools->Visual Studio Command Prompt
 
-At the command prompt, change to the Visual C++ installation directory. (The location depends on the system and the Visual Studio installation, but a typical location is C:\Program Files (x86)\Microsoft Visual Studio version\VC\.) For example, enter:
+At the command prompt, change to the Visual C++ installation directory. (The location depends on the system and the Visual Studio installation, but a typical location is C:\Program Files (x86)\Microsoft Visual Studio version\VC\.) 
+Then configure this Command Prompt window for 64-bit command-line builds that target x64 platforms, at the command prompt, enter:
 
 cd "\Program Files (x86)\Microsoft Visual Studio 12.0\VC"
-
-To configure this Command Prompt window for 64-bit command-line builds that target x64 platforms, at the command prompt, enter:
-
 vcvarsall amd64
-
+cd \CudaDecon\build
 
 1.b. Install CMAKE v2.6 and later
 

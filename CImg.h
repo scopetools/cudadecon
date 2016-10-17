@@ -116,6 +116,7 @@
 #pragma warning(disable : 4244) // Disregard loss of data from float to int.
 #pragma warning(disable : 4267) // Disregard loss of data from size_t to unsigned int.
 #pragma warning(disable : 4305) // Disregard loss of data from double to float.
+#ifndef _CRT_SECURE_NO_DEPRECATE
 #define _CRT_SECURE_NO_DEPRECATE 1
 #define _CRT_NONSTDC_NO_DEPRECATE 1
 #endif

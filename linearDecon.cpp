@@ -381,7 +381,7 @@ int main(int argc, char *argv[])
         // 
           cufftResult cuFFTErr = cufftPlan3d(&rfftplanGPU, new_nz, new_ny, deskewedXdim, CUFFT_R2C);
           if (cuFFTErr != CUFFT_SUCCESS) {
-			  std::cout << "cufftPlan3d() r2c failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
+			std::cout << "cufftPlan3d() r2c failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
 			cudaMemGetInfo(&GPUfree, &GPUtotal);
 			std::cout << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
             throw std::runtime_error("cufftPlan3d() r2c failed.");
