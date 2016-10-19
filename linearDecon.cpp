@@ -122,6 +122,7 @@ int main(int argc, char *argv[])
   bool bSaveUshort = false;
   std::vector<bool> bDoMaxIntProj;
   std::vector< CImg<> > MIprojections;
+  int Pad = 0;
 
   TIFFSetWarningHandler(NULL);
 
@@ -155,6 +156,7 @@ int main(int argc, char *argv[])
 	("DoNotAdjustResForFFT,a", po::bool_switch(&bDontAdjustResolution)->default_value(false), "Don't change data resolution size. Otherwise data is cropped to perform faster, more memory efficient FFT: size factorable into 2,3,5,7)")
 	("DevQuery,q", po::bool_switch(&bDevQuery)->default_value(false), "Show info and indices of available GPUs")
 	("GPUdevice", po::value<int>(&myGPUdevice)->default_value(0), "Index of GPU device to use (0=first device)")
+	("Pad", po::value<int>(&Pad)->default_value(0), "Pad the image data with mirrored values to avoid edge artifacts")
     ("help,h", "This help message.")
     ;
   po::positional_options_description p;
@@ -253,18 +255,27 @@ int main(int argc, char *argv[])
   cudaDeviceProp deviceProp;
   cudaGetDeviceProperties(&deviceProp, 0);
 
-  
+  unsigned nx, ny, nz;
+
+  int border_x = 0;
+  int border_y = 0;
+  int border_z = 0;
+
   //****************************Main processing***********************************
   // Loop over all matching input TIFFs, :
   try {
+
+	std::cout << "Looking for files to process... " ;
     // Gather all files in 'datafolder' and matching the file name pattern:
     std::vector< std::string > all_matching_files = gatherMatchingFiles(datafolder, filenamePattern);
+
+	std::cout << "Found " << all_matching_files.size() << " file(s)." << std::endl ;
 
     for (std::vector<std::string>::iterator it=all_matching_files.begin();
          it != all_matching_files.end(); it++) {
 
-      std::cout<< *it << std::endl;
-	  std::cout << "Loading image... ";
+	  std::cout << std::endl << *it << std::endl;
+	  std::cout << "Loading image... " << std::endl;
       raw_image.assign(it->c_str());
 
       // If it's the first input file, initialize a bunch including:
@@ -275,31 +286,50 @@ int main(int argc, char *argv[])
       // 5. transfer constants into GPU device constant memory
       // 6. make 3D OTF array in device memory
       if (it == all_matching_files.begin()) {
-        unsigned nx = raw_image.width();
-        unsigned ny = raw_image.height();
-        unsigned nz = raw_image.depth();
+        nx = raw_image.width();
+        ny = raw_image.height();
+        nz = raw_image.depth();
 
         printf("Original image size: nz=%d, ny=%d, nx=%d\n", nz, ny, nx);
 
 		//****************************Adjust resolution if desired***********************************
+		
+		int step_size;
+		if (Pad)
+			step_size =  1;
+		else
+			step_size = -1;
+			
+		int startnx = nx;
+		int startny = ny;
+		int startnz = nz;
+
+		if (Pad) //pad by N number of border pixels
+		{
+			startnx = startnx + Pad * 2;
+			startny = startny + Pad * 2;
+			startnz = startnz + Pad * 2;
+			std::cout << "Minimum padding is " << Pad << " pixels." << std::endl;
+		}
+
 		if (RL_iters > 0 && bAdjustResolution) {
-			new_ny = findOptimalDimension(ny);
-			if (new_ny != ny) {
+			new_ny = findOptimalDimension(startny, step_size);
+			if (new_ny != startny) {
 				printf("new ny=%d\n", new_ny);
 				bCrop = true;
 			}
 
-			new_nz = findOptimalDimension(nz);
-			if (new_nz != nz) {
+			new_nz = findOptimalDimension(startnz, step_size);
+			if (new_nz != startnz) {
 				printf("new nz=%d\n", new_nz);
 				bCrop = true;
 			}
 
 			// only if no deskewing is happening do we want to change image width here
-			new_nx = nx;
+			new_nx = startnx;
 			if (!(fabs(deskewAngle) > 0.0)) {
-				new_nx = findOptimalDimension(nx);
-				if (new_nx != nx) {
+				new_nx = findOptimalDimension(startnx, step_size);
+				if (new_nx != startnx) {
 					printf("new nx=%d\n", new_nx);
 					bCrop = true;
 				}
@@ -309,6 +339,60 @@ int main(int argc, char *argv[])
 			new_nx = nx;
 			new_ny = ny;
 			new_nz = nz;
+		}
+		
+
+		//****************************Pad image.  Use Mirror image in padded border region***********************************
+
+
+
+
+		if (Pad){
+			border_x = (new_nx - nx) / 2;   // get border size
+			border_y = (new_ny - ny) / 2;
+			border_z = (new_nz - nz) / 2;
+
+			std::cout << "Create padded image. Border: " << border_x << " x " << border_y << " x " << border_z << ". ";
+			CImg<> raw_original(raw_image);		//copy from raw image
+			std::cout << "New image size: " << new_nx << " x " << new_ny << " x " << new_nz << ". ";
+			raw_image.resize(new_nx, new_ny, new_nz);		//resize with border
+
+			int x_raw;
+			int y_raw;
+			int z_raw;
+
+			int i_nx = (int)nx;
+			int i_ny = (int)ny;
+			int i_nz = (int)nz;
+			
+			// std::cout << "Line:" << __LINE__ << std::endl;
+			std::cout << "Copy values... " << std::endl;
+			cimg_forXYZ(raw_image, x, y, z) // for every pixel in the new image, copy value from original image
+			{
+				x_raw = abs(x - border_x);
+				y_raw = abs(y - border_y);
+				z_raw = abs(z - border_z);
+								
+				if (x_raw >= i_nx)
+					x_raw = i_nx - (x_raw - i_nx) - 1 ;
+
+				if (y_raw >= i_ny)
+					y_raw = i_ny - (y_raw - i_ny) - 1;
+
+				if (z_raw >= i_nz)
+					z_raw = i_nz - (z_raw - i_nz) - 1;
+
+				//raw_image(x, y, z) = x_raw;
+				raw_image(x, y, z) = raw_original(x_raw, y_raw, z_raw);
+			}
+			//***debug padded image.
+			if (false){
+				std::cout << "Saving padded image... " << std::endl;
+				makeDeskewedDir("Padded");
+				CImg<unsigned short> uint16Img(raw_image);
+				uint16Img.save(makeOutputFilePath(*it, "Padded", "_padded").c_str());
+			}
+			raw_original;
 		}
 		
 		//****************************Load OTF to CPU RAM(assuming 3D rotationally averaged OTF)***********************************
@@ -450,9 +534,9 @@ int main(int argc, char *argv[])
         raw_image /= raw_image.size();
       }
       else if (RL_iters || raw_deskewed.size() || rotMatrix.getSize()) {
-		  //*************************************************************************
-		  //****************************Run RL GPU***********************************
-		  //*************************************************************************
+		  //**********************************************************************************************************
+		  //****************************Run RL GPU********************************************************************
+		  //**********************************************************************************************************
         RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters, deskewFactor,
                            deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
                            rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp);
@@ -463,6 +547,15 @@ int main(int argc, char *argv[])
       }
 
 	  //****************************Crop***********************************
+
+	  //remove padding
+	  if (Pad)
+		  raw_image.crop(
+			  border_x, border_y,	// X, Y
+			  border_z, 0,			// Z, C
+			  border_x + nx, border_y + ny,	// X, Y
+			  border_z + nz, 0);			// Z, C
+				
 	  if (! final_CropTo_boundaries.empty()) {
         raw_image.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],  // X, Y
                        final_CropTo_boundaries[4], 0,							// Z, C

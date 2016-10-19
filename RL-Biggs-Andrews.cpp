@@ -23,7 +23,7 @@ bool notGoodDimension(unsigned num)
 
 unsigned findOptimalDimension(unsigned inSize, int step)
 /*!
-  "step" can be positive or negative
+  "step" can be positive or negative.  By default this is -1 (as defined in function declaration : ...int step=-1);
 */
 {
   unsigned outSize = inSize;
@@ -125,7 +125,6 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
   GPUBuffer rawGPUbuf(X_k);  // make a copy of raw image
   GPUBuffer X_kminus1(nz * nxy * sizeof(float), 0);
-    std::cout << "Line:" << __LINE__ << std::endl;
   GPUBuffer Y_k(nz * nxy * sizeof(float), 0);
   GPUBuffer G_kminus1(nz * nxy * sizeof(float), 0);
   GPUBuffer G_kminus2(nz * nxy * sizeof(float), 0);
