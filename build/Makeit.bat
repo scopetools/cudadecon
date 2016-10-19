@@ -1,0 +1,1 @@
+nmake && copy cudaDeconv.exe E:\CudaDecon\build /Y && copy cudaDeconv.exe "\\dm11\betziglab\Tool_Codes\Decon\GPU_decon\build\" /Y
