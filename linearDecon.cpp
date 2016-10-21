@@ -126,7 +126,7 @@ int main(int argc, char *argv[])
 
   TIFFSetWarningHandler(NULL);
 
-  std::string datafolder, filenamePattern, otffiles;
+  std::string datafolder, filenamePattern, otffiles, LSfile;
   po::options_description progopts;
   progopts.add_options()
 	  ("drdata", po::value<float>(&imgParams.dr)->default_value(.104), "Image x-y pixel size (um)")
@@ -157,6 +157,7 @@ int main(int argc, char *argv[])
 	("DevQuery,q", po::bool_switch(&bDevQuery)->default_value(false), "Show info and indices of available GPUs")
 	("GPUdevice", po::value<int>(&myGPUdevice)->default_value(0), "Index of GPU device to use (0=first device)")
 	("Pad", po::value<int>(&Pad)->default_value(0), "Pad the image data with mirrored values to avoid edge artifacts")
+	("LSC, L", po::value<std::string>(&LSfile)->required(), "Lightsheet correction file") )
     ("help,h", "This help message.")
     ;
   po::positional_options_description p;
@@ -240,7 +241,8 @@ int main(int argc, char *argv[])
   cudaMemGetInfo(&GPUfree, &GPUtotal);
   std::cout << std::endl << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
 
-  CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed;
+  CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed, LSImage;
+  CImg<float> AverageLS;
   float dkr_otf, dkz_otf;
   float dkx, dky, dkz, rdistcutoff;
   fftwf_plan rfftplan=NULL, rfftplan_inv=NULL;
@@ -292,6 +294,53 @@ int main(int argc, char *argv[])
 
         printf("Original image size: nz=%d, ny=%d, nx=%d\n", nz, ny, nx);
 
+		//****************************Apply Light Sheet Correction if desired ***********************
+		
+		if (LSfile.size()){
+			std::cout << "Loading LS Correction...";
+			LSImage.assign(LSfile.c_str());
+			AverageLS.resize(LSImage.width(), LSImage.height(),1,1,-1); //Set size of AverageLS
+			AverageLS.fill(0); //fill with zeros
+
+			float my_min = 0.2;
+			cimg_forZ(LSImage, z){
+				AverageLS(x, y) = AverageLS(x, y) + LSImage(x, y, z);
+				}
+			
+			AverageLS.div(LSImage.depth()); //divide by number of slices
+			}
+
+		LSIx = AverageLS.width();
+		LSIy = AverageLS.height();
+
+		LSIborderx = (LSIx - nx) / 2;
+		LSIbordery = (LSIy - ny) / 2;
+
+				
+		AverageLS.crop(LSIborderx, LSIbordery, LSIx - LSIborderx, LSIy - LSIbordery); //crop it
+
+		cimg_forXY(AverageLS, x, y)
+			AverageLS(x, y) = AverageLS(x, y) - background;
+		
+		AverageLS.normalize(0, 1);
+		
+		cimg_forXY(AverageLS, x, y)
+			AverageLS(x, y) = max(AverageLS(x, y), 0.2);
+		
+		CImg<float> Temp(raw_image);
+
+		cimg_forXYZ(Temp, x, y, z)
+			Temp(x, y, z) = max(Temp(x, y, z) - background, 0); //subtract background. min value =0.
+		
+		Temp.div(AverageLS);
+		cimg_forXYZ(Temp, x, y, z){
+			Temp(x, y, z) = Temp(x, y, z); //replace background.
+
+		raw_image(Temp);
+		}
+
+
+		}
 		//****************************Adjust resolution if desired***********************************
 		
 		int step_size;
