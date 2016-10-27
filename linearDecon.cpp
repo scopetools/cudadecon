@@ -157,7 +157,7 @@ int main(int argc, char *argv[])
 	("DevQuery,q", po::bool_switch(&bDevQuery)->default_value(false), "Show info and indices of available GPUs")
 	("GPUdevice", po::value<int>(&myGPUdevice)->default_value(0), "Index of GPU device to use (0=first device)")
 	("Pad", po::value<int>(&Pad)->default_value(0), "Pad the image data with mirrored values to avoid edge artifacts")
-	("LSC, L", po::value<std::string>(&LSfile)->required(), "Lightsheet correction file") )
+	("LSC", po::value<std::string>(&LSfile), "Lightsheet correction file") 
     ("help,h", "This help message.")
     ;
   po::positional_options_description p;
@@ -252,10 +252,10 @@ int main(int argc, char *argv[])
   unsigned new_ny, new_nz, new_nx;
   int deskewedXdim = 0;
   cufftHandle rfftplanGPU, rfftplanInvGPU;
-  GPUBuffer d_interpOTF(0);
+  GPUBuffer d_interpOTF(0, myGPUdevice);
 
   cudaDeviceProp deviceProp;
-  cudaGetDeviceProperties(&deviceProp, 0);
+  cudaGetDeviceProperties(&deviceProp, myGPUdevice);
 
   unsigned nx, ny, nz;
 
@@ -292,55 +292,96 @@ int main(int argc, char *argv[])
         ny = raw_image.height();
         nz = raw_image.depth();
 
-        printf("Original image size: nz=%d, ny=%d, nx=%d\n", nz, ny, nx);
+        printf("Original image size ...   %d x %d x %d\n", nx, ny, nz);
 
 		//****************************Apply Light Sheet Correction if desired ***********************
 		
 		if (LSfile.size()){
-			std::cout << "Loading LS Correction...";
+			
+			const float my_min = 0.2;
+			float img_max;
+			float img_min;
+
+			std::cout << "Loading LS Correction ...";
 			LSImage.assign(LSfile.c_str());
-			AverageLS.resize(LSImage.width(), LSImage.height(),1,1,-1); //Set size of AverageLS
+			std::cout << " " << LSImage.width() << " x " << LSImage.height() << " x " << LSImage.depth() << ". " << std::endl;
+			AverageLS.resize(LSImage.width(), LSImage.height(), 1, 1, -1); //Set size of AverageLS
 			AverageLS.fill(0); //fill with zeros
 
-			float my_min = 0.2;
-			cimg_forZ(LSImage, z){
-				AverageLS(x, y) = AverageLS(x, y) + LSImage(x, y, z);
-				}
 			
-			AverageLS.div(LSImage.depth()); //divide by number of slices
+			cimg_forXYZ(LSImage, x, y, z){
+				AverageLS(x, y) = AverageLS(x, y) + LSImage(x, y, z); //sum image
+
+				if (z == (LSImage.depth()-1)) // if this is the last Z slice
+					AverageLS(x, y) = AverageLS(x, y) / LSImage.depth(); //divide by number of slices
 			}
+			
 
-		LSIx = AverageLS.width();
-		LSIy = AverageLS.height();
 
-		LSIborderx = (LSIx - nx) / 2;
-		LSIbordery = (LSIy - ny) / 2;
+			const int LSIx = AverageLS.width();
+			const int LSIy = AverageLS.height();
 
+			int LSIborderx = (LSIx - nx) / 2;
+			int LSIbordery = (LSIy - ny) / 2;
+
+			std::cout << "Excess LS border to crop   : " << LSIborderx << " x " << LSIbordery << std::endl;
+
+			AverageLS.crop(LSIborderx, LSIbordery, LSIx - LSIborderx - 1, LSIy - LSIbordery - 1); //crop it
+
+			cimg_forXY(AverageLS, x, y)
+				AverageLS(x, y) = AverageLS(x, y) - background;
+
+
+			img_max = AverageLS(0, 0);
+			img_min = AverageLS(0, 0);
+			cimg_forXY(AverageLS, x, y){
+				img_max = std::max(AverageLS(x, y), img_max);
+				img_min = std::min(AverageLS(x, y), img_min);
+			}
+			std::cout << "               LS max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
+		
+
+			const float normalization = img_max;
+
+			img_max = -9999999;
+			img_min = 9999999;
+			cimg_forXY(AverageLS, x, y){
+				AverageLS(x, y) = AverageLS(x, y) / normalization;
+				img_max = std::max(AverageLS(x, y), img_max);
+				img_min = std::min(AverageLS(x, y), img_min);
+			}
+			std::cout << "       After normalization : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
+
+
+			AverageLS.max(my_min); // set everything below 0.2 to 0.2.  This will prevent divide by zero.
+
+			CImg<float> Temp(raw_image); // Copy raw_image to a floating point image
+
+			cimg_forXYZ(Temp, x, y, z)
+				Temp(x, y, z) = Temp(x, y, z) - background; // subtract background. min value =0.
+
+			Temp.max((float)0); // set min value to 0.  have to cast zero to avoid compiler complaint.
+
+			img_max = AverageLS(0, 0);
+			img_min = AverageLS(0, 0);
+
+			cimg_forXY(AverageLS, x, y){
+				img_max = std::max(AverageLS(x, y), img_max);
+				img_min = std::min(AverageLS(x, y), img_min);
+			}
+						
+			std::cout << "LSC size     : " << AverageLS.width() << " x " << AverageLS.height() << " x " << AverageLS.depth() << ". " << std::endl;
+			std::cout << "LSC max, min : " << img_max << ", " << img_min << std::endl;
+			std::cout << "Dividing by LSC... ";
+
+			Temp.div(AverageLS);
+			std::cout << " Done." << std::endl;
+
+			cimg_forXYZ(Temp, x, y, z)
+				raw_image(x, y, z) = Temp(x, y, z) + background; //replace background and copy back to U16 raw_image.
+		} // end if applying LS correction
 				
-		AverageLS.crop(LSIborderx, LSIbordery, LSIx - LSIborderx, LSIy - LSIbordery); //crop it
-
-		cimg_forXY(AverageLS, x, y)
-			AverageLS(x, y) = AverageLS(x, y) - background;
 		
-		AverageLS.normalize(0, 1);
-		
-		cimg_forXY(AverageLS, x, y)
-			AverageLS(x, y) = max(AverageLS(x, y), 0.2);
-		
-		CImg<float> Temp(raw_image);
-
-		cimg_forXYZ(Temp, x, y, z)
-			Temp(x, y, z) = max(Temp(x, y, z) - background, 0); //subtract background. min value =0.
-		
-		Temp.div(AverageLS);
-		cimg_forXYZ(Temp, x, y, z){
-			Temp(x, y, z) = Temp(x, y, z); //replace background.
-
-		raw_image(Temp);
-		}
-
-
-		}
 		//****************************Adjust resolution if desired***********************************
 		
 		int step_size;
@@ -358,10 +399,10 @@ int main(int argc, char *argv[])
 			startnx = startnx + Pad * 2;
 			startny = startny + Pad * 2;
 			startnz = startnz + Pad * 2;
-			std::cout << "Minimum padding is " << Pad << " pixels." << std::endl;
+			std::cout << "Min padding to use is " << Pad << " pixels." << std::endl;
 		}
 
-		if (RL_iters > 0 && bAdjustResolution) {
+		if (RL_iters > 0 && (bAdjustResolution || Pad)) {
 			new_ny = findOptimalDimension(startny, step_size);
 			if (new_ny != startny) {
 				printf("new ny=%d\n", new_ny);
@@ -401,9 +442,9 @@ int main(int argc, char *argv[])
 			border_y = (new_ny - ny) / 2;
 			border_z = (new_nz - nz) / 2;
 
-			std::cout << "Create padded image. Border: " << border_x << " x " << border_y << " x " << border_z << ". ";
+			std::cout << "Create padded img.  Border : " << border_x << " x " << border_y << " x " << border_z << ". " << std::endl;
 			CImg<> raw_original(raw_image);		//copy from raw image
-			std::cout << "New image size: " << new_nx << " x " << new_ny << " x " << new_nz << ". ";
+			std::cout << "Image with padding size    : " << new_nx << " x " << new_ny << " x " << new_nz << ". ";
 			raw_image.resize(new_nx, new_ny, new_nz);		//resize with border
 
 			int x_raw;
@@ -415,7 +456,7 @@ int main(int argc, char *argv[])
 			int i_nz = (int)nz;
 			
 			// std::cout << "Line:" << __LINE__ << std::endl;
-			std::cout << "Copy values... " << std::endl;
+			std::cout << "Copy values... ";
 			cimg_forXYZ(raw_image, x, y, z) // for every pixel in the new image, copy value from original image
 			{
 				x_raw = abs(x - border_x);
@@ -441,16 +482,17 @@ int main(int argc, char *argv[])
 				CImg<unsigned short> uint16Img(raw_image);
 				uint16Img.save(makeOutputFilePath(*it, "Padded", "_padded").c_str());
 			}
-			raw_original;
+			std::cout << "Done." << std::endl;
 		}
 		
 		//****************************Load OTF to CPU RAM(assuming 3D rotationally averaged OTF)***********************************
-		std::cout << "Loading OTF... "; 
+		std::cout <<  "Loading OTF... "; 
 		complexOTF.assign(otffiles.c_str());
-        unsigned nr_otf = complexOTF.height();
+		unsigned nr_otf = complexOTF.height();
         unsigned nz_otf = complexOTF.width() / 2;
         dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
         dkz_otf = 1/(nz_otf * dz_psf);
+		std::cout << "nr x nz = " << nr_otf << " x " << nz_otf << ". " << std::endl << std::endl ;
 
         
 		//****************************Construct deskew matrix***********************************
@@ -514,6 +556,10 @@ int main(int argc, char *argv[])
 
 		//****************************Create reusable cuFFT plans***********************************
         // 
+			size_t GPUfree_prev;
+			cudaMemGetInfo(&GPUfree_prev, &GPUtotal);
+			
+
           cufftResult cuFFTErr = cufftPlan3d(&rfftplanGPU, new_nz, new_ny, deskewedXdim, CUFFT_R2C);
           if (cuFFTErr != CUFFT_SUCCESS) {
 			  std::cerr << "cufftPlan3d() r2c failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
@@ -528,6 +574,10 @@ int main(int argc, char *argv[])
 			std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
             throw std::runtime_error("cufftPlan3d() c2r failed.");
           }
+		  std::cout << "FFT plans allocated.  ";
+		  cudaMemGetInfo(&GPUfree, &GPUtotal);
+		  std::cout << std::setw(8) << (GPUfree_prev - GPUfree) / (1024 * 1024) << "MB" << std::setw(8) << GPUfree / (1024 * 1024) << "MB free" << std::endl;
+
         }
 
 
@@ -547,6 +597,10 @@ int main(int argc, char *argv[])
         // make a 3D interpolated OTF array on GPU:
         d_interpOTF.resize(new_nz * new_ny * (deskewedXdim+2) * sizeof(float)); // allocate memory
         makeOTFarray(d_interpOTF, deskewedXdim, new_ny, new_nz);				// interpolate
+		std::cout << "d_interpOTF allocated.  ";
+		cudaMemGetInfo(&GPUfree, &GPUtotal);
+		std::cout << std::setw(8) << d_interpOTF.getSize() / (1024 * 1024) << "MB" << std::setw(8) << GPUfree / (1024 * 1024) << "MB free" << std::endl;
+
 
       } // end "if this is the first iteration" (it == all_matching_files.begin())
 
@@ -588,7 +642,7 @@ int main(int argc, char *argv[])
 		  //**********************************************************************************************************
         RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters, deskewFactor,
                            deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
-                           rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp);
+						   rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp, myGPUdevice);
       }
       else {
         std::cerr << "Nothing is performed\n";

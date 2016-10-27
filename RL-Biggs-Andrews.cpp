@@ -43,8 +43,11 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         int napodize, int nZblend,
                         CPUBuffer &rotationMatrix, cufftHandle rfftplanGPU, 
                         cufftHandle rfftplanInvGPU, CImg<> & raw_deskewed,
-                        cudaDeviceProp *devProp)
+						cudaDeviceProp *devProp, int myGPUdevice)
 {
+	size_t free; //for GPU memory profiling
+	size_t total;//for GPU memory profiling
+
   // "raw" contains the raw image, also used as the initial guess X_0
   unsigned int nx = raw.width();
   unsigned int ny = raw.height();
@@ -63,8 +66,14 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 #endif
 
    // allocate buffers in GPU device 0
-  GPUBuffer X_k(nz * nxy * sizeof(float), 0);
-  cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
+  GPUBuffer X_k(nz * nxy * sizeof(float), myGPUdevice);
+  std::cout << "X_k allocated.          " ;
+  cudaMemGetInfo(&free, &total);
+  std::cout << std::setw(8) << X_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+
+
+
+  cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable)); //pin the host RAM
   // transfer host data to GPU
   cutilSafeCall(cudaMemcpy(X_k.getPtr(), raw.data(), nz*nxy*sizeof(float),
                            cudaMemcpyHostToDevice));
@@ -77,7 +86,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     apodize_GPU(&X_k, nx, ny, nz, napodize);
 
     // background subtraction (including thresholding by 0):
-    printf("background=%f\n", background);
+    // printf("background=%f\n", background);
     backgroundSubtraction_GPU(X_k, nx, ny, nz, background, devProp->maxGridSize[2]);
     // Calculate sum for bleach correction:
     double intensity_overall = meanAboveBackground_GPU(X_k, nx, ny, nz, devProp->maxGridSize[2]);
@@ -93,8 +102,8 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   
     if (fabs(deskewFactor) > 0.0) { //then deskew raw data along x-axis first:
 
-      GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), 0);
-      deskew_GPU(X_k, nx, ny, nz, deskewFactor, deskewedRaw, deskewedNx, extraShift);
+		GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), myGPUdevice);
+		deskew_GPU(X_k, nx, ny, nz, deskewFactor, deskewedRaw, deskewedNx, extraShift);
 
       // update raw (i.e., X_k) and its dimension variables.
       X_k = deskewedRaw;
@@ -123,12 +132,39 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   }
 
 
-  GPUBuffer rawGPUbuf(X_k);  // make a copy of raw image
-  GPUBuffer X_kminus1(nz * nxy * sizeof(float), 0);
-  GPUBuffer Y_k(nz * nxy * sizeof(float), 0);
-  GPUBuffer G_kminus1(nz * nxy * sizeof(float), 0);
-  GPUBuffer G_kminus2(nz * nxy * sizeof(float), 0);
-  GPUBuffer CC(nz * nxy * sizeof(float), 0);
+  GPUBuffer rawGPUbuf(X_k, myGPUdevice);  // make a copy of raw image
+  
+  std::cout << "rawGPUbuf allocated.    " ;
+  cudaMemGetInfo(&free, &total);
+  std::cout << std::setw(8) << rawGPUbuf.getSize() / (1024*1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+  
+
+  GPUBuffer X_kminus1(nz * nxy * sizeof(float), myGPUdevice);
+  std::cout << "X_kminus1 allocated.    " ;
+  cudaMemGetInfo(&free, &total);
+  std::cout << std::setw(8) << X_kminus1.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+
+
+  GPUBuffer Y_k(nz * nxy * sizeof(float), myGPUdevice);
+  std::cout << "Y_k allocated.          " ;
+  cudaMemGetInfo(&free, &total);
+  std::cout << std::setw(8) << Y_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+
+  GPUBuffer CC(nz * nxy * sizeof(float), myGPUdevice);
+  std::cout << "CC allocated.           ";
+  cudaMemGetInfo(&free, &total);
+  std::cout << std::setw(8) << CC.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+
+  GPUBuffer G_kminus1(nz * nxy * sizeof(float), myGPUdevice);
+  std::cout << "G_kminus1 allocated.    ";
+  cudaMemGetInfo(&free, &total);
+  std::cout << std::setw(8) << G_kminus1.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+
+  GPUBuffer G_kminus2(nz * nxy * sizeof(float), myGPUdevice);
+  std::cout << "G_kminus2 allocated.    ";
+  cudaMemGetInfo(&free, &total);
+  std::cout << std::setw(8) << G_kminus2.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+
 
 /*  testing using 2D texture for OTF interpolation
   CImg<> realpart(otf.width()/2, otf.height()), imagpart(realpart);
@@ -150,11 +186,21 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   debugging code ends
 */
   // Allocate GPU buffer for temp FFT result
-  GPUBuffer fftGPUbuf(nz * nxy2 * sizeof(float), 0);
+  GPUBuffer fftGPUbuf(nz * nxy2 * sizeof(float), myGPUdevice);
+  std::cout << "fftGPUbuf allocated.    ";
+  cudaMemGetInfo(&free, &total);
+  std::cout << std::setw(8) << fftGPUbuf.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+
 
   double lambda=0;
   float eps = std::numeric_limits<float>::epsilon();
-
+  
+  
+  
+  //****************************************************************************
+  //****************************RL Iteration ***********************************
+  //****************************************************************************
+  
   // R-L iteration
   for (int k = 0; k < nIter; k++) {
     std::cout << "Iteration " << k << ". ";
@@ -209,12 +255,17 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 	std::cout << "Done. " << std::endl;
   }
 
+  //************************************************************************************
+  //****************************RL Iteration complete***********************************
+  //************************************************************************************
+
+
   // Rotate decon result if requested:
   
   if (rotationMatrix.getSize()) {
-    GPUBuffer d_rotatedResult(nz * nxy * sizeof(float), 0);
+	  GPUBuffer d_rotatedResult(nz * nxy * sizeof(float), myGPUdevice);
 
-    GPUBuffer d_rotMatrix(rotationMatrix, 0);
+	  GPUBuffer d_rotMatrix(rotationMatrix, myGPUdevice);
 
     rotate_GPU(X_k, nx, ny, nz, d_rotMatrix, d_rotatedResult);
     // Download from device memory back to "raw":
@@ -246,7 +297,7 @@ double deskewFactor;
 unsigned deskewedXdim;
 CPUBuffer rotMatrix;
 cufftHandle rfftplanGPU, rfftplanInvGPU;
-GPUBuffer d_interpOTF(0);
+GPUBuffer d_interpOTF(0, myGPUdevice);
 
 unsigned get_output_nx()
 {
@@ -268,7 +319,7 @@ int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
                       float deskewAngle, // deskew
                       float rotationAngle,
                       int outputWidth,
-                      char * OTF_file_name)
+					  char * OTF_file_name, int myGPUdevice)
 {
   // Find the optimal dimensions nearest to the originals to meet CUFFT demands
   bCrop = false;
@@ -369,7 +420,8 @@ int RL_interface(const unsigned short * const raw_data,
                  float * const result,
                  float background,
                  int nIters,
-                 int extraShift
+                 int extraShift,
+				 int myGPUdevice
                  )
 {
   CImg<> raw_image(raw_data, nx, ny, nz);
@@ -378,13 +430,13 @@ int RL_interface(const unsigned short * const raw_data,
     raw_image.crop(0, 0, 0, 0, output_nx-1, output_ny-1, output_nz-1, 0);
 
   cudaDeviceProp deviceProp;
-  cudaGetDeviceProperties(&deviceProp, 0);
+  cudaGetDeviceProperties(&deviceProp, myGPUdevice); 
 
   // Finally do calculation including deskewing, decon, rotation:
   CImg<> raw_deskewed;
   RichardsonLucy_GPU(raw_image, background, d_interpOTF, nIters,
                      deskewFactor, deskewedXdim, extraShift, 15, 10, rotMatrix,
-                     rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp);
+					 rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp, myGPUdevice);
 
   // Copy deconvolved data, stored in raw_image, to "result" for return:
   memcpy(result, raw_image.data(), raw_image.size() * sizeof(float));

@@ -419,7 +419,7 @@ __host__ double calcAccelFactor(GPUBuffer &G_km1, GPUBuffer &G_km2,
   unsigned nBlocks = ceil( ((float) (nx*ny*nz)) / nThreads/2 );
 
   // Used for holding partial reduction results; one for each thread block:
-  GPUBuffer devBuf1(nBlocks * sizeof(double) * 2, 0);
+  GPUBuffer devBuf1(nBlocks * sizeof(double) * 2, myGPUdevice);
   // First nBlocks: numerator; second nBlocks: denominator
 
   unsigned smemSize = nThreads * sizeof(double) * 2;
@@ -547,7 +547,7 @@ __host__ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz, 
   unsigned smemSize = nThreads * sizeof(double);
 
   // used for holding intermediate reduction results; one for each thread block
-  GPUBuffer d_intres(nYblocks * nXblocks * sizeof(double), 0);
+  GPUBuffer d_intres(nYblocks * nXblocks * sizeof(double), myGPUdevice);
 
   summation_kernel<<<dim3(nXblocks, nYblocks), nThreads, smemSize>>>
     ((float *) img.getPtr(), (double *) d_intres.getPtr(), nx*ny*nz);
@@ -560,7 +560,7 @@ __host__ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz, 
 
   float mean = sum/(nx*ny*nz);
 
-  GPUBuffer d_counter(nXblocks * nYblocks * sizeof(unsigned), 0);
+  GPUBuffer d_counter(nXblocks * nYblocks * sizeof(unsigned), myGPUdevice);
   smemSize = nThreads * (sizeof(double) + sizeof(unsigned));
   sumAboveThresh_kernel<<<dim3(nXblocks, nYblocks), nThreads, smemSize>>>
     ((float *) img.getPtr(), (double *) d_intres.getPtr(),

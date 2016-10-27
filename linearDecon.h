@@ -2,6 +2,7 @@
 #define LINEAR_DECON_H
 
 #include <iostream>
+#include <iomanip>      // std::setw
 
 #include <string>
 #include <complex>
@@ -101,7 +102,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         int napodize, int nZblend,
                         CPUBuffer &rotationMatrix,
                         cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU,
-                        CImg<> & raw_deskewed, cudaDeviceProp* devprop);
+						CImg<> & raw_deskewed, cudaDeviceProp* devprop, int myGPUdevice);
 
 CImg<> MaxIntProj(CImg<> &input, int axis);
 
@@ -180,7 +181,7 @@ extern "C" {
  * outputWidth: if set to 0, then calculate the output width because of deskewing; otherwise use this value as the output width
  * OTF_file_name: file name of OTF
 */
-CUDADECON_API int RL_interface_init(int nx, int ny, int nz, float dr, float dz, float dr_psf, float dz_psf, float deskewAngle, float rotationAngle, int outputWidth, char * OTF_file_name);
+	CUDADECON_API int RL_interface_init(int nx, int ny, int nz, float dr, float dz, float dr_psf, float dz_psf, float deskewAngle, float rotationAngle, int outputWidth, char * OTF_file_name, int myGPUdevice);
 
 //! RL_interface() to run deconvolution
 /*!
@@ -191,7 +192,7 @@ CUDADECON_API int RL_interface_init(int nx, int ny, int nz, float dr, float dz, 
  * nIters: how many iterations to run
  * extraShift: in pixels; sometimes an extra shift in X is needed to center the deskewed image better
 */
-CUDADECON_API int RL_interface(const unsigned short * const raw_data, int nx, int ny, int nz, float * const result, float background, int nIters, int extraShift);
+CUDADECON_API int RL_interface(const unsigned short * const raw_data, int nx, int ny, int nz, float * const result, float background, int nIters, int extraShift, int myGPUdevice);
 
 //! Call this before program quits to release global GPUBuffer d_interpOTF
 CUDADECON_API void RL_cleanup();
