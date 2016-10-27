@@ -411,7 +411,7 @@ __global__ void currPrevDiff_kernel(float * img1, float * img2, float * img3)
 }
 
 __host__ double calcAccelFactor(GPUBuffer &G_km1, GPUBuffer &G_km2,
-                                int nx, int ny, int nz, float eps)
+	int nx, int ny, int nz, float eps, int myGPUdevice)
 // (G_km1 dot G_km2) / (G_km2 dot G_km2)
 // All inputs are of dimension (nx, ny, nz) and of floating type;
 {
@@ -536,7 +536,7 @@ __global__ void updatePrediction_kernel(float * Y_k, float * X_k, float *X_km1, 
   }
 }
 
-__host__ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz, unsigned maxGridXdim)
+__host__ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz, unsigned maxGridXdim, int myGPUdevice)
 {
   unsigned nThreads = 1024;
   unsigned nXblocks = ceil( nx*ny*nz /(float) nThreads/2 );

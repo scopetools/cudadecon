@@ -89,7 +89,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     // printf("background=%f\n", background);
     backgroundSubtraction_GPU(X_k, nx, ny, nz, background, devProp->maxGridSize[2]);
     // Calculate sum for bleach correction:
-    double intensity_overall = meanAboveBackground_GPU(X_k, nx, ny, nz, devProp->maxGridSize[2]);
+    double intensity_overall = meanAboveBackground_GPU(X_k, nx, ny, nz, devProp->maxGridSize[2], myGPUdevice);
     if (bFirstTime) {
       intensity_overall0 = intensity_overall;
       bFirstTime = false;
@@ -206,7 +206,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     std::cout << "Iteration " << k << ". ";
     // a. Make an image predictions for the next iteration    
     if (k > 1) {
-      lambda = calcAccelFactor(G_kminus1, G_kminus2, nx, ny, nz, eps);
+      lambda = calcAccelFactor(G_kminus1, G_kminus2, nx, ny, nz, eps, myGPUdevice);
       lambda = std::max(std::min(lambda, 1.), 0.); // stability enforcement
 #ifndef NDEBUG
       printf("labmda = %lf\n", lambda);
@@ -297,7 +297,7 @@ double deskewFactor;
 unsigned deskewedXdim;
 CPUBuffer rotMatrix;
 cufftHandle rfftplanGPU, rfftplanInvGPU;
-GPUBuffer d_interpOTF(0, myGPUdevice);
+GPUBuffer d_interpOTF(0); 
 
 unsigned get_output_nx()
 {
@@ -319,8 +319,9 @@ int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
                       float deskewAngle, // deskew
                       float rotationAngle,
                       int outputWidth,
-					  char * OTF_file_name, int myGPUdevice)
+					  char * OTF_file_name, int myGPUdevice) // device might not work, since d_interpOTF is a global and device is set at compile time.
 {
+	cudaSetDevice(myGPUdevice);
   // Find the optimal dimensions nearest to the originals to meet CUFFT demands
   bCrop = false;
   output_ny = findOptimalDimension(ny);
@@ -424,6 +425,7 @@ int RL_interface(const unsigned short * const raw_data,
 				 int myGPUdevice
                  )
 {
+	cudaSetDevice(myGPUdevice);
   CImg<> raw_image(raw_data, nx, ny, nz);
 
   if (bCrop)

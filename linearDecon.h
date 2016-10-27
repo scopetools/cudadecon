@@ -129,7 +129,7 @@ void calcCurrPrevDiff(GPUBuffer &X_k, GPUBuffer &Y_k, GPUBuffer &G_kminus1,
                       int nx, int ny, int nz, unsigned maxGridXdim);
 
 double calcAccelFactor(GPUBuffer &G_km1, GPUBuffer &G_km2,
-                       int nx, int ny, int nz, float eps);
+	int nx, int ny, int nz, float eps, int myGPUdevice);
 
 void updatePrediction(GPUBuffer &Y_k, GPUBuffer &X_k, GPUBuffer &X_kminus1,
                       double lambda, int nx, int ny, int nz, unsigned maxGridXdim);
@@ -144,7 +144,7 @@ void rotate_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
 void cropGPU(GPUBuffer &inBuf, int nx, int ny, int nz,
              int new_nx, int new_ny, int new_nz,
              GPUBuffer &outBuf);
-double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz, unsigned maxGridXdim);
+double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz, unsigned maxGridXdim, int myGPUdevice);
 void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale, unsigned maxGridXdim);
 void apodize_GPU(GPUBuffer* image, int nx, int ny, int nz, int napodize);
 void zBlend_GPU(GPUBuffer & image, int nx, int ny, int nz, int nZblend);
