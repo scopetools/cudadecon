@@ -23,6 +23,8 @@
 #include <GPUBuffer.h>
 #include <PinnedCPUBuffer.h>
 
+#include <thread> //for asynchronous loading of raw .tif files
+
 #ifdef _WIN32
 #define _USE_MATH_DEFINES
 #endif
@@ -102,7 +104,8 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         int napodize, int nZblend,
                         CPUBuffer &rotationMatrix,
                         cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU,
-						CImg<> & raw_deskewed, cudaDeviceProp* devprop, int myGPUdevice);
+						CImg<> & raw_deskewed, cudaDeviceProp* devprop, int myGPUdevice, bool bFlatStartGuess, 
+						float my_median, bool No_Bleach_correction);
 
 CImg<> MaxIntProj(CImg<> &input, int axis);
 

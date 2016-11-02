@@ -1,10 +1,36 @@
 #include "linearDecon.h"
 #include <exception>
+#include <ctime>
+
+
 
 // Disable silly warnings on some Microsoft VC++ compilers.
 #pragma warning(disable : 4244) // Disregard loss of data from float to int.
 #pragma warning(disable : 4267) // Disregard loss of data from size_t to unsigned int.
 #pragma warning(disable : 4305) // Disregard loss of data from double to float.
+
+CImg<> next_raw_image;
+
+
+
+int load_next_thread(const char* my_path)
+{
+	next_raw_image.assign(my_path);
+	if (false)
+	{
+		float img_max = next_raw_image(0, 0, 0);
+		float img_min = next_raw_image(0, 0, 0);
+		cimg_forXYZ(next_raw_image, x, y, z){
+			img_max = std::max(next_raw_image(x, y, z), img_max);
+			img_min = std::min(next_raw_image(x, y, z), img_min);
+		}
+		std::cout << "next_raw_image : " << next_raw_image.width() << " x " << next_raw_image.height() << " x " << next_raw_image.depth() << ". " << std::endl;
+		std::cout << "         next_raw_image max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
+		std::cout << "Loaded from " << my_path << std::endl;
+	}
+
+	return 0;
+}
 
 
 std::complex<float> otfinterpolate(std::complex<float> * otf, float kx, float ky, float kz, int nzotf, int nrotf)
@@ -102,6 +128,11 @@ int wienerfilter(CImg<> & g, float dkx, float dky, float dkz,
 
 int main(int argc, char *argv[])
 {
+	std::clock_t start_t;
+	double duration;
+	double iter_duration = 0;
+
+  start_t = std::clock();
   int napodize, nZblend;
   float background;
   float NA=1.2;
@@ -123,10 +154,12 @@ int main(int argc, char *argv[])
   std::vector<bool> bDoMaxIntProj;
   std::vector< CImg<> > MIprojections;
   int Pad = 0;
+  bool bFlatStartGuess = false;
+  bool No_Bleach_correction = false;
 
   TIFFSetWarningHandler(NULL);
 
-  std::string datafolder, filenamePattern, otffiles, LSfile;
+  std::string datafolder, datafolderB, filenamePattern, filenamePatternB, otffiles, otffilesB, LSfile;
   po::options_description progopts;
   progopts.add_options()
 	  ("drdata", po::value<float>(&imgParams.dr)->default_value(.104), "Image x-y pixel size (um)")
@@ -151,13 +184,18 @@ int main(int argc, char *argv[])
 	  ("MIP,M", fixed_tokens_value< std::vector<bool> >(&bDoMaxIntProj, 3, 3), "Save max-intensity projection along x, y, or z axis; takes 3 binary numbers separated by space: 0 0 1")
     ("uint16,u", po::bool_switch(&bSaveUshort)->implicit_value(true), "Save result in uint16 format; should be used only if no actual decon is performed")
     ("input-dir", po::value<std::string>(&datafolder)->required(), "Folder of input images")
+	("input-dirB", po::value<std::string>(&datafolderB), "Folder of input (second view) B images")
     ("otf-file", po::value<std::string>(&otffiles)->required(), "OTF file")
+	("otf-fileB", po::value<std::string>(&otffilesB), "OTF B (second view) file")
     ("filename-pattern", po::value<std::string>(&filenamePattern)->required(), "File name pattern to find input images to process")
+	("filename-patternB", po::value<std::string>(&filenamePatternB), "File name pattern to find input (second view) B images to process")
 	("DoNotAdjustResForFFT,a", po::bool_switch(&bDontAdjustResolution)->default_value(false), "Don't change data resolution size. Otherwise data is cropped to perform faster, more memory efficient FFT: size factorable into 2,3,5,7)")
 	("DevQuery,q", po::bool_switch(&bDevQuery)->default_value(false), "Show info and indices of available GPUs")
 	("GPUdevice", po::value<int>(&myGPUdevice)->default_value(0), "Index of GPU device to use (0=first device)")
 	("Pad", po::value<int>(&Pad)->default_value(0), "Pad the image data with mirrored values to avoid edge artifacts")
-	("LSC", po::value<std::string>(&LSfile), "Lightsheet correction file") 
+	("LSC", po::value<std::string>(&LSfile), "Lightsheet correction file")
+	("FlatStart", po::bool_switch(&bFlatStartGuess)->default_value(false), "Start the RL from a guess that is a flat image filled with the median image value.  This may supress noise.")
+	("NoBleachCorrection", po::bool_switch(&No_Bleach_correction)->default_value(false), "Does not apply bleach correction when running multiple images in a single batch.")
     ("help,h", "This help message.")
     ;
   po::positional_options_description p;
@@ -273,12 +311,58 @@ int main(int argc, char *argv[])
 
 	std::cout << "Found " << all_matching_files.size() << " file(s)." << std::endl ;
 
+	std::vector<std::string>::iterator next_it = all_matching_files.begin();//make a second incrementer that will be used to load the next raw image while we process.
+	
+	std::thread t1;
+	t1 = std::thread(load_next_thread, next_it->c_str());						//start loading the first file.
+	
     for (std::vector<std::string>::iterator it=all_matching_files.begin();
          it != all_matching_files.end(); it++) {
-
+		
 	  std::cout << std::endl << *it << std::endl;
-	  std::cout << "Loading image... " << std::endl;
-      raw_image.assign(it->c_str());
+	  int number_of_files_left = all_matching_files.end() - it + 1;
+
+	  HANDLE  hConsole;
+	  hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	  SetConsoleTextAttribute(hConsole, 10); // colors are 9=blue 10=green and so on to 15=white 
+	  std::cout << "Loading raw image " << it - all_matching_files.begin() + 1 << " out of " << all_matching_files.size() << ".   ";
+	  if (it > all_matching_files.begin()) // if this isn't the first iteration.
+	  {
+		  int seconds = number_of_files_left * iter_duration;
+		  int hours = ceil(seconds / (60 * 60));
+		  int minutes = ceil((seconds - (hours * 60 * 60)) / 60);
+		  std::cout << "Seconds per file = "<< (int)iter_duration << ".  Time remaining = " << hours << " hours, " <<  minutes << " minutes.";
+	  }
+	    
+	  std::cout <<	std::endl;
+	  SetConsoleTextAttribute(hConsole, 8); // colors are 9=blue 10=green and so on to 15=bright white 8=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+
+	  std::cout << "Waiting for raw loading thread..." ;
+	  t1.join();		// wait for loading thread to finish reading next_raw_image into memory.
+	  //std::cout << "Destroying thread..." << std::endl;
+	  //t1.~thread();		// destroy thread.
+
+	  std::cout << "Copy image to raw..." ;
+	  raw_image.assign(next_raw_image); // Copy to raw_image. 
+	  
+	  float img_max = raw_image(0, 0);
+	  float img_min = raw_image(0, 0);
+	  cimg_forXYZ(raw_image, x, y, z){
+		  img_max = std::max(raw_image(x, y, z), img_max);
+		  img_min = std::min(raw_image(x, y, z), img_min);
+	  }
+	  std::cout << "         raw img max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
+
+
+
+	//std::swap(raw_image, next_raw_image); // Swap pointers.
+	std::cout << "Done" << std::endl;
+
+	// start reading the next image
+	next_it++; // increment next_it.  This will now have the next file to read.
+	if (it < all_matching_files.end() - 1)  // If there are more files to process...
+		t1 = std::thread(load_next_thread, next_it->c_str());		//start new thread and load the next file, while we process raw_image
+	  
 
       // If it's the first input file, initialize a bunch including:
       // 1. crop image to make dimensions nice factorizable numbers
@@ -287,101 +371,18 @@ int main(int argc, char *argv[])
       // 4. create FFT plans
       // 5. transfer constants into GPU device constant memory
       // 6. make 3D OTF array in device memory
+	printf("Original image size ...   %d x %d x %d\n", raw_image.width(), raw_image.height(), raw_image.depth());
+
+	  
+	  //****************************If first image***********************************
       if (it == all_matching_files.begin()) {
         nx = raw_image.width();
         ny = raw_image.height();
         nz = raw_image.depth();
 
-        printf("Original image size ...   %d x %d x %d\n", nx, ny, nz);
-
-		//****************************Apply Light Sheet Correction if desired ***********************
-		
-		if (LSfile.size()){
-			
-			const float my_min = 0.2;
-			float img_max;
-			float img_min;
-
-			std::cout << "Loading LS Correction ...";
-			LSImage.assign(LSfile.c_str());
-			std::cout << " " << LSImage.width() << " x " << LSImage.height() << " x " << LSImage.depth() << ". " << std::endl;
-			AverageLS.resize(LSImage.width(), LSImage.height(), 1, 1, -1); //Set size of AverageLS
-			AverageLS.fill(0); //fill with zeros
-
-			
-			cimg_forXYZ(LSImage, x, y, z){
-				AverageLS(x, y) = AverageLS(x, y) + LSImage(x, y, z); //sum image
-
-				if (z == (LSImage.depth()-1)) // if this is the last Z slice
-					AverageLS(x, y) = AverageLS(x, y) / LSImage.depth(); //divide by number of slices
-			}
-			
-
-
-			const int LSIx = AverageLS.width();
-			const int LSIy = AverageLS.height();
-
-			int LSIborderx = (LSIx - nx) / 2;
-			int LSIbordery = (LSIy - ny) / 2;
-
-			std::cout << "Excess LS border to crop   : " << LSIborderx << " x " << LSIbordery << std::endl;
-
-			AverageLS.crop(LSIborderx, LSIbordery, LSIx - LSIborderx - 1, LSIy - LSIbordery - 1); //crop it
-
-			cimg_forXY(AverageLS, x, y)
-				AverageLS(x, y) = AverageLS(x, y) - background;
-
-
-			img_max = AverageLS(0, 0);
-			img_min = AverageLS(0, 0);
-			cimg_forXY(AverageLS, x, y){
-				img_max = std::max(AverageLS(x, y), img_max);
-				img_min = std::min(AverageLS(x, y), img_min);
-			}
-			std::cout << "               LS max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
 		
 
-			const float normalization = img_max;
-
-			img_max = -9999999;
-			img_min = 9999999;
-			cimg_forXY(AverageLS, x, y){
-				AverageLS(x, y) = AverageLS(x, y) / normalization;
-				img_max = std::max(AverageLS(x, y), img_max);
-				img_min = std::min(AverageLS(x, y), img_min);
-			}
-			std::cout << "       After normalization : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
-
-
-			AverageLS.max(my_min); // set everything below 0.2 to 0.2.  This will prevent divide by zero.
-
-			CImg<float> Temp(raw_image); // Copy raw_image to a floating point image
-
-			cimg_forXYZ(Temp, x, y, z)
-				Temp(x, y, z) = Temp(x, y, z) - background; // subtract background. min value =0.
-
-			Temp.max((float)0); // set min value to 0.  have to cast zero to avoid compiler complaint.
-
-			img_max = AverageLS(0, 0);
-			img_min = AverageLS(0, 0);
-
-			cimg_forXY(AverageLS, x, y){
-				img_max = std::max(AverageLS(x, y), img_max);
-				img_min = std::min(AverageLS(x, y), img_min);
-			}
-						
-			std::cout << "LSC size     : " << AverageLS.width() << " x " << AverageLS.height() << " x " << AverageLS.depth() << ". " << std::endl;
-			std::cout << "LSC max, min : " << img_max << ", " << img_min << std::endl;
-			std::cout << "Dividing by LSC... ";
-
-			Temp.div(AverageLS);
-			std::cout << " Done." << std::endl;
-
-			cimg_forXYZ(Temp, x, y, z)
-				raw_image(x, y, z) = Temp(x, y, z) + background; //replace background and copy back to U16 raw_image.
-		} // end if applying LS correction
-				
-		
+			
 		//****************************Adjust resolution if desired***********************************
 		
 		int step_size;
@@ -430,60 +431,7 @@ int main(int argc, char *argv[])
 			new_ny = ny;
 			new_nz = nz;
 		}
-		
-
-		//****************************Pad image.  Use Mirror image in padded border region***********************************
-
-
-
-
-		if (Pad){
-			border_x = (new_nx - nx) / 2;   // get border size
-			border_y = (new_ny - ny) / 2;
-			border_z = (new_nz - nz) / 2;
-
-			std::cout << "Create padded img.  Border : " << border_x << " x " << border_y << " x " << border_z << ". " << std::endl;
-			CImg<> raw_original(raw_image);		//copy from raw image
-			std::cout << "Image with padding size    : " << new_nx << " x " << new_ny << " x " << new_nz << ". ";
-			raw_image.resize(new_nx, new_ny, new_nz);		//resize with border
-
-			int x_raw;
-			int y_raw;
-			int z_raw;
-
-			int i_nx = (int)nx;
-			int i_ny = (int)ny;
-			int i_nz = (int)nz;
 			
-			// std::cout << "Line:" << __LINE__ << std::endl;
-			std::cout << "Copy values... ";
-			cimg_forXYZ(raw_image, x, y, z) // for every pixel in the new image, copy value from original image
-			{
-				x_raw = abs(x - border_x);
-				y_raw = abs(y - border_y);
-				z_raw = abs(z - border_z);
-								
-				if (x_raw >= i_nx)
-					x_raw = i_nx - (x_raw - i_nx) - 1 ;
-
-				if (y_raw >= i_ny)
-					y_raw = i_ny - (y_raw - i_ny) - 1;
-
-				if (z_raw >= i_nz)
-					z_raw = i_nz - (z_raw - i_nz) - 1;
-
-				//raw_image(x, y, z) = x_raw;
-				raw_image(x, y, z) = raw_original(x_raw, y_raw, z_raw);
-			}
-			//***debug padded image.
-			if (false){
-				std::cout << "Saving padded image... " << std::endl;
-				makeDeskewedDir("Padded");
-				CImg<unsigned short> uint16Img(raw_image);
-				uint16Img.save(makeOutputFilePath(*it, "Padded", "_padded").c_str());
-			}
-			std::cout << "Done." << std::endl;
-		}
 		
 		//****************************Load OTF to CPU RAM(assuming 3D rotationally averaged OTF)***********************************
 		std::cout <<  "Loading OTF... "; 
@@ -601,9 +549,149 @@ int main(int argc, char *argv[])
 		cudaMemGetInfo(&GPUfree, &GPUtotal);
 		std::cout << std::setw(8) << d_interpOTF.getSize() / (1024 * 1024) << "MB" << std::setw(8) << GPUfree / (1024 * 1024) << "MB free" << std::endl;
 
+		//****************************Prepare Light Sheet Correction if desired ***********************
+		if (LSfile.size()){
+
+			const float my_min = 0.2;
+
+			std::cout << "Loading LS Correction ...";
+			LSImage.assign(LSfile.c_str());
+			std::cout << " " << LSImage.width() << " x " << LSImage.height() << " x " << LSImage.depth() << ". " << std::endl;
+			AverageLS.resize(LSImage.width(), LSImage.height(), 1, 1, -1); //Set size of AverageLS
+			AverageLS.fill(0); //fill with zeros
+
+
+			cimg_forXYZ(LSImage, x, y, z){
+				AverageLS(x, y) = AverageLS(x, y) + LSImage(x, y, z); //sum image
+
+				if (z == (LSImage.depth() - 1)) // if this is the last Z slice
+					AverageLS(x, y) = AverageLS(x, y) / LSImage.depth(); //divide by number of slices
+			}
+
+
+
+			const int LSIx = AverageLS.width();
+			const int LSIy = AverageLS.height();
+
+			int LSIborderx = (LSIx - nx) / 2;
+			int LSIbordery = (LSIy - ny) / 2;
+
+			std::cout << "Excess LS border to crop   : " << LSIborderx << " x " << LSIbordery << std::endl;
+
+			AverageLS.crop(LSIborderx, LSIbordery, LSIx - LSIborderx - 1, LSIy - LSIbordery - 1); //crop it
+
+			cimg_forXY(AverageLS, x, y)
+				AverageLS(x, y) = AverageLS(x, y) - background;
+
+
+			img_max = AverageLS(0, 0);
+			img_min = AverageLS(0, 0);
+			cimg_forXY(AverageLS, x, y){
+				img_max = std::max(AverageLS(x, y), img_max);
+				img_min = std::min(AverageLS(x, y), img_min);
+			}
+			std::cout << "               LS max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
+
+
+			const float normalization = img_max;
+
+			img_max = -9999999;
+			img_min = 9999999;
+			cimg_forXY(AverageLS, x, y){
+				AverageLS(x, y) = AverageLS(x, y) / normalization;
+				img_max = std::max(AverageLS(x, y), img_max);
+				img_min = std::min(AverageLS(x, y), img_min);
+			}
+			std::cout << "       After normalization : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
+
+
+			AverageLS.max(my_min); // set everything below 0.2 to 0.2.  This will prevent divide by zero.
+		} // end if prepare LS correction
+
+
+
 
       } // end "if this is the first iteration" (it == all_matching_files.begin())
 
+
+	  //****************************Apply Light Sheet Correction if desired ***********************
+	  if (LSfile.size()){
+		  CImg<float> Temp(raw_image); // Copy raw_image to a floating point image
+
+		  cimg_forXYZ(Temp, x, y, z)
+			  Temp(x, y, z) = Temp(x, y, z) - background; // subtract background. min value =0.
+
+		  Temp.max((float)0); // set min value to 0.  have to cast zero to avoid compiler complaint.
+
+		  img_max = AverageLS(0, 0);
+		  img_min = AverageLS(0, 0);
+
+		  cimg_forXY(AverageLS, x, y){
+			  img_max = std::max(AverageLS(x, y), img_max);
+			  img_min = std::min(AverageLS(x, y), img_min);
+		  }
+
+		  std::cout << "LSC size     : " << AverageLS.width() << " x " << AverageLS.height() << " x " << AverageLS.depth() << ". " << std::endl;
+		  std::cout << "LSC max, min : " << img_max << ", " << img_min << std::endl;
+		  std::cout << "Dividing by LSC... ";
+
+		  Temp.div(AverageLS);
+		  std::cout << " Done." << std::endl;
+
+		  cimg_forXYZ(Temp, x, y, z)
+			  raw_image(x, y, z) = Temp(x, y, z) + background; //replace background and copy back to U16 raw_image.
+	  } // end if applying LS correction
+
+
+	  //****************************Pad image.  Use Mirror image in padded border region***********************************
+
+	  if (Pad){
+		  border_x = (new_nx - nx) / 2;   // get border size
+		  border_y = (new_ny - ny) / 2;
+		  border_z = (new_nz - nz) / 2;
+
+		  std::cout << "Create padded img.  Border : " << border_x << " x " << border_y << " x " << border_z << ". " << std::endl;
+		  CImg<> raw_original(raw_image);		//copy from raw image
+		  std::cout << "Image with padding size    : " << new_nx << " x " << new_ny << " x " << new_nz << ". ";
+		  raw_image.resize(new_nx, new_ny, new_nz);		//resize with border
+
+		  int x_raw;
+		  int y_raw;
+		  int z_raw;
+
+		  int i_nx = (int)nx;
+		  int i_ny = (int)ny;
+		  int i_nz = (int)nz;
+
+		  // std::cout << "Line:" << __LINE__ << std::endl;
+		  std::cout << "Copy values... ";
+		  cimg_forXYZ(raw_image, x, y, z) // for every pixel in the new image, copy value from original image
+		  {
+			  x_raw = abs(x - border_x);
+			  y_raw = abs(y - border_y);
+			  z_raw = abs(z - border_z);
+
+			  if (x_raw >= i_nx)
+				  x_raw = i_nx - (x_raw - i_nx) - 1;
+
+			  if (y_raw >= i_ny)
+				  y_raw = i_ny - (y_raw - i_ny) - 1;
+
+			  if (z_raw >= i_nz)
+				  z_raw = i_nz - (z_raw - i_nz) - 1;
+
+			  //raw_image(x, y, z) = x_raw;
+			  raw_image(x, y, z) = raw_original(x_raw, y_raw, z_raw);
+		  }
+		  //***debug padded image.
+		  if (true){
+			  std::cout << "Saving padded image... " << std::endl;
+			  makeDeskewedDir("Padded");
+			  CImg<unsigned short> uint16Img(raw_image);
+			  uint16Img.save(makeOutputFilePath(*it, "Padded", "_padded").c_str());
+		  }
+		  std::cout << "Done." << std::endl;
+	  } // End Pad image creation.
 
 
 	  // initialize the raw_deskewed size everytime in case it is cropped on an earlier iteration
@@ -637,17 +725,39 @@ int main(int argc, char *argv[])
         raw_image /= raw_image.size();
       }
       else if (RL_iters || raw_deskewed.size() || rotMatrix.getSize()) {
+
+		  img_max = raw_image(0, 0, 0);
+		  img_min = raw_image(0, 0, 0);
+		  cimg_forXYZ(raw_image, x, y, z){
+			  img_max = std::max(raw_image(x, y, z), img_max);
+			  img_min = std::min(raw_image(x, y, z), img_min);
+		  }
+		  std::cout << "RL_image : " << raw_image.width() << " x " << raw_image.height() << " x " << raw_image.depth() << ". " << std::endl;
+		  std::cout << "         RL_image max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
+
+
+
+		  float my_median = raw_image.median();
 		  //**********************************************************************************************************
 		  //****************************Run RL GPU********************************************************************
 		  //**********************************************************************************************************
         RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters, deskewFactor,
                            deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
-						   rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp, myGPUdevice);
+						   rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp, myGPUdevice, bFlatStartGuess, my_median, No_Bleach_correction);
       }
       else {
         std::cerr << "Nothing is performed\n";
         break;
       }
+	  
+	  img_max = raw_image(0, 0, 0);
+	  img_min = raw_image(0, 0, 0);
+	  cimg_forXYZ(raw_image, x, y, z){
+		  img_max = std::max(raw_image(x, y, z), img_max);
+		  img_min = std::min(raw_image(x, y, z), img_min);
+	  }
+	  std::cout << "output_image : " << raw_image.width() << " x " << raw_image.height() << " x " << raw_image.depth() << ". " << std::endl;
+	  std::cout << "         output_image max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
 
 	  //****************************Crop***********************************
 
@@ -714,7 +824,11 @@ int main(int argc, char *argv[])
         }
       }
 
+	  iter_duration = (std::clock() - start_t) / (double)CLOCKS_PER_SEC / (it - all_matching_files.begin() + 1 );
     } // iteration over all_matching_files
+	duration = (std::clock() - start_t) / (double)CLOCKS_PER_SEC;
+	std::cout << duration << " seconds total, for " << all_matching_files.size() << " images." << duration / all_matching_files.size() << " seconds per image." << std::endl;
+
   } // try {} block
   catch (std::exception &e) {
     std::cerr << "\n!!Error occurred: " << e.what() << std::endl;
