@@ -114,9 +114,9 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     }
     else
       rescale_GPU(X_k, nx, ny, nz, intensity_overall0/intensity_overall, devProp->maxGridSize[2]);
-//#ifndef NDEBUG
+#ifndef NDEBUG
     printf("intensity_overall=%lf\n", intensity_overall);
-//#endif
+#endif
   
     if (fabs(deskewFactor) > 0.0) { //then deskew raw data along x-axis first:
 

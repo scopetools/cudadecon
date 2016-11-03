@@ -132,6 +132,9 @@ int main(int argc, char *argv[])
 	double duration;
 	double iter_duration = 0;
 
+	HANDLE  hConsole;
+	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
   start_t = std::clock();
   int napodize, nZblend;
   float background;
@@ -156,6 +159,7 @@ int main(int argc, char *argv[])
   int Pad = 0;
   bool bFlatStartGuess = false;
   bool No_Bleach_correction = false;
+  int start = 0;
 
   TIFFSetWarningHandler(NULL);
 
@@ -196,6 +200,7 @@ int main(int argc, char *argv[])
 	("LSC", po::value<std::string>(&LSfile), "Lightsheet correction file")
 	("FlatStart", po::bool_switch(&bFlatStartGuess)->default_value(false), "Start the RL from a guess that is a flat image filled with the median image value.  This may supress noise.")
 	("NoBleachCorrection", po::bool_switch(&No_Bleach_correction)->default_value(false), "Does not apply bleach correction when running multiple images in a single batch.")
+	("start", po::value<int>(&start)->default_value(0), "Skip the first 'start' number of files.")
     ("help,h", "This help message.")
     ;
   po::positional_options_description p;
@@ -277,7 +282,11 @@ int main(int argc, char *argv[])
   size_t GPUfree;
   size_t GPUtotal;
   cudaMemGetInfo(&GPUfree, &GPUtotal);
-  std::cout << std::endl << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
+  cudaDeviceProp mydeviceProp;
+  cudaGetDeviceProperties(&mydeviceProp, myGPUdevice);
+
+  SetConsoleTextAttribute(hConsole, 13); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+  std::cout << std::endl << "Built : " << __DATE__ << " " << __TIME__ << ".  GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total on " << mydeviceProp.name << std::endl;
 
   CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed, LSImage;
   CImg<float> AverageLS;
@@ -304,59 +313,67 @@ int main(int argc, char *argv[])
   //****************************Main processing***********************************
   // Loop over all matching input TIFFs, :
   try {
+	
 
 	std::cout << "Looking for files to process... " ;
     // Gather all files in 'datafolder' and matching the file name pattern:
     std::vector< std::string > all_matching_files = gatherMatchingFiles(datafolder, filenamePattern);
 
 	std::cout << "Found " << all_matching_files.size() << " file(s)." << std::endl ;
+	SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
 
-	std::vector<std::string>::iterator next_it = all_matching_files.begin();//make a second incrementer that will be used to load the next raw image while we process.
+
+
+	std::vector<std::string>::iterator next_it = all_matching_files.begin() + start;//make a second incrementer that will be used to load the next raw image while we process.
 	
 	std::thread t1;
 	t1 = std::thread(load_next_thread, next_it->c_str());						//start loading the first file.
 	
-    for (std::vector<std::string>::iterator it=all_matching_files.begin();
+    for (std::vector<std::string>::iterator it= all_matching_files.begin() + start;
          it != all_matching_files.end(); it++) {
 		
-	  std::cout << std::endl << *it << std::endl;
-	  int number_of_files_left = all_matching_files.end() - it + 1;
+	  
+	  int number_of_files_left = all_matching_files.end() - it;
 
-	  HANDLE  hConsole;
-	  hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	  
 	  SetConsoleTextAttribute(hConsole, 10); // colors are 9=blue 10=green and so on to 15=white 
-	  std::cout << "Loading raw image " << it - all_matching_files.begin() + 1 << " out of " << all_matching_files.size() << ".   ";
-	  if (it > all_matching_files.begin()) // if this isn't the first iteration.
+	  std::cout << std::endl << "Loading raw_image: " << it - all_matching_files.begin() + 1 << " out of " << all_matching_files.size() << ".   ";
+	  if (it > all_matching_files.begin() + start) // if this isn't the first iteration.
 	  {
 		  int seconds = number_of_files_left * iter_duration;
 		  int hours = ceil(seconds / (60 * 60));
 		  int minutes = ceil((seconds - (hours * 60 * 60)) / 60);
-		  std::cout << "Seconds per file = "<< (int)iter_duration << ".  Time remaining = " << hours << " hours, " <<  minutes << " minutes.";
+		  std::cout << (int)iter_duration << " s/file.   " << number_of_files_left << " files left.  " << hours << " hours, " <<  minutes << " minutes remaining.";
 	  }
 	    
 	  std::cout <<	std::endl;
-	  SetConsoleTextAttribute(hConsole, 8); // colors are 9=blue 10=green and so on to 15=bright white 8=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+	  SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
 
-	  std::cout << "Waiting for raw loading thread..." ;
+
+	  std::cout << std::endl << *it << std::endl;
+	  std::cout << "Waiting for separate thread to load img..." ;
 	  t1.join();		// wait for loading thread to finish reading next_raw_image into memory.
-	  //std::cout << "Destroying thread..." << std::endl;
-	  //t1.~thread();		// destroy thread.
+	  t1.~thread();		// destroy thread.
 
-	  std::cout << "Copy image to raw..." ;
+	  std::cout << "Loaded. Copying img to raw..." ;
 	  raw_image.assign(next_raw_image); // Copy to raw_image. 
 	  
 	  float img_max = raw_image(0, 0);
 	  float img_min = raw_image(0, 0);
+
+#ifndef NDEBUG
 	  cimg_forXYZ(raw_image, x, y, z){
 		  img_max = std::max(raw_image(x, y, z), img_max);
 		  img_min = std::min(raw_image(x, y, z), img_min);
 	  }
+
 	  std::cout << "         raw img max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
+#endif
 
 
 
 	//std::swap(raw_image, next_raw_image); // Swap pointers.
-	std::cout << "Done" << std::endl;
+	std::cout << "Done." << std::endl;
 
 	// start reading the next image
 	next_it++; // increment next_it.  This will now have the next file to read.
@@ -371,11 +388,20 @@ int main(int argc, char *argv[])
       // 4. create FFT plans
       // 5. transfer constants into GPU device constant memory
       // 6. make 3D OTF array in device memory
-	printf("Original image size ...   %d x %d x %d\n", raw_image.width(), raw_image.height(), raw_image.depth());
+
+	bool bDifferent_sized_raw_img = (nx != raw_image.width() || ny != raw_image.height() || nz != raw_image.depth() ); // Check if raw.image has changed size from first iteration
+
+	if (it != all_matching_files.begin() + start && bDifferent_sized_raw_img) {
+		SetConsoleTextAttribute(hConsole, 14); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+		std::cout << std::endl << "File " << it - all_matching_files.begin() + 1 << " has a different size" << std::endl;
+	}
+	std::cout << "raw_image size             : " << raw_image.width() << " x " << raw_image.height() << " x " << raw_image.depth() << std::endl;
+	SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+				
 
 	  
-	  //****************************If first image***********************************
-      if (it == all_matching_files.begin()) {
+	  //**************************** If first image OR if raw_img has changed size ***********************************
+      if (it == all_matching_files.begin() + start || bDifferent_sized_raw_img ) {
         nx = raw_image.width();
         ny = raw_image.height();
         nz = raw_image.depth();
@@ -440,7 +466,7 @@ int main(int argc, char *argv[])
         unsigned nz_otf = complexOTF.width() / 2;
         dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
         dkz_otf = 1/(nz_otf * dz_psf);
-		std::cout << "nr x nz = " << nr_otf << " x " << nz_otf << ". " << std::endl << std::endl ;
+		std::cout << "nr x nz     : " << nr_otf << " x " << nz_otf << ". " << std::endl << std::endl ;
 
         
 		//****************************Construct deskew matrix***********************************
@@ -504,10 +530,20 @@ int main(int argc, char *argv[])
 
 		//****************************Create reusable cuFFT plans***********************************
         // 
+		
+			if (rfftplanGPU){ // if plan existed before, destroy it before creating a new plan.
+				cufftDestroy(rfftplanGPU);
+				std::cout << "Destroying rfftplanGPU." << std::endl;
+			}
+			if (rfftplanInvGPU){ // if plan existed before, destroy it before creating a new plan.
+				cufftDestroy(rfftplanInvGPU);
+				std::cout << "Destroying rfftplanInvGPU." << std::endl;
+			}
+
 			size_t GPUfree_prev;
 			cudaMemGetInfo(&GPUfree_prev, &GPUtotal);
-			
 
+			
           cufftResult cuFFTErr = cufftPlan3d(&rfftplanGPU, new_nz, new_ny, deskewedXdim, CUFFT_R2C);
           if (cuFFTErr != CUFFT_SUCCESS) {
 			  std::cerr << "cufftPlan3d() r2c failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
@@ -515,6 +551,9 @@ int main(int argc, char *argv[])
 			std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
             throw std::runtime_error("cufftPlan3d() r2c failed.");
           }
+
+
+
           cuFFTErr = cufftPlan3d(&rfftplanInvGPU, new_nz, new_ny, deskewedXdim, CUFFT_C2R);
           if (cuFFTErr != CUFFT_SUCCESS) {
 			  std::cerr << "cufftPlan3d() c2r failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
@@ -522,7 +561,7 @@ int main(int argc, char *argv[])
 			std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
             throw std::runtime_error("cufftPlan3d() c2r failed.");
           }
-		  std::cout << "FFT plans allocated.  ";
+		  std::cout << "FFT plans allocated.    ";
 		  cudaMemGetInfo(&GPUfree, &GPUtotal);
 		  std::cout << std::setw(8) << (GPUfree_prev - GPUfree) / (1024 * 1024) << "MB" << std::setw(8) << GPUfree / (1024 * 1024) << "MB free" << std::endl;
 
@@ -554,9 +593,9 @@ int main(int argc, char *argv[])
 
 			const float my_min = 0.2;
 
-			std::cout << "Loading LS Correction ...";
+			std::cout << std::endl << "Loading LS Correction      : ";
 			LSImage.assign(LSfile.c_str());
-			std::cout << " " << LSImage.width() << " x " << LSImage.height() << " x " << LSImage.depth() << ". " << std::endl;
+			std::cout << LSImage.width() << " x " << LSImage.height() << " x " << LSImage.depth() << ". " << std::endl;
 			AverageLS.resize(LSImage.width(), LSImage.height(), 1, 1, -1); //Set size of AverageLS
 			AverageLS.fill(0); //fill with zeros
 
@@ -623,16 +662,18 @@ int main(int argc, char *argv[])
 
 		  Temp.max((float)0); // set min value to 0.  have to cast zero to avoid compiler complaint.
 
-		  img_max = AverageLS(0, 0);
-		  img_min = AverageLS(0, 0);
+		  if (it == all_matching_files.begin()){
+			  img_max = AverageLS(0, 0);
+			  img_min = AverageLS(0, 0);
 
-		  cimg_forXY(AverageLS, x, y){
-			  img_max = std::max(AverageLS(x, y), img_max);
-			  img_min = std::min(AverageLS(x, y), img_min);
+			  cimg_forXY(AverageLS, x, y){
+				  img_max = std::max(AverageLS(x, y), img_max);
+				  img_min = std::min(AverageLS(x, y), img_min);
+			  }
+			  std::cout << "LSC size                   : " << AverageLS.width() << " x " << AverageLS.height() << " x " << AverageLS.depth() << std::endl;
+			  std::cout << "LSC max, min               : " << img_max << ", " << img_min << std::endl;
 		  }
 
-		  std::cout << "LSC size     : " << AverageLS.width() << " x " << AverageLS.height() << " x " << AverageLS.depth() << ". " << std::endl;
-		  std::cout << "LSC max, min : " << img_max << ", " << img_min << std::endl;
 		  std::cout << "Dividing by LSC... ";
 
 		  Temp.div(AverageLS);
@@ -650,7 +691,7 @@ int main(int argc, char *argv[])
 		  border_y = (new_ny - ny) / 2;
 		  border_z = (new_nz - nz) / 2;
 
-		  std::cout << "Create padded img.  Border : " << border_x << " x " << border_y << " x " << border_z << ". " << std::endl;
+		  std::cout << std::endl <<  "Create padded img.  Border : " << border_x << " x " << border_y << " x " << border_z << ". " << std::endl;
 		  CImg<> raw_original(raw_image);		//copy from raw image
 		  std::cout << "Image with padding size    : " << new_nx << " x " << new_ny << " x " << new_nz << ". ";
 		  raw_image.resize(new_nx, new_ny, new_nz);		//resize with border
@@ -684,7 +725,7 @@ int main(int argc, char *argv[])
 			  raw_image(x, y, z) = raw_original(x_raw, y_raw, z_raw);
 		  }
 		  //***debug padded image.
-		  if (true){
+		  if (false){
 			  std::cout << "Saving padded image... " << std::endl;
 			  makeDeskewedDir("Padded");
 			  CImg<unsigned short> uint16Img(raw_image);
@@ -698,7 +739,7 @@ int main(int argc, char *argv[])
 	  if (bSaveDeskewedRaw && (fabs(deskewAngle) > 0.0) ) {
 		  raw_deskewed.assign(deskewedXdim, new_ny, new_nz);
 
-		  if (it == all_matching_files.begin()) //make directory only on first call, and if we are saving Deskewed.
+		  if (it == all_matching_files.begin() + start) //make directory only on first call, and if we are saving Deskewed.
 			   makeDeskewedDir("Deskewed");
 	  }
 
@@ -732,9 +773,11 @@ int main(int argc, char *argv[])
 			  img_max = std::max(raw_image(x, y, z), img_max);
 			  img_min = std::min(raw_image(x, y, z), img_min);
 		  }
+
+#ifndef NDEBUG
 		  std::cout << "RL_image : " << raw_image.width() << " x " << raw_image.height() << " x " << raw_image.depth() << ". " << std::endl;
 		  std::cout << "         RL_image max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
-
+#endif
 
 
 		  float my_median = raw_image.median();
@@ -750,6 +793,7 @@ int main(int argc, char *argv[])
         break;
       }
 	  
+#ifndef NDEBUG
 	  img_max = raw_image(0, 0, 0);
 	  img_min = raw_image(0, 0, 0);
 	  cimg_forXYZ(raw_image, x, y, z){
@@ -758,6 +802,7 @@ int main(int argc, char *argv[])
 	  }
 	  std::cout << "output_image : " << raw_image.width() << " x " << raw_image.height() << " x " << raw_image.depth() << ". " << std::endl;
 	  std::cout << "         output_image max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
+#endif
 
 	  //****************************Crop***********************************
 
@@ -806,7 +851,7 @@ int main(int argc, char *argv[])
       }
 
 	  //****************************Save MIPs***********************************
-      if (it == all_matching_files.begin() && bDoMaxIntProj.size())
+      if (it == all_matching_files.begin() + start && bDoMaxIntProj.size())
         makeDeskewedDir("GPUdecon/MIPs");
 
       if (bDoMaxIntProj.size() == 3) {
@@ -824,10 +869,13 @@ int main(int argc, char *argv[])
         }
       }
 
-	  iter_duration = (std::clock() - start_t) / (double)CLOCKS_PER_SEC / (it - all_matching_files.begin() + 1 );
+	  iter_duration = (std::clock() - start_t) / (double)CLOCKS_PER_SEC / (it - (all_matching_files.begin() + start) + 1 );
     } // iteration over all_matching_files
 	duration = (std::clock() - start_t) / (double)CLOCKS_PER_SEC;
-	std::cout << duration << " seconds total, for " << all_matching_files.size() << " images." << duration / all_matching_files.size() << " seconds per image." << std::endl;
+
+	SetConsoleTextAttribute(hConsole, 10); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+	std::cout << "*** Finished! Elapsed " << duration << " seconds.  Processed " << all_matching_files.size() << " images.  " << duration / all_matching_files.size() << " seconds per image. ***" << std::endl;
+	SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
 
   } // try {} block
   catch (std::exception &e) {
