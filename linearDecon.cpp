@@ -159,7 +159,7 @@ int main(int argc, char *argv[])
   int Pad = 0;
   bool bFlatStartGuess = false;
   bool No_Bleach_correction = false;
-  int start = 0;
+  int skip = 0;
 
   TIFFSetWarningHandler(NULL);
 
@@ -200,13 +200,23 @@ int main(int argc, char *argv[])
 	("LSC", po::value<std::string>(&LSfile), "Lightsheet correction file")
 	("FlatStart", po::bool_switch(&bFlatStartGuess)->default_value(false), "Start the RL from a guess that is a flat image filled with the median image value.  This may supress noise.")
 	("NoBleachCorrection", po::bool_switch(&No_Bleach_correction)->default_value(false), "Does not apply bleach correction when running multiple images in a single batch.")
-	("start", po::value<int>(&start)->default_value(0), "Skip the first 'start' number of files.")
+	("skip", po::value<int>(&skip)->default_value(0), "Skip the first 'skip' number of files.")
     ("help,h", "This help message.")
     ;
   po::positional_options_description p;
   p.add("input-dir", 1);
   p.add("filename-pattern", 1);
   p.add("otf-file", 1);
+
+  
+  std::string commandline_string = __DATE__ ;
+  commandline_string.append(" ");
+  commandline_string.append(__TIME__);
+  for (int i = 0; i < argc; i++){
+	  commandline_string.append(" ");
+	  commandline_string.append(argv[i]);
+  } // store commandline_string
+
 
   // Parse commandline option:
   po::variables_map varsmap;
@@ -324,12 +334,12 @@ int main(int argc, char *argv[])
 
 
 
-	std::vector<std::string>::iterator next_it = all_matching_files.begin() + start;//make a second incrementer that will be used to load the next raw image while we process.
+	std::vector<std::string>::iterator next_it = all_matching_files.begin() + skip;//make a second incrementer that will be used to load the next raw image while we process.
 	
 	std::thread t1;
 	t1 = std::thread(load_next_thread, next_it->c_str());						//start loading the first file.
 	
-    for (std::vector<std::string>::iterator it= all_matching_files.begin() + start;
+    for (std::vector<std::string>::iterator it= all_matching_files.begin() + skip;
          it != all_matching_files.end(); it++) {
 		
 	  
@@ -338,7 +348,7 @@ int main(int argc, char *argv[])
 	  
 	  SetConsoleTextAttribute(hConsole, 10); // colors are 9=blue 10=green and so on to 15=white 
 	  std::cout << std::endl << "Loading raw_image: " << it - all_matching_files.begin() + 1 << " out of " << all_matching_files.size() << ".   ";
-	  if (it > all_matching_files.begin() + start) // if this isn't the first iteration.
+	  if (it > all_matching_files.begin() + skip) // if this isn't the first iteration.
 	  {
 		  int seconds = number_of_files_left * iter_duration;
 		  int hours = ceil(seconds / (60 * 60));
@@ -391,7 +401,7 @@ int main(int argc, char *argv[])
 
 	bool bDifferent_sized_raw_img = (nx != raw_image.width() || ny != raw_image.height() || nz != raw_image.depth() ); // Check if raw.image has changed size from first iteration
 
-	if (it != all_matching_files.begin() + start && bDifferent_sized_raw_img) {
+	if (it != all_matching_files.begin() + skip && bDifferent_sized_raw_img) {
 		SetConsoleTextAttribute(hConsole, 14); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
 		std::cout << std::endl << "File " << it - all_matching_files.begin() + 1 << " has a different size" << std::endl;
 	}
@@ -401,7 +411,7 @@ int main(int argc, char *argv[])
 
 	  
 	  //**************************** If first image OR if raw_img has changed size ***********************************
-      if (it == all_matching_files.begin() + start || bDifferent_sized_raw_img ) {
+      if (it == all_matching_files.begin() + skip || bDifferent_sized_raw_img ) {
         nx = raw_image.width();
         ny = raw_image.height();
         nz = raw_image.depth();
@@ -530,12 +540,13 @@ int main(int argc, char *argv[])
 
 		//****************************Create reusable cuFFT plans***********************************
         // 
-		
-			if (rfftplanGPU){ // if plan existed before, destroy it before creating a new plan.
+			size_t workSize = 0;
+
+			if (cufftGetSize(rfftplanGPU, &workSize) == CUFFT_SUCCESS){ // if plan existed before, destroy it before creating a new plan.
 				cufftDestroy(rfftplanGPU);
 				std::cout << "Destroying rfftplanGPU." << std::endl;
 			}
-			if (rfftplanInvGPU){ // if plan existed before, destroy it before creating a new plan.
+			if (cufftGetSize(rfftplanInvGPU, &workSize) == CUFFT_SUCCESS){ // if plan existed before, destroy it before creating a new plan.
 				cufftDestroy(rfftplanInvGPU);
 				std::cout << "Destroying rfftplanInvGPU." << std::endl;
 			}
@@ -729,6 +740,7 @@ int main(int argc, char *argv[])
 			  std::cout << "Saving padded image... " << std::endl;
 			  makeDeskewedDir("Padded");
 			  CImg<unsigned short> uint16Img(raw_image);
+			  uint16Img.SetDescription(commandline_string);
 			  uint16Img.save(makeOutputFilePath(*it, "Padded", "_padded").c_str());
 		  }
 		  std::cout << "Done." << std::endl;
@@ -739,7 +751,7 @@ int main(int argc, char *argv[])
 	  if (bSaveDeskewedRaw && (fabs(deskewAngle) > 0.0) ) {
 		  raw_deskewed.assign(deskewedXdim, new_ny, new_nz);
 
-		  if (it == all_matching_files.begin() + start) //make directory only on first call, and if we are saving Deskewed.
+		  if (it == all_matching_files.begin() + skip) //make directory only on first call, and if we are saving Deskewed.
 			   makeDeskewedDir("Deskewed");
 	  }
 
@@ -832,49 +844,60 @@ int main(int argc, char *argv[])
 
 	  //****************************Save Deskewed Raw***********************************
       if (bSaveDeskewedRaw) {
-       if (! bSaveUshort)
-          raw_deskewed.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
+		  if (!bSaveUshort){
+			  raw_deskewed.SetDescription(commandline_string);
+			  raw_deskewed.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
+		  }
         else {
           CImg<unsigned short> uint16Img(raw_deskewed);
+		  uint16Img.SetDescription(commandline_string);
           uint16Img.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
          }
       }
 
 	  //****************************Save Decon Image***********************************
       if (RL_iters || rotMatrix.getSize()) {
-        if (! bSaveUshort)
-          raw_image.save(makeOutputFilePath(*it).c_str());
+		  if (!bSaveUshort){
+			  raw_image.SetDescription(commandline_string);
+			  raw_image.save(makeOutputFilePath(*it).c_str());
+		  }
         else {
           CImg<unsigned short> uint16Img(raw_image);
+		  uint16Img.SetDescription(commandline_string);
           uint16Img.save(makeOutputFilePath(*it).c_str());
           }
       }
 
 	  //****************************Save MIPs***********************************
-      if (it == all_matching_files.begin() + start && bDoMaxIntProj.size())
+      if (it == all_matching_files.begin() + skip && bDoMaxIntProj.size())
         makeDeskewedDir("GPUdecon/MIPs");
 
       if (bDoMaxIntProj.size() == 3) {
         if (bDoMaxIntProj[0]) {
           CImg<> proj = MaxIntProj(raw_image, 0);
-          proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str());
+		  proj.SetDescription(commandline_string);
+		  proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str());
         }
         if (bDoMaxIntProj[1]) {
           CImg<> proj = MaxIntProj(raw_image, 1);
-          proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str());
+		  proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str());
         }
         if (bDoMaxIntProj[2]) {
           CImg<> proj = MaxIntProj(raw_image, 2);
+		  proj.SetDescription(commandline_string);		 
           proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str());
         }
       }
 
-	  iter_duration = (std::clock() - start_t) / (double)CLOCKS_PER_SEC / (it - (all_matching_files.begin() + start) + 1 );
+	  iter_duration = (std::clock() - start_t) / (double)CLOCKS_PER_SEC / (it - (all_matching_files.begin() + skip) + 1 );
     } // iteration over all_matching_files
 	duration = (std::clock() - start_t) / (double)CLOCKS_PER_SEC;
 
 	SetConsoleTextAttribute(hConsole, 10); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
-	std::cout << "*** Finished! Elapsed " << duration << " seconds.  Processed " << all_matching_files.size() << " images.  " << duration / all_matching_files.size() << " seconds per image. ***" << std::endl;
+	std::cout << "*** Finished! Elapsed " << duration << " seconds.  ";
+	if (skip != 0)
+		std::cout << "Skipped " << skip << "images.  ";
+	std::cout << "Processed " << all_matching_files.size() - skip << " images.  " << duration / all_matching_files.size() << " seconds per image. ***" << std::endl;
 	SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
 
   } // try {} block

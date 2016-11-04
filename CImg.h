@@ -77,6 +77,9 @@
 #include <cmath>
 #include <ctime>
 #include <exception>
+#include <string>
+
+
 
 // Detect/configure OS variables.
 //
@@ -9428,6 +9431,7 @@ namespace cimg_library_suffixed {
 
     unsigned int _width, _height, _depth, _spectrum;
     bool _is_shared;
+	std::string _description;
     T *_data;
 
     //! Simple iterator type, to loop through each pixel value of an image instance.
@@ -9865,7 +9869,7 @@ namespace cimg_library_suffixed {
     CImg(const CImg<t>& img):_is_shared(false) {
       const unsigned long siz = img.size();
       if (img._data && siz) {
-        _width = img._width; _height = img._height; _depth = img._depth; _spectrum = img._spectrum;
+		  _width = img._width; _height = img._height; _depth = img._depth; _spectrum = img._spectrum; _description = img._description;
         try { _data = new T[siz]; } catch (...) {
           _width = _height = _depth = _spectrum = 0; _data = 0;
           throw CImgInstanceException(_cimg_instance
@@ -9882,7 +9886,7 @@ namespace cimg_library_suffixed {
     CImg(const CImg<T>& img) {
       const unsigned long siz = img.size();
       if (img._data && siz) {
-        _width = img._width; _height = img._height; _depth = img._depth; _spectrum = img._spectrum; _is_shared = img._is_shared;
+		  _width = img._width; _height = img._height; _depth = img._depth; _spectrum = img._spectrum; _is_shared = img._is_shared; _description = img._description;
         if (_is_shared) _data = const_cast<T*>(img._data);
         else {
           try { _data = new T[siz]; } catch (...) {
@@ -9926,7 +9930,7 @@ namespace cimg_library_suffixed {
       }
       const unsigned long siz = img.size();
       if (img._data && siz) {
-        _width = img._width; _height = img._height; _depth = img._depth; _spectrum = img._spectrum;
+		  _width = img._width; _height = img._height; _depth = img._depth; _spectrum = img._spectrum; _description = img._description;
         try { _data = new T[siz]; } catch (...) {
           _width = _height = _depth = _spectrum = 0; _data = 0;
           throw CImgInstanceException(_cimg_instance
@@ -9943,7 +9947,7 @@ namespace cimg_library_suffixed {
     CImg(const CImg<T>& img, const bool is_shared) {
       const unsigned long siz = img.size();
       if (img._data && siz) {
-        _width = img._width; _height = img._height; _depth = img._depth; _spectrum = img._spectrum; _is_shared = is_shared;
+		  _width = img._width; _height = img._height; _depth = img._depth; _spectrum = img._spectrum; _is_shared = is_shared; _description = img._description;
         if (_is_shared) _data = const_cast<T*>(img._data);
         else {
           try { _data = new T[siz]; } catch (...) {
@@ -11683,6 +11687,16 @@ namespace cimg_library_suffixed {
     static const char* pixel_type() {
       return cimg::type<T>::string();
     }
+
+	//! Set image description string
+	/**
+		Set the image description
+	**/
+	void SetDescription(std::string descrip) {
+		_description = descrip;		
+	}
+
+
 
     //! Return the number of image columns.
     /**
@@ -22201,6 +22215,7 @@ namespace cimg_library_suffixed {
         if (boundary_conditions) cimg_forXYZC(res,x,y,z,c) res(x,y,z,c) = _atXYZC(nx0+x,ny0+y,nz0+z,nc0+c);
         else res.fill(0).draw_image(-nx0,-ny0,-nz0,-nc0,*this);
       } else res.draw_image(-nx0,-ny0,-nz0,-nc0,*this);
+	  res.SetDescription(_description); // Copy description from source image to cropped image.
       return res;
     }
 
@@ -40739,7 +40754,8 @@ namespace cimg_library_suffixed {
       rowsperstrip = TIFFDefaultStripSize(tif,rowsperstrip);
       TIFFSetField(tif,TIFFTAG_ROWSPERSTRIP,rowsperstrip);
       TIFFSetField(tif,TIFFTAG_FILLORDER,FILLORDER_MSB2LSB);
-      TIFFSetField(tif,TIFFTAG_SOFTWARE,"CImg");
+	  TIFFSetField(tif, TIFFTAG_SOFTWARE, "CImg 158");
+	  TIFFSetField(tif, TIFFTAG_IMAGEDESCRIPTION, _description.c_str());
       t *const buf = (t*)_TIFFmalloc(TIFFStripSize(tif));
       if (buf) {
         for (unsigned int row = 0; row<_height; row+=rowsperstrip) {

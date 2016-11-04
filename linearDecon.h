@@ -35,6 +35,7 @@
 #include <CImg.h>
 using namespace cimg_library;
 
+
 struct ImgParams {
   float dr, dz, wave;
 };

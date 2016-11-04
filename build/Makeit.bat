@@ -1,1 +1,1 @@
-nmake cudaDeconv otfviewer radialft libcudaDeconv && copy cudaDeconv.exe E:\CudaDecon\build /Y && copy ..\* E:\CudaDecon && copy cudaDeconv.exe "\\dm11\betziglab\Tool_Codes\Decon\GPU_decon\build\" /Y
+nmake && copy *.exe E:\CudaDecon\build /Y && copy ..\* E:\CudaDecon && copy *.exe "\\dm11\betziglab\Tool_Codes\Decon\GPU_decon\build\" /Y

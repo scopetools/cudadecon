@@ -15,6 +15,8 @@ namespace po = boost::program_options;
 #include <CImg.h>
 using namespace cimg_library;
 
+
+
 #ifdef _WIN32
 #define _USE_MATH_DEFINES
 #define rint(fp) (int)((fp) >= 0 ? (fp) + 0.5 : (fp) - 0.5)

@@ -6,6 +6,8 @@
 
 using namespace cimg_library;
 
+
+
 int main(int argc, char *argv[])
 {
   TIFFSetWarningHandler(NULL);
