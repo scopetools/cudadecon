@@ -541,6 +541,7 @@ int main(int argc, char *argv[])
 		//****************************Create reusable cuFFT plans***********************************
         // 
 			size_t workSize = 0;
+			cufftResult cuFFTErr;
 
 			if (cufftGetSize(rfftplanGPU, &workSize) == CUFFT_SUCCESS){ // if plan existed before, destroy it before creating a new plan.
 				cufftDestroy(rfftplanGPU);
@@ -555,12 +556,15 @@ int main(int argc, char *argv[])
 			cudaMemGetInfo(&GPUfree_prev, &GPUtotal);
 
 			
-          cufftResult cuFFTErr = cufftPlan3d(&rfftplanGPU, new_nz, new_ny, deskewedXdim, CUFFT_R2C);
+		  cuFFTErr = cufftPlan3d(&rfftplanGPU, new_nz, new_ny, deskewedXdim, CUFFT_R2C);
           if (cuFFTErr != CUFFT_SUCCESS) {
-			  std::cerr << "cufftPlan3d() r2c failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
-			cudaMemGetInfo(&GPUfree, &GPUtotal);
-			std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
-            throw std::runtime_error("cufftPlan3d() r2c failed.");
+				std::cerr << "cufftPlan3d() r2c failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
+				cudaMemGetInfo(&GPUfree, &GPUtotal);
+				std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
+				
+				cufftEstimate3d(new_nz, new_ny, deskewedXdim, CUFFT_R2C, &workSize);
+				std::cerr << "R2C FFT Plan desires " << workSize / (1024 * 1024) << " MB. " << std::endl;
+				throw std::runtime_error("cufftPlan3d() r2c failed.");
           }
 
 
@@ -570,7 +574,10 @@ int main(int argc, char *argv[])
 			  std::cerr << "cufftPlan3d() c2r failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
 			cudaMemGetInfo(&GPUfree, &GPUtotal);
 			std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
-            throw std::runtime_error("cufftPlan3d() c2r failed.");
+
+			cufftEstimate3d(new_nz, new_ny, deskewedXdim, CUFFT_R2C, &workSize);
+			std::cerr << "C2R FFT Plan desires " << workSize / (1024 * 1024) << " MB. " << std::endl;
+			throw std::runtime_error("cufftPlan3d() c2r failed.");
           }
 		  std::cout << "FFT plans allocated.    ";
 		  cudaMemGetInfo(&GPUfree, &GPUtotal);
