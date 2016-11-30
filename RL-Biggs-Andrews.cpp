@@ -81,14 +81,16 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   GPUBuffer X_k(nz * nxy * sizeof(float), myGPUdevice); // Estimate after RL iteration
   std::cout << "X_k allocated.          " ;
   cudaMemGetInfo(&free, &total);
-  std::cout << std::setw(8) << X_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+  std::cout << std::setw(8) << X_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free " ;
 
 
-
+  std::cout << "Pinning Host RAM.  ";
   cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable)); //pin the host RAM
   // transfer host data to GPU
+  std::cout << "Copy raw.data to X_k HostToDevice.  ";
   cutilSafeCall(cudaMemcpy(X_k.getPtr(), raw.data(), nz*nxy*sizeof(float),
                            cudaMemcpyHostToDevice));
+  std::cout << "Done.  " << std::endl;
 
 #ifndef NDEBUG
   printf("%f msecs\n", stopwatch.getTime());
@@ -119,32 +121,46 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     printf("intensity_overall=%lf\n", intensity_overall);
 #endif
   
+
+	//**************************** Deskew ***********************************
     if (fabs(deskewFactor) > 0.0) { //then deskew raw data along x-axis first:
 
 		GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), myGPUdevice);
+		std::cout << "deskewedRaw allocated.  ";
+		cudaMemGetInfo(&free, &total);
+		std::cout << std::setw(8) << X_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" ;
+		
+		std::cout << " Deskewing. ";
 		deskew_GPU(X_k, nx, ny, nz, deskewFactor, deskewedRaw, deskewedNx, extraShift);
 
       // update raw (i.e., X_k) and its dimension variables.
-      X_k = deskewedRaw;
+		std::cout << "Copy deskewedRaw back to X_k. ";
+		X_k = deskewedRaw;
+	  
+		nx = deskewedNx;
+		nxy = nx * ny;
+		nxy2 = (nx / 2 + 1)*ny; // x=N3, y=N2, z=N1 see: http://docs.nvidia.com/cuda/cufft/#multi-dimensional
 
-      nx = deskewedNx;
-      nxy = nx * ny;
-	  nxy2 = (nx / 2 + 1)*ny; // x=N3, y=N2, z=N1 see: http://docs.nvidia.com/cuda/cufft/#multi-dimensional
+		cutilSafeCall(cudaHostUnregister(raw.data()));
+		raw.clear();
+		raw.assign(nx, ny, nz, 1);
 
-      cutilSafeCall(cudaHostUnregister(raw.data()));
-      raw.clear();
-      raw.assign(nx, ny, nz, 1);
-      if (nIter > 0)
-        cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
+		if (nIter > 0)
+	        cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
 
-      if (raw_deskewed.size()>0) {
-// save deskewed raw data into "raw_deskewed"; if no decon iteration is requested, then return immediately.
-        cutilSafeCall(cudaMemcpy(raw_deskewed.data(), X_k.getPtr(),
+		if (raw_deskewed.size()>0) {
+			// save deskewed raw data into "raw_deskewed"; if no decon iteration is requested, then return immediately.
+			std::cout << "Copy X_k into raw_deskewed. " ;
+			cutilSafeCall(cudaMemcpy(raw_deskewed.data(), X_k.getPtr(),
                                  nz*nxy*sizeof(float), cudaMemcpyDeviceToHost));
         if (nIter == 0)
           return;
       }
+		std::cout << "Done." << std::endl;
     }
+
+
+	//**************************** Z blend ***********************************
 
     if (nZblend > 0)
       zBlend_GPU(X_k, nx, ny, nz, nZblend);
@@ -227,11 +243,12 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 	if (k > 1) {
 		lambda = calcAccelFactor(G_kminus1, G_kminus2, nx, ny, nz, eps, myGPUdevice); // (G_km1 dot G_km2) / (G_km2 dot G_km2)
 		lambda = std::max(std::min(lambda, 1.), 0.); // stability enforcement
-#ifndef NDEBUG
-		printf("labmda = %lf\n", lambda);
-#endif
+
+		printf("Lambda = %.2f. ", lambda);
+
 		updatePrediction(Y_k, X_k, X_kminus1, lambda, nx, ny, nz, devProp->maxGridSize[2]); // Y_k = X_k + lambda * (X_k - X_kminus1)
 	}
+	
 	else if (bFlatStartGuess && k == 0)
 	{
 		std::cout << "Median. ";
@@ -244,16 +261,23 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 		cutilSafeCall(cudaHostUnregister(FlatStartGuess.data()));
 		~FlatStartGuess;
 	}
+	
 	else
-      Y_k = X_k; // copy data from X_k to Y_k (= operator has been redefined)
+	{
+		std::cout << "Copy X_k to Y_k. ";
+		Y_k = X_k; // copy data (not pointer) from X_k to Y_k (= operator has been redefined)
+	}
+
 
 	std::cout << "Copy X_k to X_k-1. ";
     cutilSafeCall(cudaMemcpyAsync(X_kminus1.getPtr(), X_k.getPtr(),				//copy previous guess to X_kminus1
                                   X_k.getSize(), cudaMemcpyDeviceToDevice));
 	
-    if (k>0)
-      cutilSafeCall(cudaMemcpyAsync(G_kminus2.getPtr(), G_kminus1.getPtr(), 
-                                    G_kminus1.getSize(), cudaMemcpyDeviceToDevice));
+	if (k > 0){
+		std::cout << "Copy G_k-1 to G_k-2. ";
+		cutilSafeCall(cudaMemcpyAsync(G_kminus2.getPtr(), G_kminus1.getPtr(),
+			G_kminus1.getSize(), cudaMemcpyDeviceToDevice));
+	}
     
 	std::cout << "Filter1. ";
 	// b.  Make core for the LR estimation ( raw/reblurred_current_estimation )

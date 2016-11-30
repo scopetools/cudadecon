@@ -40,17 +40,19 @@ device_(device), size_(size), ptr_(0), Hostptr_(0)
 }
 
 GPUBuffer::GPUBuffer(const GPUBuffer& toCopy) :
-device_(toCopy.device_), size_(toCopy.size_), ptr_(0), Hostptr_(0)
+device_(toCopy.device_), size_(0), ptr_(0), Hostptr_(0)
 {
-  this->resize(size_);
-  toCopy.set(this, 0, size_, 0);
+	this->resize(toCopy.size_);
+	size_ = toCopy.size_;
+	toCopy.set(this, 0, size_, 0);
 }
 
 GPUBuffer::GPUBuffer(const Buffer& toCopy, int device) :
-device_(device), size_(toCopy.getSize()), ptr_(0), Hostptr_(0)
+device_(device), size_(0), ptr_(0), Hostptr_(0)
 {
-  this->resize(size_);
-  toCopy.set(this, 0, size_, 0);
+	this->resize(toCopy.getSize());
+	size_ = toCopy.getSize();
+	toCopy.set(this, 0, size_, 0);
 }
 
 GPUBuffer& GPUBuffer::operator=(const GPUBuffer& rhs) {
@@ -59,25 +61,25 @@ GPUBuffer& GPUBuffer::operator=(const GPUBuffer& rhs) {
         "Different devices in GPUBuffer::operator=.");
   }
   if (this != &rhs) {
-    size_ = rhs.getSize();
-    this->resize(size_);
-    rhs.set(this, 0, size_, 0);
+    this->resize(rhs.getSize()); //Set the left hand side to the correct size
+	size_ = rhs.getSize();
+    rhs.set(this, 0, size_, 0);  //Copy data from right hand side to left hand side.
   }
   return *this;
 }
 
 GPUBuffer& GPUBuffer::operator=(const CPUBuffer& rhs) {
+  this->resize(rhs.getSize());	//Set the left hand side to the correct size
   size_ = rhs.getSize();
-  this->resize(size_);
-  rhs.set(this, 0, size_, 0);
-  return *this;
+  rhs.set(this, 0, size_, 0);   //Copy data from right hand side to left hand side.
+  return *this;					
 }
 
 GPUBuffer::~GPUBuffer() {
     if (Hostptr_){
         cudaError_t err = cudaFreeHost(Hostptr_);
         if (err != cudaSuccess) {
-			std::cerr << "cudaFreeHost failed. Error code: " << err << ". " << cudaGetErrorString(err) << std::endl;
+			std::cerr << "cudaFreeHost failed during destructor. Error code: " << err << ". " << cudaGetErrorString(err) << std::endl;
 			std::cerr << "Hostptr_: " << (long long int)Hostptr_ << std::endl;
           throw std::runtime_error("cudaFreeHost failed.");
         }
@@ -88,7 +90,7 @@ GPUBuffer::~GPUBuffer() {
         if (ptr_) {
             cudaError_t err = cudaFree(ptr_);
             if (err != cudaSuccess) {
-				std::cerr << "CudaFree failed. Error code: " << err << ". " << cudaGetErrorString(err) << std::endl;
+				std::cerr << "CudaFree failed during destructor. Error code: " << err << ". " << cudaGetErrorString(err) << std::endl;
 				std::cerr << "ptr_: " << (long long int)ptr_ << std::endl;
                 throw std::runtime_error("cudaFree failed.");
             }
@@ -97,46 +99,60 @@ GPUBuffer::~GPUBuffer() {
 }
 
 void GPUBuffer::resize(size_t newsize) {
-    if (Hostptr_){
-        cudaError_t err = cudaFreeHost(Hostptr_);
-        if (err != cudaSuccess) {
-			std::cerr << "cudaFreeHost failed. Error code: " << err << ". " << cudaGetErrorString(err) << std::endl;
-			std::cerr << "Hostptr_: " << (long long int)Hostptr_ << std::endl;
-          throw std::runtime_error("cudaFreeHost failed.");
-        }
-        ptr_ = 0;
-        Hostptr_ = 0;
-    }
-    else
-        if (ptr_) {
-          cudaError_t err = cudaFree(ptr_);
-          if (err != cudaSuccess) {
-              throw std::runtime_error("cudaFree failed.");
-              }
-         ptr_ = 0;
-        }
-  cudaError_t err = cudaSetDevice(device_);
-  if (err != cudaSuccess) {
-    throw std::runtime_error("cudaSetDevice failed.");
-  }
-  size_ = newsize;
-  if (newsize > 0) {
-      err = cudaMalloc((void**)&ptr_, size_);
-      if (err != cudaSuccess) {
-          err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped); // if device allocation fails, try to allocate on Host
-          if (err != cudaSuccess)
-              throw std::runtime_error("cudaMalloc and cudaHostAlloc failed.");
-          else {
-              cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0);
-              size_t free;
-              size_t total;
-              cudaMemGetInfo(&free, &total);
-              if (firstcall)
-                  std::cout << "Resizing buffer. " << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
-              firstcall = false;
-          }
-      }
-  }
+	if (size_ != newsize){	// if we need to resize
+
+		if (Hostptr_){				// if this is a host pointer, then free it.
+			cudaError_t err = cudaFreeHost(Hostptr_);
+			if (err != cudaSuccess) {
+				std::cerr << "cudaFreeHost failed during resize. Error code: " << err << ". " << cudaGetErrorString(err) << std::endl;
+				std::cerr << "Hostptr_: " << (long long int)Hostptr_ << std::endl;
+				throw std::runtime_error("cudaFreeHost failed.");
+			}
+			ptr_ = 0;
+			Hostptr_ = 0;
+		}
+
+		else
+			if (ptr_) {				// if this is a GPU pointer, then free it.
+				cudaError_t err = cudaFree(ptr_);
+				if (err != cudaSuccess) {
+					throw std::runtime_error("cudaFree failed during resize.");
+				}
+				ptr_ = 0;
+			}
+
+
+		cudaError_t err = cudaSetDevice(device_);
+		if (err != cudaSuccess) {
+			throw std::runtime_error("cudaSetDevice failed during resize.");
+		}
+
+		size_ = newsize;
+
+		if (newsize > 0) {
+			err = cudaMalloc((void**)&ptr_, size_);
+
+			if (err != cudaSuccess) { // if device allocation fails, try to allocate on Host
+				err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped);
+				if (err != cudaSuccess) // if Host allocation failed.
+					throw std::runtime_error("cudaMalloc and cudaHostAlloc failed during resize.");
+				else {
+					cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0); //if succeeded, then get pointer
+					size_t free;
+					size_t total;
+					cudaMemGetInfo(&free, &total);
+					if (firstcall)
+						std::cout << "Resizing buffer. " << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
+					firstcall = false;
+				}
+			}
+
+		}
+	} //end if we need to resize
+	
+	//else
+		// std::cout << "Didn't need to resize.  size_ = " << size_ << " newsize = " << newsize << std::endl;
+
 }
 
 void GPUBuffer::setPtr(char* ptr, char* Hostptr, size_t size, int device)

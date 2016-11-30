@@ -71,4 +71,4 @@ cmake .. -G "Visual Studio 12 Wind64"
 Main function is in LinearDecon.cpp. 
 
 * Set windows display driver timeout to something larger (like 10 seconds instead of default 5 seconds) :
-reg.exe ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v "TdrDelay" /t REG_DWORD /D "10" /f
+reg.exe ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v "TdrDelay" /t REG_DWORD /D "30" /f
