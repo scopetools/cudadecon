@@ -23,27 +23,34 @@ class GPUBuffer : public Buffer {
   public:
     /** Constructor.  Creates a buffer on default cuda device 0.*/
     GPUBuffer();
+
     /** Create a buffer on a specific cuda device.
      * @param device Cuda device on which to create the Buffer.
      * */
-    GPUBuffer(int device);
+	GPUBuffer(int device, bool UseCudaHostOnly);
+
     /** Create a buffer of a certain size on a specific cuda device.
      * @param size Size of buffer in bytes.
      * @param device Cuda device on which to create the Buffer.
      * */
-    GPUBuffer(size_t size, int device);
+	GPUBuffer(size_t size, int device, bool UseCudaHostOnly);
+
     /** Copy constructor.*/
     GPUBuffer(const GPUBuffer& toCopy);
+
     /** Copy a GPU Buffer to a different device.
      * @param toCopy GPUBuffer that is to be copied.
      * @param device Cuda device on which to create the new GPUBuffer.*/
-    GPUBuffer(const Buffer& toCopy, int device);
+	GPUBuffer(const Buffer& toCopy, int device, bool UseCudaHostOnly);
+
     /** Set a GPUBuffer from a different GPUBuffer.
      * @param rhs GPUBuffer from which to set this GPUBuffer.*/
     GPUBuffer& operator=(const GPUBuffer& rhs);
+
     /** Set a GPUBuffer from a CPUBuffer.
      * @param rhs CPUBuffer from which to set this GPUBuffer.*/
     GPUBuffer& operator=(const CPUBuffer& rhs);
+
     /** Destructor.  Frees the GPU memory managed by this GPUBuffer.*/
     virtual ~GPUBuffer();
 
@@ -52,6 +59,7 @@ class GPUBuffer : public Buffer {
     virtual const void* getPtr() const { return ptr_; } ;
     void * getHostptr() { return Hostptr_; };
     const void* getHostptr() const { return Hostptr_; };
+
     /** Set the pointer managed by this GPUBuffer to ptr.  The memory
      * managed previously by this Buffer is released.
      * @param ptr Device pointer to GPU memory.
@@ -59,6 +67,7 @@ class GPUBuffer : public Buffer {
      * @param device Cuda device on which the memory pointed to by ptr
      * is located.*/
     virtual void setPtr(char* ptr, char *Hostptr, size_t size, int device);
+
     /** Change the size of the GPUBuffer.  The data held by the buffer
      * becomes invalid, even when the size of the buffer is increased.
      * Setting the size of the buffer to zero frees all GPU memory.
@@ -85,6 +94,7 @@ class GPUBuffer : public Buffer {
      * */
     virtual void setFrom(const CPUBuffer& src, size_t srcBegin,
         size_t srcEnd, size_t destBegin);
+
     /** Set this buffer from a src PinnedCPUBuffer.  Data transfers
      * between GPUBuffer and PinnedCPUBuffer objects are done
      * asynchronously.
@@ -95,6 +105,7 @@ class GPUBuffer : public Buffer {
      * */
     virtual void setFrom(const PinnedCPUBuffer& src, size_t srcBegin,
         size_t srcEnd, size_t destBegin);
+
     /** Set this buffer from a src GPUBuffer.  Currently only setting
      * from a buffer on the same device is supported.
      * @param src         Source buffer.
@@ -118,6 +129,7 @@ class GPUBuffer : public Buffer {
     size_t size_;
     char* ptr_;
     char* Hostptr_;
+	bool UseCudaHostOnly_;
 };
 
 #endif

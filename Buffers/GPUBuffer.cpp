@@ -1,29 +1,33 @@
 #include "GPUBuffer.h"
-
 #include "CPUBuffer.h"
 #include "PinnedCPUBuffer.h"
+#include <Windows.h>
+
 
 bool firstcall = true;
 
 GPUBuffer::GPUBuffer() :
-  device_(0), size_(0), ptr_(0), Hostptr_(0)
+device_(0), size_(0), ptr_(0), Hostptr_(0), UseCudaHostOnly_(false)
 {
 }
 
-GPUBuffer::GPUBuffer(int device) :
-  device_(device), size_(0), ptr_(0), Hostptr_(0)
+GPUBuffer::GPUBuffer(int device, bool UseCudaHostOnly) :
+device_(device), size_(0), ptr_(0), Hostptr_(0), UseCudaHostOnly_(UseCudaHostOnly)
 {
 }
 
-GPUBuffer::GPUBuffer(size_t size, int device) :
-device_(device), size_(size), ptr_(0), Hostptr_(0)
+GPUBuffer::GPUBuffer(size_t size, int device, bool UseCudaHostOnly) :
+device_(device), size_(size), ptr_(0), Hostptr_(0), UseCudaHostOnly_(UseCudaHostOnly)
 {
   cudaError_t err = cudaSetDevice(device_);
   if (err != cudaSuccess) {
     throw std::runtime_error("cudaSetDevice failed.");
   }
-  err = cudaMalloc((void**)&ptr_, size_);
-  if (err != cudaSuccess) {
+
+  if (!UseCudaHostOnly_)
+	err = cudaMalloc((void**)&ptr_, size_);
+
+  if (err != cudaSuccess || UseCudaHostOnly_) {
       err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped); // if device allocation fails, try to allocate on Host
       if (err != cudaSuccess) 
           throw std::runtime_error("cudaMalloc and cudaHostAlloc failed.");
@@ -32,23 +36,28 @@ device_(device), size_(size), ptr_(0), Hostptr_(0)
           size_t free;
           size_t total;
           cudaMemGetInfo(&free, &total);
-          if (firstcall)
-              std::cout << "Want new " << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
+		  if (firstcall){
+			  HANDLE  hConsole;
+			  hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+			  SetConsoleTextAttribute(hConsole, 6); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+			  std::cout << "Want new " << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
+			  SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+		  }
           firstcall = false;
       }
   }
 }
 
 GPUBuffer::GPUBuffer(const GPUBuffer& toCopy) :
-device_(toCopy.device_), size_(0), ptr_(0), Hostptr_(0)
+device_(toCopy.device_), size_(0), ptr_(0), Hostptr_(0), UseCudaHostOnly_(toCopy.UseCudaHostOnly_)
 {
 	this->resize(toCopy.size_);
 	size_ = toCopy.size_;
 	toCopy.set(this, 0, size_, 0);
 }
 
-GPUBuffer::GPUBuffer(const Buffer& toCopy, int device) :
-device_(device), size_(0), ptr_(0), Hostptr_(0)
+GPUBuffer::GPUBuffer(const Buffer& toCopy, int device, bool UseCudaHostOnly) :
+device_(device), size_(0), ptr_(0), Hostptr_(0), UseCudaHostOnly_(UseCudaHostOnly)
 {
 	this->resize(toCopy.getSize());
 	size_ = toCopy.getSize();
@@ -62,8 +71,10 @@ GPUBuffer& GPUBuffer::operator=(const GPUBuffer& rhs) {
   }
   if (this != &rhs) {
     this->resize(rhs.getSize()); //Set the left hand side to the correct size
+	//std::cout << "Resize complete. ";
 	size_ = rhs.getSize();
-    rhs.set(this, 0, size_, 0);  //Copy data from right hand side to left hand side.
+	rhs.set(this, 0, size_, 0);  //Copy data from right hand side to left hand side.
+	//std::cout << "rhs.set complete. ";
   }
   return *this;
 }
@@ -100,7 +111,7 @@ GPUBuffer::~GPUBuffer() {
 
 void GPUBuffer::resize(size_t newsize) {
 	if (size_ != newsize){	// if we need to resize
-
+		// std::cout << "Need to resize.  size_ = " << size_ << " newsize = " << newsize << std::endl;
 		if (Hostptr_){				// if this is a host pointer, then free it.
 			cudaError_t err = cudaFreeHost(Hostptr_);
 			if (err != cudaSuccess) {
@@ -130,19 +141,28 @@ void GPUBuffer::resize(size_t newsize) {
 		size_ = newsize;
 
 		if (newsize > 0) {
-			err = cudaMalloc((void**)&ptr_, size_);
+			if (!UseCudaHostOnly_)
+				err = cudaMalloc((void**)&ptr_, size_);
 
-			if (err != cudaSuccess) { // if device allocation fails, try to allocate on Host
+			if (err != cudaSuccess || UseCudaHostOnly_) { // if device allocation fails, try to allocate on Host
 				err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped);
 				if (err != cudaSuccess) // if Host allocation failed.
 					throw std::runtime_error("cudaMalloc and cudaHostAlloc failed during resize.");
 				else {
-					cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0); //if succeeded, then get pointer
+					err = cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0); //if succeeded, then get pointer
+					if (err != cudaSuccess) // if getting pointer failed.
+						throw std::runtime_error("cudaHostGetDevicePointer failed during resize.");
 					size_t free;
 					size_t total;
 					cudaMemGetInfo(&free, &total);
 					if (firstcall)
+					{
+						HANDLE  hConsole;
+						hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+						SetConsoleTextAttribute(hConsole, 6); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
 						std::cout << "Resizing buffer. " << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
+						SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+					}
 					firstcall = false;
 				}
 			}
@@ -151,7 +171,7 @@ void GPUBuffer::resize(size_t newsize) {
 	} //end if we need to resize
 	
 	//else
-		// std::cout << "Didn't need to resize.  size_ = " << size_ << " newsize = " << newsize << std::endl;
+		
 
 }
 

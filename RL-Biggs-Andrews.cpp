@@ -55,7 +55,8 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         int napodize, int nZblend,
                         CPUBuffer &rotationMatrix, cufftHandle rfftplanGPU, 
                         cufftHandle rfftplanInvGPU, CImg<> & raw_deskewed,
-						cudaDeviceProp *devProp, int myGPUdevice, bool bFlatStartGuess, float my_median, bool No_Bleach_correction)
+						cudaDeviceProp *devProp, int myGPUdevice, bool bFlatStartGuess, float my_median,
+						bool No_Bleach_correction, bool UseOnlyHostMem)
 {
 	size_t free; //for GPU memory profiling
 	size_t total;//for GPU memory profiling
@@ -78,7 +79,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 #endif
 
    // allocate buffers in GPU device 0
-  GPUBuffer X_k(nz * nxy * sizeof(float), myGPUdevice); // Estimate after RL iteration
+  GPUBuffer X_k(nz * nxy * sizeof(float), myGPUdevice, false); // Estimate after RL iteration
   std::cout << "X_k allocated.          " ;
   cudaMemGetInfo(&free, &total);
   std::cout << std::setw(8) << X_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free " ;
@@ -125,7 +126,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 	//**************************** Deskew ***********************************
     if (fabs(deskewFactor) > 0.0) { //then deskew raw data along x-axis first:
 
-		GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), myGPUdevice);
+		GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), myGPUdevice, UseOnlyHostMem);
 		std::cout << "deskewedRaw allocated.  ";
 		cudaMemGetInfo(&free, &total);
 		std::cout << std::setw(8) << X_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" ;
@@ -136,6 +137,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
       // update raw (i.e., X_k) and its dimension variables.
 		std::cout << "Copy deskewedRaw back to X_k. ";
 		X_k = deskewedRaw;
+		
 	  
 		nx = deskewedNx;
 		nxy = nx * ny;
@@ -167,35 +169,35 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   }
 
 
-  GPUBuffer rawGPUbuf(X_k, myGPUdevice);  // make a copy of raw image
+  GPUBuffer rawGPUbuf(X_k, myGPUdevice, UseOnlyHostMem);  // make a copy of raw image
   
   std::cout << "rawGPUbuf allocated.    " ;
   cudaMemGetInfo(&free, &total);
   std::cout << std::setw(8) << rawGPUbuf.getSize() / (1024*1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
   
 
-  GPUBuffer X_kminus1(nz * nxy * sizeof(float), myGPUdevice); // guess at the end of previous RL iteration
+  GPUBuffer X_kminus1(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // guess at the end of previous RL iteration
   std::cout << "X_kminus1 allocated.    " ;
   cudaMemGetInfo(&free, &total);
   std::cout << std::setw(8) << X_kminus1.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
 
-  GPUBuffer Y_k(nz * nxy * sizeof(float), myGPUdevice); // guess at beginning of RL iteration
+  GPUBuffer Y_k(nz * nxy * sizeof(float), myGPUdevice, false); // guess at beginning of RL iteration
   std::cout << "Y_k allocated.          " ;
   cudaMemGetInfo(&free, &total);
   std::cout << std::setw(8) << Y_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
-  GPUBuffer CC(nz * nxy * sizeof(float), myGPUdevice); // RL factor to apply to Y_k to get X_k
+  GPUBuffer CC(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // RL factor to apply to Y_k to get X_k
   std::cout << "CC allocated.           ";
   cudaMemGetInfo(&free, &total);
   std::cout << std::setw(8) << CC.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
-  GPUBuffer G_kminus1(nz * nxy * sizeof(float), myGPUdevice); // X_k - Y_k (RL change)
+  GPUBuffer G_kminus1(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // X_k - Y_k (RL change)
   std::cout << "G_kminus1 allocated.    ";
   cudaMemGetInfo(&free, &total);
   std::cout << std::setw(8) << G_kminus1.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
-  GPUBuffer G_kminus2(nz * nxy * sizeof(float), myGPUdevice); // previous X_k - Y_k (change between prediction and acceleration)
+  GPUBuffer G_kminus2(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // previous X_k - Y_k (change between prediction and acceleration)
   std::cout << "G_kminus2 allocated.    ";
   cudaMemGetInfo(&free, &total);
   std::cout << std::setw(8) << G_kminus2.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
@@ -221,7 +223,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   debugging code ends
 */
   // Allocate GPU buffer for temp FFT result
-  GPUBuffer fftGPUbuf(nz * nxy2 * sizeof(cuFloatComplex), myGPUdevice); // This is the complex FFT output.
+  GPUBuffer fftGPUbuf(nz * nxy2 * sizeof(cuFloatComplex), myGPUdevice, UseOnlyHostMem); // This is the complex FFT output.
   std::cout << "fftGPUbuf allocated.    ";
   cudaMemGetInfo(&free, &total);
   std::cout << std::setw(8) << fftGPUbuf.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
@@ -318,9 +320,9 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   // Rotate decon result if requested:
   
   if (rotationMatrix.getSize()) {
-	  GPUBuffer d_rotatedResult(nz * nxy * sizeof(float), myGPUdevice);
+	  GPUBuffer d_rotatedResult(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem);
 
-	  GPUBuffer d_rotMatrix(rotationMatrix, myGPUdevice);
+	  GPUBuffer d_rotMatrix(rotationMatrix, myGPUdevice, UseOnlyHostMem);
 
     rotate_GPU(X_k, nx, ny, nz, d_rotMatrix, d_rotatedResult);
     // Download from device memory back to "raw":
@@ -352,7 +354,7 @@ double deskewFactor;
 unsigned deskewedXdim;
 CPUBuffer rotMatrix;
 cufftHandle rfftplanGPU, rfftplanInvGPU;
-GPUBuffer d_interpOTF(0); // since this is a global, just leave device empty.  It will probably default to GPU 0.
+GPUBuffer d_interpOTF(0, false); // since this is a global for th RL_interface dll, just leave device empty.  It will probably default to GPU 0.
 
 unsigned get_output_nx()
 {
@@ -493,7 +495,7 @@ int RL_interface(const unsigned short * const raw_data,
   CImg<> raw_deskewed;
   RichardsonLucy_GPU(raw_image, background, d_interpOTF, nIters,
                      deskewFactor, deskewedXdim, extraShift, 15, 10, rotMatrix,
-					 rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp, myGPUdevice, false, 1, true);
+					 rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp, myGPUdevice, false, 1, true, false);
 
   // Copy deconvolved data, stored in raw_image, to "result" for return:
   memcpy(result, raw_image.data(), raw_image.size() * sizeof(float));

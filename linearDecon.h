@@ -106,7 +106,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         CPUBuffer &rotationMatrix,
                         cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU,
 						CImg<> & raw_deskewed, cudaDeviceProp* devprop, int myGPUdevice, bool bFlatStartGuess, 
-						float my_median, bool No_Bleach_correction);
+						float my_median, bool No_Bleach_correction, bool UseOnlyHostMem);
 
 CImg<> MaxIntProj(CImg<> &input, int axis);
 

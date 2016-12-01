@@ -159,6 +159,7 @@ int main(int argc, char *argv[])
   int Pad = 0;
   bool bFlatStartGuess = false;
   bool No_Bleach_correction = false;
+  bool UseOnlyHostMem = false;
   int skip = 0;
 
   TIFFSetWarningHandler(NULL);
@@ -201,6 +202,7 @@ int main(int argc, char *argv[])
 	("FlatStart", po::bool_switch(&bFlatStartGuess)->default_value(false), "Start the RL from a guess that is a flat image filled with the median image value.  This may supress noise.")
 	("NoBleachCorrection", po::bool_switch(&No_Bleach_correction)->default_value(false), "Does not apply bleach correction when running multiple images in a single batch.")
 	("skip", po::value<int>(&skip)->default_value(0), "Skip the first 'skip' number of files.")
+	("UseOnlyHostMem", po::bool_switch(&UseOnlyHostMem)->default_value(false), "Just use Host Mapped Memory, and not GPU.")
     ("help,h", "This help message.")
     ;
   po::positional_options_description p;
@@ -309,7 +311,7 @@ int main(int argc, char *argv[])
   unsigned new_ny, new_nz, new_nx;
   int deskewedXdim = 0;
   cufftHandle rfftplanGPU, rfftplanInvGPU;
-  GPUBuffer d_interpOTF(0, myGPUdevice);
+  GPUBuffer d_interpOTF(0, myGPUdevice, UseOnlyHostMem);
 
   cudaDeviceProp deviceProp;
   cudaGetDeviceProperties(&deviceProp, myGPUdevice);
@@ -805,7 +807,8 @@ int main(int argc, char *argv[])
 		  //**********************************************************************************************************
         RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters, deskewFactor,
                            deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
-						   rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp, myGPUdevice, bFlatStartGuess, my_median, No_Bleach_correction);
+						   rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp, myGPUdevice, 
+						   bFlatStartGuess, my_median, No_Bleach_correction, UseOnlyHostMem);
       }
       else {
         std::cerr << "Nothing is performed\n";
