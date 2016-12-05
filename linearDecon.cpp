@@ -10,8 +10,7 @@
 #pragma warning(disable : 4305) // Disregard loss of data from double to float.
 
 CImg<> next_raw_image;
-
-
+CImg<> ToSave;
 
 int load_next_thread(const char* my_path)
 {
@@ -32,6 +31,13 @@ int load_next_thread(const char* my_path)
 	return 0;
 }
 
+
+int save_in_thread(const char* my_path)
+{
+	ToSave.save(my_path);
+
+	return 0;
+}
 
 std::complex<float> otfinterpolate(std::complex<float> * otf, float kx, float ky, float kz, int nzotf, int nrotf)
 // Use sub-pixel coordinates (kx,ky,kz) to linearly interpolate a rotationally-averaged 3D OTF ("otf").
@@ -134,8 +140,8 @@ int main(int argc, char *argv[])
 
 	HANDLE  hConsole;
 	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+	start_t = std::clock();
 
-  start_t = std::clock();
   int napodize, nZblend;
   float background;
   float NA=1.2;
@@ -340,6 +346,7 @@ int main(int argc, char *argv[])
 	
 	std::thread t1;
 	t1 = std::thread(load_next_thread, next_it->c_str());						//start loading the first file.
+	std::thread tsave;	// make thread for saving decon
 	
     for (std::vector<std::string>::iterator it= all_matching_files.begin() + skip;
          it != all_matching_files.end(); it++) {
@@ -363,11 +370,11 @@ int main(int argc, char *argv[])
 
 
 	  std::cout << std::endl << *it << std::endl;
-	  std::cout << "Waiting for separate thread to load img..." ;
+	  std::cout << "Waiting for separate thread to finish loading image... " ;
 	  t1.join();		// wait for loading thread to finish reading next_raw_image into memory.
 	  t1.~thread();		// destroy thread.
 
-	  std::cout << "Loaded. Copying img to raw..." ;
+	  std::cout << "Image loaded. Copying to raw... " ;
 	  raw_image.assign(next_raw_image); // Copy to raw_image. 
 	  
 	  float img_max = raw_image(0, 0);
@@ -786,22 +793,23 @@ int main(int argc, char *argv[])
         fftwf_execute_dft_c2r(rfftplan_inv, (fftwf_complex *) raw_imageFFT.data(), raw_image.data());
         raw_image /= raw_image.size();
       }
-      else if (RL_iters || raw_deskewed.size() || rotMatrix.getSize()) {
 
+
+	  else if (RL_iters || raw_deskewed.size() || rotMatrix.getSize()) {
+#ifndef NDEBUG
 		  img_max = raw_image(0, 0, 0);
 		  img_min = raw_image(0, 0, 0);
 		  cimg_forXYZ(raw_image, x, y, z){
 			  img_max = std::max(raw_image(x, y, z), img_max);
 			  img_min = std::min(raw_image(x, y, z), img_min);
 		  }
-
-#ifndef NDEBUG
 		  std::cout << "RL_image : " << raw_image.width() << " x " << raw_image.height() << " x " << raw_image.depth() << ". " << std::endl;
 		  std::cout << "         RL_image max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
 #endif
+		  float my_median = 1;
+		  if (bFlatStartGuess)
+			my_median = raw_image.median();
 
-
-		  float my_median = raw_image.median();
 		  //**********************************************************************************************************
 		  //****************************Run RL GPU********************************************************************
 		  //**********************************************************************************************************
@@ -852,6 +860,12 @@ int main(int argc, char *argv[])
 
 
 
+	  if (tsave.joinable()){
+		  tsave.join();		// wait for previous saving thread to finish.
+		  tsave.~thread();		// destroy thread.
+	  }
+
+
 	  //****************************Save Deskewed Raw***********************************
       if (bSaveDeskewedRaw) {
 		  if (!bSaveUshort){
@@ -865,19 +879,7 @@ int main(int argc, char *argv[])
          }
       }
 
-	  //****************************Save Decon Image***********************************
-      if (RL_iters || rotMatrix.getSize()) {
-		  if (!bSaveUshort){
-			  raw_image.SetDescription(commandline_string);
-			  raw_image.save(makeOutputFilePath(*it).c_str());
-		  }
-        else {
-          CImg<unsigned short> uint16Img(raw_image);
-		  uint16Img.SetDescription(commandline_string);
-          uint16Img.save(makeOutputFilePath(*it).c_str());
-          }
-      }
-
+	  
 	  //****************************Save MIPs***********************************
       if (it == all_matching_files.begin() + skip && bDoMaxIntProj.size())
         makeDeskewedDir("GPUdecon/MIPs");
@@ -899,8 +901,34 @@ int main(int argc, char *argv[])
         }
       }
 
+	  //****************************Save Decon Image***********************************
+	  if (RL_iters || rotMatrix.getSize()) {
+		  if (!bSaveUshort){
+
+			  ToSave.assign(raw_image); //copy decon image (i.e. raw_image) to new image space for saving.
+			  ToSave.SetDescription(commandline_string);
+			  // ToSave.save(makeOutputFilePath(*it).c_str());
+
+			  tsave = std::thread(save_in_thread, makeOutputFilePath(*it).c_str()); //start saving this file.
+		  }
+		  else {
+			  CImg<unsigned short> uint16Img(raw_image);
+			  uint16Img.SetDescription(commandline_string);
+			  uint16Img.save(makeOutputFilePath(*it).c_str());
+		  }
+	  }
+
+
 	  iter_duration = (std::clock() - start_t) / (double)CLOCKS_PER_SEC / (it - (all_matching_files.begin() + skip) + 1 );
     } // iteration over all_matching_files
+
+	if (tsave.joinable()){
+		tsave.join();		// wait for previous saving thread to finish.
+		tsave.~thread();		// destroy thread.
+	} //Make sure we have finished saving.
+	
+
+
 	duration = (std::clock() - start_t) / (double)CLOCKS_PER_SEC;
 
 	SetConsoleTextAttribute(hConsole, 10); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
