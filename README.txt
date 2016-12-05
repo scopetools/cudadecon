@@ -72,3 +72,9 @@ Main function is in LinearDecon.cpp.
 
 * Set windows display driver timeout to something larger (like 10 seconds instead of default 5 seconds) :
 reg.exe ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v "TdrDelay" /t REG_DWORD /D "30" /f
+
+* Better yet, use a second GPU.  The GPU you wish to use for computation only should use the TCC driver (must be a Titan 
+	or Tesla or other GPU that supports TCC).  This card should be initialized after the display GPU, so put the compute 
+	card in a slot that is > display card.  The TCC driver is selected with NVIDIAsmi.exe -L from an administrator cmd window
+	to show the GPUs, then NVIDIAsmi.exe -dm 1 -i 0 to set TCC on GPU 0.  Then use "set CUDA_VISIBLE_DEVICES" to pick 
+	the GPU the deconv code should execute on. 

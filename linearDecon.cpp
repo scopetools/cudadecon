@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
 	("FlatStart", po::bool_switch(&bFlatStartGuess)->default_value(false), "Start the RL from a guess that is a flat image filled with the median image value.  This may supress noise.")
 	("NoBleachCorrection", po::bool_switch(&No_Bleach_correction)->default_value(false), "Does not apply bleach correction when running multiple images in a single batch.")
 	("skip", po::value<int>(&skip)->default_value(0), "Skip the first 'skip' number of files.")
-	("UseOnlyHostMem", po::bool_switch(&UseOnlyHostMem)->default_value(false), "Just use Host Mapped Memory, and not GPU.")
+	// ("UseOnlyHostMem", po::bool_switch(&UseOnlyHostMem)->default_value(false), "Just use Host Mapped Memory, and not GPU. For debugging only.")
     ("help,h", "This help message.")
     ;
   po::positional_options_description p;

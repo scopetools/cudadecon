@@ -90,7 +90,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   // transfer host data to GPU
   std::cout << "Copy raw.data to X_k HostToDevice.  ";
   cutilSafeCall(cudaMemcpy(X_k.getPtr(), raw.data(), nz*nxy*sizeof(float),
-                           cudaMemcpyHostToDevice));
+	  cudaMemcpyDefault));
   std::cout << "Done.  " << std::endl;
 
 #ifndef NDEBUG
@@ -154,7 +154,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 			// save deskewed raw data into "raw_deskewed"; if no decon iteration is requested, then return immediately.
 			std::cout << "Copy X_k into raw_deskewed. " ;
 			cutilSafeCall(cudaMemcpy(raw_deskewed.data(), X_k.getPtr(),
-                                 nz*nxy*sizeof(float), cudaMemcpyDeviceToHost));
+				nz*nxy*sizeof(float), cudaMemcpyDefault));
         if (nIter == 0)
           return;
       }
@@ -259,7 +259,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 		cutilSafeCall(cudaHostRegister(FlatStartGuess.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable)); //pin the host RAM
 		// transfer host data to GPU
 		cutilSafeCall(cudaMemcpy(Y_k.getPtr(), FlatStartGuess.data(), nz*nxy*sizeof(float),
-			cudaMemcpyHostToDevice));
+			cudaMemcpyDefault));
 		cutilSafeCall(cudaHostUnregister(FlatStartGuess.data()));
 		~FlatStartGuess;
 	}
@@ -273,12 +273,12 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
 	std::cout << "Copy X_k to X_k-1. ";
     cutilSafeCall(cudaMemcpyAsync(X_kminus1.getPtr(), X_k.getPtr(),				//copy previous guess to X_kminus1
-                                  X_k.getSize(), cudaMemcpyDeviceToDevice));
+		X_k.getSize(), cudaMemcpyDefault));
 	
 	if (k > 0){
 		std::cout << "Copy G_k-1 to G_k-2. ";
 		cutilSafeCall(cudaMemcpyAsync(G_kminus2.getPtr(), G_kminus1.getPtr(),
-			G_kminus1.getSize(), cudaMemcpyDeviceToDevice));
+			G_kminus1.getSize(), cudaMemcpyDefault));
 	}
     
 	std::cout << "Filter1. ";
@@ -327,13 +327,13 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     rotate_GPU(X_k, nx, ny, nz, d_rotMatrix, d_rotatedResult);
     // Download from device memory back to "raw":
     cutilSafeCall(cudaMemcpy(raw.data(), d_rotatedResult.getPtr(), nz*nxy*sizeof(float),
-                             cudaMemcpyDeviceToHost));
+		cudaMemcpyDefault));
   }
 
   else {
     // Download from device memory back to "raw":
     cutilSafeCall(cudaMemcpy(raw.data(), X_k.getPtr(), nz*nxy*sizeof(float),
-                             cudaMemcpyDeviceToHost));
+		cudaMemcpyDefault));
   }
 
   if (nIter > 0)

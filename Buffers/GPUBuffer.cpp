@@ -24,14 +24,17 @@ device_(device), size_(size), ptr_(0), Hostptr_(0), UseCudaHostOnly_(UseCudaHost
     throw std::runtime_error("cudaSetDevice failed.");
   }
 
-  if (!UseCudaHostOnly_)
-	err = cudaMalloc((void**)&ptr_, size_);
+  if (!UseCudaHostOnly_){
+	  err = cudaMalloc((void**)&ptr_, size_);
+	  cudaDeviceSynchronize();
+  }
 
   if (err != cudaSuccess || UseCudaHostOnly_) {
       err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped); // if device allocation fails, try to allocate on Host
       if (err != cudaSuccess) 
           throw std::runtime_error("cudaMalloc and cudaHostAlloc failed.");
       else {
+		  cudaDeviceSynchronize();
           cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0);
           size_t free;
           size_t total;
@@ -87,7 +90,8 @@ GPUBuffer& GPUBuffer::operator=(const CPUBuffer& rhs) {
 }
 
 GPUBuffer::~GPUBuffer() {
-    if (Hostptr_){
+	cudaDeviceSynchronize();
+	if (Hostptr_){
         cudaError_t err = cudaFreeHost(Hostptr_);
         if (err != cudaSuccess) {
 			std::cerr << "cudaFreeHost failed during destructor. Error code: " << err << ". " << cudaGetErrorString(err) << std::endl;
@@ -141,8 +145,10 @@ void GPUBuffer::resize(size_t newsize) {
 		size_ = newsize;
 
 		if (newsize > 0) {
-			if (!UseCudaHostOnly_)
+			if (!UseCudaHostOnly_){
 				err = cudaMalloc((void**)&ptr_, size_);
+				cudaDeviceSynchronize();
+			}
 
 			if (err != cudaSuccess || UseCudaHostOnly_) { // if device allocation fails, try to allocate on Host
 				err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped);
@@ -164,6 +170,7 @@ void GPUBuffer::resize(size_t newsize) {
 						SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
 					}
 					firstcall = false;
+					cudaDeviceSynchronize();
 				}
 			}
 
@@ -209,7 +216,7 @@ void GPUBuffer::setFrom(const CPUBuffer& src, size_t srcBegin,
   }
   cudaError_t err = cudaMemcpy(ptr_ + destBegin,
       (char*)src.getPtr() + srcBegin, srcEnd - srcBegin,
-      cudaMemcpyHostToDevice);
+	  cudaMemcpyDefault);
   if (err != cudaSuccess) {
     throw std::runtime_error("cudaMemcpy failed.");
   }
@@ -227,7 +234,7 @@ void GPUBuffer::setFrom(const PinnedCPUBuffer& src, size_t srcBegin,
   }
   cudaError_t err = cudaMemcpyAsync(ptr_ + destBegin,
       (char*)src.getPtr() + srcBegin, srcEnd - srcBegin,
-      cudaMemcpyHostToDevice, 0);
+	  cudaMemcpyDefault, 0);
   if (err != cudaSuccess) {
     throw std::runtime_error("cudaMemcpy failed.");
   }
@@ -245,7 +252,7 @@ void GPUBuffer::setFrom(const GPUBuffer& src, size_t srcBegin,
   }
   cudaError_t err = cudaMemcpy(ptr_ + destBegin,
       (char*)src.getPtr() + srcBegin, srcEnd - srcBegin,
-      cudaMemcpyDeviceToDevice);
+	  cudaMemcpyDefault);
   if (err != cudaSuccess) {
     throw std::runtime_error("cudaMemcpy failed.");
   }
