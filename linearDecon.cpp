@@ -491,6 +491,7 @@ int main(int argc, char *argv[])
 		//****************************Construct deskew matrix***********************************
         deskewedXdim = new_nx;
         if (fabs(deskewAngle) > 0.0) {
+			float old_dz = imgParams.dz;
           if (deskewAngle <0) deskewAngle += 180.;
           deskewFactor = cos(deskewAngle * M_PI/180.) * imgParams.dz / imgParams.dr;
           if (outputWidth ==0)
@@ -506,9 +507,15 @@ int main(int argc, char *argv[])
 
           // update z step size:
           imgParams.dz *= sin(deskewAngle * M_PI/180.);
-
-          printf("deskewFactor=%f, new nx=%d\n", deskewFactor, deskewedXdim);
-        }
+		  if (fabs(deskewFactor) < 1)
+		  {
+			  SetConsoleTextAttribute(hConsole, 14); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+			  printf("Warning : deskewFactor is < 1.  Check that angle, dz, and dr sizes are correct.\n");
+			  SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+		  }
+		  printf("old dz = %f, dxy = %f, deskewFactor = %f, new nx = %d, new dz = %f\n", old_dz, imgParams.dr, deskewFactor, deskewedXdim, imgParams.dz);
+		  
+		}
 
 
 
@@ -909,7 +916,7 @@ int main(int argc, char *argv[])
 			  ToSave.SetDescription(commandline_string);
 			  // ToSave.save(makeOutputFilePath(*it).c_str());
 
-			  tsave = std::thread(save_in_thread, *it); //start saving this file.
+			  tsave = std::thread(save_in_thread, *it); //start saving "To Save" file.
 		  }
 		  else {
 			  CImg<unsigned short> uint16Img(raw_image);
