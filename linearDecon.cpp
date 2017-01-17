@@ -32,9 +32,9 @@ int load_next_thread(const char* my_path)
 }
 
 
-int save_in_thread(const char* my_path)
+int save_in_thread(std::string inputFileName)
 {
-	ToSave.save(my_path);
+	ToSave.save(makeOutputFilePath(inputFileName).c_str());
 
 	return 0;
 }
@@ -909,7 +909,7 @@ int main(int argc, char *argv[])
 			  ToSave.SetDescription(commandline_string);
 			  // ToSave.save(makeOutputFilePath(*it).c_str());
 
-			  tsave = std::thread(save_in_thread, makeOutputFilePath(*it).c_str()); //start saving this file.
+			  tsave = std::thread(save_in_thread, *it); //start saving this file.
 		  }
 		  else {
 			  CImg<unsigned short> uint16Img(raw_image);
@@ -924,7 +924,7 @@ int main(int argc, char *argv[])
 
 	if (tsave.joinable()){
 		tsave.join();		// wait for previous saving thread to finish.
-		tsave.~thread();		// destroy thread.
+		tsave.~thread();	// destroy thread.
 	} //Make sure we have finished saving.
 	
 

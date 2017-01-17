@@ -235,7 +235,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   
   
   //****************************************************************************
-  //****************************RL Iteration ***********************************
+  //****************************RL Iterations ***********************************
   //****************************************************************************
   
   // R-L iteration
@@ -313,13 +313,14 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   }
 
   //************************************************************************************
-  //****************************RL Iteration complete***********************************
+  //****************************RL Iterations complete***********************************
   //************************************************************************************
 
 
   // Rotate decon result if requested:
   
   if (rotationMatrix.getSize()) {
+	  std::cout << "Rotating...";
 	  GPUBuffer d_rotatedResult(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem);
 
 	  GPUBuffer d_rotMatrix(rotationMatrix, myGPUdevice, UseOnlyHostMem);
@@ -328,6 +329,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     // Download from device memory back to "raw":
     cutilSafeCall(cudaMemcpy(raw.data(), d_rotatedResult.getPtr(), nz*nxy*sizeof(float),
 		cudaMemcpyDefault));
+	std::cout << "Done." << std::endl;
   }
 
   else {
