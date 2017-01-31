@@ -31,6 +31,10 @@ set(SCI_GROUP_WRITE GROUP_WRITE)
 set(SCI_WORLD_FILE_PERMS WORLD_READ)
 set(SCI_WORLD_PROGRAM_PERMS WORLD_READ WORLD_EXECUTE)
 
+
+
+
+
 # If no CMAKE_BUILD_TYPE is specified on command line, Windows and Unix
 # give different treatments. On Windows, CMAKE_BUILD_TYPE is defaulted to
 # "Debug"; on Unix, it's some empty string that cannot be legally placed in
@@ -177,6 +181,14 @@ else()
   include_directories( ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc )
 endif()
 
+
+
+
+##### Make this everything time so that linearDecon.cpp is remade each time.  This will ensure that the build date is correct #####
+#add_custom_target(invalidate_files ALL
+#                  COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_SOURCE_DIR}/linearDecon.cpp")
+
+
 ######################################################################
 #
 # Add build outputs and their dependencies
@@ -250,6 +262,7 @@ target_link_libraries(
   ${X11_X11_LIB}
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
   ${Boost_FILESYSTEM_LIBRARY}
+  ${Boost_PREDICATE_LIBRARY}
 #  ${Boost_REGEX_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
@@ -278,6 +291,7 @@ target_link_libraries(
   ${X11_X11_LIB}
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
   ${Boost_FILESYSTEM_LIBRARY}
+ ${Boost_PREDICATE_LIBRARY}
 #  ${Boost_REGEX_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}

@@ -11,6 +11,8 @@
 
 CImg<> next_raw_image;
 CImg<> ToSave;
+CImg<unsigned short> U16ToSave;
+CImg<> DeskewedToSave;
 
 int load_next_thread(const char* my_path)
 {
@@ -38,6 +40,21 @@ int save_in_thread(std::string inputFileName)
 
 	return 0;
 }
+
+int U16save_in_thread(std::string inputFileName)
+{
+	U16ToSave.save(makeOutputFilePath(inputFileName).c_str());
+
+	return 0;
+}
+
+int DeSkewsave_in_thread(std::string inputFileName)
+{
+	DeskewedToSave.save(makeOutputFilePath(inputFileName, "Deskewed", "_deskewed").c_str());
+	//raw_deskewed.save(makeOutputFilePath(*it,			  "Deskewed", "_deskewed").c_str());
+	return 0;
+}
+
 
 std::complex<float> otfinterpolate(std::complex<float> * otf, float kx, float ky, float kz, int nzotf, int nrotf)
 // Use sub-pixel coordinates (kx,ky,kz) to linearly interpolate a rotationally-averaged 3D OTF ("otf").
@@ -149,7 +166,7 @@ int main(int argc, char *argv[])
   float dz_psf, dr_psf;
   float wiener;
 
-  int myGPUdevice;
+  int myGPUdevice=0;
   int RL_iters=0;
   bool bSaveDeskewedRaw = false;
   bool bDontAdjustResolution = false;
@@ -166,11 +183,12 @@ int main(int argc, char *argv[])
   bool bFlatStartGuess = false;
   bool No_Bleach_correction = false;
   bool UseOnlyHostMem = false;
+  bool no_overwrite = false;
   int skip = 0;
 
   TIFFSetWarningHandler(NULL);
 
-  std::string datafolder, datafolderB, filenamePattern, filenamePatternB, otffiles, otffilesB, LSfile;
+  std::string datafolder, filenamePattern, otffiles, LSfile;
   po::options_description progopts;
   progopts.add_options()
 	  ("drdata", po::value<float>(&imgParams.dr)->default_value(.104), "Image x-y pixel size (um)")
@@ -189,25 +207,21 @@ int main(int argc, char *argv[])
 	  ("shift,x", po::value<int>(&extraShift)->default_value(0), "If deskewed, the output image's extra shift in X (positive->left")
 	  ("rotate,R", po::value<float>(&rotationAngle)->default_value(0.0), "Rotation angle; if not 0.0 then perform rotation around y axis after deconv")
 	  ("saveDeskewedRaw,S", po::bool_switch(&bSaveDeskewedRaw)->default_value(false), "Save deskewed raw data to files")
-	  // ("crop,C", po::value< std::vector<int> >(&final_CropTo_boundaries)->multitoken(), "takes 6 integers separated by space: x1 x2 y1 y2 z1 z2; crop final image size to [x1:x2, y1:y2, z1:z2]")
-	  // ("MIP,M", po::value< std::vector<bool> >(&bDoMaxIntProj)->multitoken(), "takes 3 binary numbers separated by space to indicate whether save a max-intensity projection along x, y, or z axis")
 	  ("crop,C", fixed_tokens_value< std::vector<int> >(&final_CropTo_boundaries, 6, 6), "Crop final image size to [x1:x2, y1:y2, z1:z2]; takes 6 integers separated by space: x1 x2 y1 y2 z1 z2; ")
 	  ("MIP,M", fixed_tokens_value< std::vector<bool> >(&bDoMaxIntProj, 3, 3), "Save max-intensity projection along x, y, or z axis; takes 3 binary numbers separated by space: 0 0 1")
     ("uint16,u", po::bool_switch(&bSaveUshort)->implicit_value(true), "Save result in uint16 format; should be used only if no actual decon is performed")
     ("input-dir", po::value<std::string>(&datafolder)->required(), "Folder of input images")
-	("input-dirB", po::value<std::string>(&datafolderB), "Folder of input (second view) B images")
     ("otf-file", po::value<std::string>(&otffiles)->required(), "OTF file")
-	("otf-fileB", po::value<std::string>(&otffilesB), "OTF B (second view) file")
     ("filename-pattern", po::value<std::string>(&filenamePattern)->required(), "File name pattern to find input images to process")
-	("filename-patternB", po::value<std::string>(&filenamePatternB), "File name pattern to find input (second view) B images to process")
 	("DoNotAdjustResForFFT,a", po::bool_switch(&bDontAdjustResolution)->default_value(false), "Don't change data resolution size. Otherwise data is cropped to perform faster, more memory efficient FFT: size factorable into 2,3,5,7)")
 	("DevQuery,q", po::bool_switch(&bDevQuery)->default_value(false), "Show info and indices of available GPUs")
-	("GPUdevice", po::value<int>(&myGPUdevice)->default_value(0), "Index of GPU device to use (0=first device)")
+	//("GPUdevice", po::value<int>(&myGPUdevice)->default_value(0), "Index of GPU device to use (0=first device)")
 	("Pad", po::value<int>(&Pad)->default_value(0), "Pad the image data with mirrored values to avoid edge artifacts")
 	("LSC", po::value<std::string>(&LSfile), "Lightsheet correction file")
 	("FlatStart", po::bool_switch(&bFlatStartGuess)->default_value(false), "Start the RL from a guess that is a flat image filled with the median image value.  This may supress noise.")
 	("NoBleachCorrection", po::bool_switch(&No_Bleach_correction)->default_value(false), "Does not apply bleach correction when running multiple images in a single batch.")
 	("skip", po::value<int>(&skip)->default_value(0), "Skip the first 'skip' number of files.")
+	("no_overwrite", po::bool_switch(&no_overwrite)->default_value(false), "Don't reprocess files that are already deconvolved (i.e. exist in the GPUdecon folder).")
 	// ("UseOnlyHostMem", po::bool_switch(&UseOnlyHostMem)->default_value(false), "Just use Host Mapped Memory, and not GPU. For debugging only.")
     ("help,h", "This help message.")
     ;
@@ -335,18 +349,25 @@ int main(int argc, char *argv[])
 
 	std::cout << "Looking for files to process... " ;
     // Gather all files in 'datafolder' and matching the file name pattern:
-    std::vector< std::string > all_matching_files = gatherMatchingFiles(datafolder, filenamePattern);
-
+    std::vector< std::string > all_matching_files = gatherMatchingFiles(datafolder, filenamePattern, no_overwrite);
 	std::cout << "Found " << all_matching_files.size() << " file(s)." << std::endl ;
+	
 	SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
-
+	if (all_matching_files.size() == 0){
+		SetConsoleTextAttribute(hConsole, 10); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+		std::cout<< "\nNo files need processing!" << std::endl;
+		SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+		return 0;
+	}
 
 
 	std::vector<std::string>::iterator next_it = all_matching_files.begin() + skip;//make a second incrementer that will be used to load the next raw image while we process.
 	
-	std::thread t1;
-	t1 = std::thread(load_next_thread, next_it->c_str());						//start loading the first file.
-	std::thread tsave;	// make thread for saving decon
+	std::thread t1; // thread for loading files
+	t1 = std::thread(load_next_thread, next_it->c_str());	//start loading the first file.
+	
+	std::thread tsave;	// thread for saving decon
+	std::thread tDeskewsave; // thread for saving deskewed
 	
     for (std::vector<std::string>::iterator it= all_matching_files.begin() + skip;
          it != all_matching_files.end(); it++) {
@@ -872,12 +893,19 @@ int main(int argc, char *argv[])
 		  tsave.~thread();		// destroy thread.
 	  }
 
+	  if (tDeskewsave.joinable()){
+		  tDeskewsave.join();		// wait for previous saving thread to finish.
+		  tDeskewsave.~thread();		// destroy thread.
+	  }
+
 
 	  //****************************Save Deskewed Raw***********************************
       if (bSaveDeskewedRaw) {
 		  if (!bSaveUshort){
-			  raw_deskewed.SetDescription(commandline_string);
-			  raw_deskewed.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
+			  DeskewedToSave.assign(raw_deskewed);
+			  DeskewedToSave.SetDescription(commandline_string);
+			  tDeskewsave = std::thread(DeSkewsave_in_thread, *it); //start saving "Deskewed To Save" file.
+			  //raw_deskewed.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
 		  }
         else {
           CImg<unsigned short> uint16Img(raw_deskewed);
@@ -919,9 +947,9 @@ int main(int argc, char *argv[])
 			  tsave = std::thread(save_in_thread, *it); //start saving "To Save" file.
 		  }
 		  else {
-			  CImg<unsigned short> uint16Img(raw_image);
-			  uint16Img.SetDescription(commandline_string);
-			  uint16Img.save(makeOutputFilePath(*it).c_str());
+			  U16ToSave = raw_image;
+			  U16ToSave.SetDescription(commandline_string);
+			  tsave = std::thread(U16save_in_thread, *it); //start saving "To Save" file.
 		  }
 	  }
 
@@ -930,11 +958,14 @@ int main(int argc, char *argv[])
     } // iteration over all_matching_files
 
 	if (tsave.joinable()){
-		tsave.join();		// wait for previous saving thread to finish.
-		tsave.~thread();	// destroy thread.
+		tsave.join();				// wait for previous saving thread to finish.
+		tsave.~thread();			// destroy thread.
 	} //Make sure we have finished saving.
 	
-
+	if (tDeskewsave.joinable()){
+		tDeskewsave.join();			// wait for previous saving thread to finish.
+		tDeskewsave.~thread();		// destroy thread.
+	} //Make sure we have finished saving.
 
 	duration = (std::clock() - start_t) / (double)CLOCKS_PER_SEC;
 
