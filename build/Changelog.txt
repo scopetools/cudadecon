@@ -21,3 +21,5 @@ reg.exe ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers
 
 
 2016-07-19 found and fixed a bug in cudaDecon (if deskewed X dimension is an odd number, then output is garbage because of incorrect FFT buffer allocation).
+
+2016-08-19 Load full tiff file into memory and process it via a stream.  This should improve image load time over the network. Also can choose to skip over already processed files.
