@@ -290,10 +290,15 @@ extern "C" {
 extern "C" {
 #define uint64 uint64_hack_
 #define int64 int64_hack_
-#include "tiffio.h"
+#include <tiffio.h>
 #undef uint64
 #undef int64
 }
+#include <tiffio.hxx> 
+#include <iostream>
+#include <fstream>
+#include <vector>
+
 #endif
 
 // Configure LibMINC2 support.
@@ -36825,7 +36830,7 @@ namespace cimg_library_suffixed {
         nstep_frame = step_frame?step_frame:1;
       unsigned int nlast_frame = first_frame<last_frame?last_frame:first_frame;
 
-#ifndef cimg_use_tiff
+#ifndef cimg_use_tiff 
       if (nfirst_frame || nlast_frame!=~0U || nstep_frame>1)
         throw CImgArgumentException(_cimg_instance
                                     "load_tiff(): Unable to read sub-images from file '%s' unless libtiff is enabled.",
@@ -36833,7 +36838,74 @@ namespace cimg_library_suffixed {
                                     filename);
       return load_other(filename);
 #else
-      TIFF *tif = TIFFOpen(filename,"r");
+	  // Read WHOLE file into memory, then do TIFF processing.
+	  
+	  std::ifstream       file(filename, std::ios::binary);
+
+#ifdef TRUE
+	  /*
+	  * Get the size of the file
+	  */
+	  file.seekg(0, std::ios::end);
+	  std::streampos          length = file.tellg();
+	  file.seekg(0, std::ios::beg);
+
+
+
+	  /*
+	  * Use a vector as the buffer.
+	  * It is exception safe and will be tidied up correctly.
+	  * This constructor creates a buffer of the correct length.
+	  *
+	  * Then read the whole file into the buffer.
+	  */
+	  //std::vector<char>       buffer(length);
+	  //std::cout << "Start Read of file " << filename << ". Size = " << length ;
+	  //file.read(&buffer[0], length);
+	  
+	  /*
+	  * Create your string stream.
+	  * Get the stringbuffer from the stream and set the vector as it source.
+	  */
+	  //input_TIFF_stream.rdbuf()->pubsetbuf(&buffer[0], length);
+	  //input_TIFF_stream >> file.rdbuf();
+
+	  // allocate memory:
+	  char *buffer = new char[length];
+
+	  // read data as a block:
+	  file.read(buffer, length);
+	  //std::cout << ".  Read complete." << std::endl;
+
+	  // create string stream of memory contents
+	  // NOTE: this ends up copying the buffer!!!
+	  //std::istringstream input_TIFF_stream(std::string(buffer));
+
+	  // delete temporary buffer
+	  delete[] buffer;
+
+	  file.seekg(0, std::ios::beg);
+
+	  //input_TIFF_stream.seekg(0, std::ios::end);
+	  //std::streampos          length2 = input_TIFF_stream.tellg();
+	  //input_TIFF_stream.seekg(0, std::ios::beg);
+	  //std::cout << "Stream Size = " << length2 << std::endl;
+
+	  /*
+	  * Note the buffer is NOT copied, if it goes out of scope
+	  * the stream will be reading from released memory.
+	  */
+
+
+
+	  TIFF *tif = TIFFStreamOpen("MemTIFF", &file);
+	  //std::cout << "TIFFStreamOpen complete." << std::endl;
+
+
+#else 
+	  TIFF *tif = TIFFOpen(filename,"r");
+#endif
+
       if (tif) {
         unsigned int nb_images = 0;
         do ++nb_images; while (TIFFReadDirectory(tif));
@@ -36859,7 +36931,8 @@ namespace cimg_library_suffixed {
                                    "load_tiff(): Failed to open file '%s'.",
                                    cimg_instance,
                                    filename);
-      return *this;
+	  file.close();
+	  return *this;
 #endif
     }
 
@@ -45180,7 +45253,45 @@ namespace cimg_library_suffixed {
 
       return assign(CImg<T>::get_load_tiff(filename));
 #else
-      TIFF *tif = TIFFOpen(filename,"r");
+	  
+	  // Read WHOLE file into memory, then do TIFF processing.
+	  std::istringstream input_TIFF_stream;
+	  std::ifstream       file(filename);
+			  /*
+			  * Get the size of the file
+			  */
+			  file.seekg(0, std::ios::end);
+			  std::streampos          length = file.tellg();
+			  file.seekg(0, std::ios::beg);
+
+			  /*
+			  * Use a vector as the buffer.
+			  * It is exception safe and will be tidied up correctly.
+			  * This constructor creates a buffer of the correct length.
+			  *
+			  * Then read the whole file into the buffer.
+			  */
+			  std::vector<char>       buffer(length);
+			  std::cout << "Start Read.";
+			  file.read(&buffer[0], length);
+			  std::cout << "Read complete." << std::endl;
+			  /*
+			  * Create your string stream.
+			  * Get the stringbuffer from the stream and set the vector as it source.
+			  */
+			  input_TIFF_stream.rdbuf()->pubsetbuf(&buffer[0], length);
+
+			  /*
+			  * Note the buffer is NOT copied, if it goes out of scope
+			  * the stream will be reading from released memory.
+			  */
+	
+	  
+
+
+
+			  TIFF *tif = TIFFStreamOpen("MemTIFF", &input_TIFF_stream);
+      //TIFF *tif = TIFFOpen(filename,"r");
       if (tif) {
         unsigned int nb_images = 0;
         do ++nb_images; while (TIFFReadDirectory(tif));
@@ -45204,7 +45315,8 @@ namespace cimg_library_suffixed {
                                    "load_tiff(): Failed to open file '%s'.",
                                    cimglist_instance,
                                    filename);
-      return *this;
+	  file.close();
+	  return *this;
 #endif
     }
 

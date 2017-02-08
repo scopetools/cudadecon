@@ -10,7 +10,7 @@
 static boost::filesystem::path dataDir;
 
 
-std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern, bool no_overwrite)
+std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern, bool no_overwrite, bool MIPsOnly)
 {
 	HANDLE  hConsole;
 	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -20,13 +20,15 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
 
   // Create output subfolder "GPUdecon/" just under the data folder:
   dataDir = target_path;
-  boost::filesystem::path outputDir = dataDir/"GPUdecon";
+  boost::filesystem::path outputDir;
+
+  if (MIPsOnly)
+	 outputDir = dataDir / "GPUdecon" / "MIPs"; //if we are just creating MIPs
+  else
+	 outputDir = dataDir / "GPUdecon";
   
   if (! boost::filesystem::exists(outputDir) )
     boost::filesystem::create_directory(outputDir);
-
-  
-
 
   //***************** make regex filter ***************
   pattern.insert(0, ".*");  // '.' is the wildcard in Perl regexp; '*' just means "repeat".
@@ -63,7 +65,7 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
   int outer_loop = 0; // outer loop counter
   
   boost::filesystem::directory_iterator end_itr; // Constructs the end iterator.
-  for( boost::filesystem::directory_iterator i( target_path ); i != end_itr; ++i ) {
+  for( boost::filesystem::directory_iterator i( target_path ); i != end_itr; ++i ) { // loop on all files in the input folder
 
 	  outer_loop++;
     // Skip if not a file
@@ -74,7 +76,7 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
     // Skip if no match
     if( !std::regex_match( i->path().string(), what, my_filter ) ) continue;
 
-	// Skip if we are not "overwriting", check if the file exists in the output folder already
+	// Skip if we are not "overwriting" and if the file exists in the output folder already
 	if (no_overwrite)
 	{
 		//SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c

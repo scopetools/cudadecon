@@ -153,7 +153,7 @@ void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale, unsigned m
 void apodize_GPU(GPUBuffer* image, int nx, int ny, int nz, int napodize);
 void zBlend_GPU(GPUBuffer & image, int nx, int ny, int nz, int nZblend);
 
-std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern, bool no_overwrite);
+std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern, bool no_overwrite, bool MIPsOnly);
 std::string makeOutputFilePath(std::string inputFileName, std::string subdir="GPUdecon",
                                std::string insert="_decon");
 void makeDeskewedDir(std::string subdirname);
@@ -169,6 +169,8 @@ void makeDeskewedDir(std::string subdirname);
 #else
   #define CUDADECON_API
 #endif
+
+
 
 //! All DLL interface calls start HERE:
 extern "C" {
@@ -206,5 +208,6 @@ CUDADECON_API  unsigned get_output_nx();
 CUDADECON_API  unsigned get_output_ny();
 CUDADECON_API  unsigned get_output_nz();
 }
+
 
 #endif

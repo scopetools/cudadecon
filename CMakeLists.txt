@@ -32,9 +32,6 @@ set(SCI_WORLD_FILE_PERMS WORLD_READ)
 set(SCI_WORLD_PROGRAM_PERMS WORLD_READ WORLD_EXECUTE)
 
 
-
-
-
 # If no CMAKE_BUILD_TYPE is specified on command line, Windows and Unix
 # give different treatments. On Windows, CMAKE_BUILD_TYPE is defaulted to
 # "Debug"; on Unix, it's some empty string that cannot be legally placed in
@@ -196,6 +193,7 @@ endif()
 ######################################################################
 
 
+
 #####  libcudaDeconv.dll ###########################################
 
  CUDA_ADD_LIBRARY(
@@ -210,6 +208,8 @@ add_dependencies(
    libcudaDeconv
    Buffer
    )
+
+
 
 #####  cudaDeconv.exe ###########################################
 
@@ -283,6 +283,7 @@ target_link_libraries(
   ${X11_X11_LIB}
   )
 
+
 target_link_libraries(
   libcudaDeconv
   Buffer
@@ -296,7 +297,10 @@ target_link_libraries(
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
   )
+CUDA_ADD_CUFFT_TO_TARGET(libcudaDeconv)
+
+
 
 CUDA_ADD_CUFFT_TO_TARGET(cudaDeconv)
-CUDA_ADD_CUFFT_TO_TARGET(libcudaDeconv)
+
 

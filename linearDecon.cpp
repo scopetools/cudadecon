@@ -349,7 +349,9 @@ int main(int argc, char *argv[])
 
 	std::cout << "Looking for files to process... " ;
     // Gather all files in 'datafolder' and matching the file name pattern:
-    std::vector< std::string > all_matching_files = gatherMatchingFiles(datafolder, filenamePattern, no_overwrite);
+	bool MIPsOnly = (RL_iters == 0 && bDoMaxIntProj.size() == 3);
+		
+    std::vector< std::string > all_matching_files = gatherMatchingFiles(datafolder, filenamePattern, no_overwrite, MIPsOnly);
 	std::cout << "Found " << all_matching_files.size() << " file(s)." << std::endl ;
 	
 	SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
@@ -412,7 +414,6 @@ int main(int argc, char *argv[])
 
 
 
-	//std::swap(raw_image, next_raw_image); // Swap pointers.
 	std::cout << "Done." << std::endl;
 
 	// start reading the next image
@@ -847,8 +848,7 @@ int main(int argc, char *argv[])
 						   bFlatStartGuess, my_median, No_Bleach_correction, UseOnlyHostMem);
       }
       else {
-        std::cerr << "Nothing is performed\n";
-        break;
+        std::cerr << "Nothing is performed\n";        
       }
 	  
 #ifndef NDEBUG
@@ -922,18 +922,43 @@ int main(int argc, char *argv[])
       if (bDoMaxIntProj.size() == 3) {
         if (bDoMaxIntProj[0]) {
           CImg<> proj = MaxIntProj(raw_image, 0);
-		  proj.SetDescription(commandline_string);
-		  proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str());
+		  if (bSaveUshort){
+			  CImg<unsigned short> uint16Img(proj);
+			  uint16Img.SetDescription(commandline_string);
+			  uint16Img.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str());
+		  }
+		  else
+		  {
+			  proj.SetDescription(commandline_string);
+			  proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str());
+		  }
         }
-        if (bDoMaxIntProj[1]) {
-          CImg<> proj = MaxIntProj(raw_image, 1);
-		  proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str());
-        }
+		if (bDoMaxIntProj[1]) {
+			CImg<> proj = MaxIntProj(raw_image, 1);
+			if (bSaveUshort){
+				CImg<unsigned short> uint16Img(proj);
+				uint16Img.SetDescription(commandline_string);
+				uint16Img.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str());
+			}
+			else
+			{
+				proj.SetDescription(commandline_string);
+				proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str());
+			}
+		}
         if (bDoMaxIntProj[2]) {
-          CImg<> proj = MaxIntProj(raw_image, 2);
-		  proj.SetDescription(commandline_string);		 
-          proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str());
-        }
+			CImg<> proj = MaxIntProj(raw_image, 2);
+			if (bSaveUshort){
+				CImg<unsigned short> uint16Img(proj);
+				uint16Img.SetDescription(commandline_string);
+				uint16Img.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str());
+			}
+			else
+			{
+				proj.SetDescription(commandline_string);
+				proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str());
+			}
+		}
       }
 
 	  //****************************Save Decon Image***********************************
