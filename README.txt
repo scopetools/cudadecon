@@ -13,7 +13,7 @@ DLL build instructions:
 Run Visual Studio
 Select Tools->Visual Studio Command Prompt
 
-At the command prompt, change to the Visual C++ installation directory. (The location depends on the system and the Visual Studio installation, but a typical location is C:\Program Files (x86)\Microsoft Visual Studio version\VC\.) 
+At the VS command prompt, change to the Visual C++ installation directory. (The location depends on the system and the Visual Studio installation, but a typical location is C:\Program Files (x86)\Microsoft Visual Studio version\VC\.) 
 Then configure this Command Prompt window for 64-bit command-line builds that target x64 platforms, at the command prompt, enter:
 
 cd "\Program Files (x86)\Microsoft Visual Studio 12.0\VC"
@@ -27,9 +27,20 @@ lib /machine:x64 /def:libfftw3-3.def
 lib /machine:x64 /def:libfftw3l-3.def
 lib /machine:x64 /def:libfftw3f-3.def
 
+1.d.a Install zlib
+Unzip zlib library into c:\zlib\zlib-1.2.11 or equivalent.
+Open the solution file : C:\zlib\zlib-1.2.11\contrib\vstudio\vc12\zlibvc.sln in Visual Studio
+At the top, change the pulldown menus to "Release" and "x64".
+Build the solution. (F7 or from "Build" menu)
 
-1.d. Unzip Libtiff library into C:\libtiff, then build with :
-cmake -G "Visual Studio 12 2013 Win64"
+1.d. Unzip Libtiff library into C:\libtiff, then build:
+cmake -G "Visual Studio 12 2013 Win64" -DZLIB_LIBRARY:STRING=C:\zlib\zlib-1.2.11\contrib\vstudio\vc12\x64\ZlibStatRelease\zlibstat.lib -DZLIB_INCLUDE_DIR:STRING=C:\zlib\zlib-1.2.11
+
+This generates the cmake files and should identify that it found zlib.  Next run :
+
+cmake --build . --config Release
+ctest -V -C Release
+
 
 1.e. Install CUDA SDK (I'm using 8.0)
 
