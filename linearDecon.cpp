@@ -2,8 +2,6 @@
 #include <exception>
 #include <ctime>
 
-
-
 // Disable silly warnings on some Microsoft VC++ compilers.
 #pragma warning(disable : 4244) // Disregard loss of data from float to int.
 #pragma warning(disable : 4267) // Disregard loss of data from size_t to unsigned int.
@@ -151,12 +149,19 @@ int wienerfilter(CImg<> & g, float dkx, float dky, float dkz,
 
 int main(int argc, char *argv[])
 {
+
+	HANDLE  hConsole;
+	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
+	SetConsoleTextAttribute(hConsole, 11); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+	printf("Created at Howard Hughes Medical Institute Janelia Research Campus. Copyright 2017. All rights reserved.\n");
+	SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+
 	std::clock_t start_t;
 	double duration;
 	double iter_duration = 0;
 
-	HANDLE  hConsole;
-	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+
 	start_t = std::clock();
 
   int napodize, nZblend;
