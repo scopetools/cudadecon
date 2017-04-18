@@ -1,6 +1,17 @@
-2016-10-06
-* Fixed bug with "new nx" and "DoNotAdjustResForFFT" flag.
+2017-01-31
+* Allow existing decon files to be skipped. (This would be a piece of a route to autodecon: i.e. just keep running this this exe as data is being acquired). Also saving of deskewed images is now parallelized with decon.
 
+2016-11-03
+* cudaDeconv.exe will now redo initialization if it encounters a different sized .tiff stack during a batch run, instead of crashing.  Also added a --start flag that allows the program to start in the middle of a batch run.
+
+2016-11-02
+* Made switch to enable/disable bleach correction. Bleach correction isn't valid when processing a batch of 3D tiled data (it's not a time series).
+
+2016-10-19
+* Adding option to pad raw image with mirrored values.  This should help avoid edge artifacts on all 6 sides of the volume. Padding is rounded up to nearest size for efficient FFT.
+
+2016-10-06
+* Fixed bug with "new nx" and "DoNotAdjustResForFFT" flag. "DoNotAdjustResForFFT" will prevent resizing that occurs to make a more efficient FFT.
 
 2016-10-05 
 * Upgraded to CUDA 8.0.  Now supports compute capability 6.1 and the new Pascal GPUs (like GTX 1080). 
@@ -15,9 +26,6 @@
 see http://stackoverflow.com/questions/17186638/modifying-registry-to-increase-gpu-timeout-windows-7
 Running this command from an adminstrator command prompt should set the timeout to 10 :
 reg.exe ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\GraphicsDrivers" /v "TdrDelay" /t REG_DWORD /D "10" /f
-
-* If multiple GPUs, GPU device can be selected with --GPUdevice.  Devices can be enumerated with the --DevQuery flag, or by running the deviceQueryDrv.exe
-
 
 
 2016-07-19 found and fixed a bug in cudaDecon (if deskewed X dimension is an odd number, then output is garbage because of incorrect FFT buffer allocation).
