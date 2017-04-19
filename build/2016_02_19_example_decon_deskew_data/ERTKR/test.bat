@@ -1,2 +1,2 @@
 ..\..\radialft.exe ..\mbPSF_560_NAp5nap42_z100nm.tif ..\mbOTF_560_NAp5nap42_z100nm.tif --nocleanup --fixorigin 10
-..\..\cudaDeconv.exe %1 -z .36 -D 32.8 -R 32.8 -i 10 -M 0 0 1 -S --input-dir . --filename-pattern sample_scan_560_20ms_zp36_cell1 --otf-file ../mbOTF_560_NAp5nap42_z100nm.tif --NoBleachCorrection --Pad 15
+..\..\cudaDeconv.exe %1 -z .36 -D 32.8 -R 32.8 -i 10 -M 0 0 1 -S --input-dir . --filename-pattern sample_scan_560_20ms_zp36_cell --otf-file ../mbOTF_560_NAp5nap42_z100nm.tif --NoBleachCorrection 
