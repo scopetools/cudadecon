@@ -221,7 +221,7 @@ int main(int argc, char *argv[])
 	("DoNotAdjustResForFFT,a", po::bool_switch(&bDontAdjustResolution)->default_value(false), "Don't change data resolution size. Otherwise data is cropped to perform faster, more memory efficient FFT: size factorable into 2,3,5,7)")
 	("DevQuery,q", po::bool_switch(&bDevQuery)->default_value(false), "Show info and indices of available GPUs")
 	//("GPUdevice", po::value<int>(&myGPUdevice)->default_value(0), "Index of GPU device to use (0=first device)")
-	("Pad", po::value<int>(&Pad)->default_value(0), "Pad the image data with mirrored values to avoid edge artifacts")
+	("Pad", po::value<int>(&Pad)->default_value(0), "Pad the image data with mirrored values to avoid edge artifacts. Currently only enabled when rotate and deskew are zero.")
 	("LSC", po::value<std::string>(&LSfile), "Lightsheet correction file")
 	("FlatStart", po::bool_switch(&bFlatStartGuess)->default_value(false), "Start the RL from a guess that is a flat image filled with the median image value.  This may supress noise.")
 	("NoBleachCorrection", po::bool_switch(&No_Bleach_correction)->default_value(false), "Does not apply bleach correction when running multiple images in a single batch.")
@@ -458,6 +458,13 @@ int main(int argc, char *argv[])
 		//****************************Adjust resolution if desired***********************************
 		
 		int step_size;
+
+		if (fabs(deskewAngle) > 0.0 || fabs(rotationAngle) > 0.0)
+		{
+			Pad = 0;	// Currently padding is disabled if we are deskewing or rotating.
+			std::cout << "Currently padding is disabled if we are deskewing or rotating." << std::endl;
+		}
+
 		if (Pad)
 			step_size =  1;
 		else

@@ -26,7 +26,7 @@ Make the OTF run this command from the PSF folder:
 e:\Cuda\otfgen.bat mbPSF_560_NAp5nap42_z100nm.tif mbOTF_560_NAp5nap42_z100nm.tif
 
 Process the data (note that the path to the OTF file is the relative path from the current directory):
-e:\Cuda\cudaDeconv -z .36 -D 32.8 -R 32.8 -i 10 -M 0 0 1 -S --input-dir . --filename-pattern sample_scan_560_20ms_zp36_cell1 --otf-file ../mbOTF_560_NAp5nap42_z100nm.tif --NoBleachCorrection --Pad 20
+e:\Cuda\cudaDeconv -z .36 -D 32.8 -R 32.8 -i 10 -M 0 0 1 -S --input-dir . --filename-pattern sample_scan_560_20ms_zp36_cell1 --otf-file ../mbOTF_560_NAp5nap42_z100nm.tif --NoBleachCorrection 
 
 Note that you will need a GPU with enough memory to process the dataset. Also, note that the file extension is required for the OTF file, but should not be included in the name/string for the image.  The image string is just a character match, so it will process all files in the folder containing that string.
 

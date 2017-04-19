@@ -11,7 +11,7 @@
 * Made switch to enable/disable bleach correction. Bleach correction isn't valid when processing a batch of 3D tiled data (it's not a time series).
 
 2016-10-19
-* Adding option to pad raw image with mirrored values.  This should help avoid edge artifacts on all 6 sides of the volume. Padding is rounded up to nearest size for efficient FFT.
+* Adding option to pad raw image with mirrored values.  This should help avoid edge artifacts on all 6 sides of the volume. Padding is rounded up to nearest size for efficient FFT. Not available for rotated or deskewed images yet.
 
 2016-10-06
 * Fixed bug with "new nx" and "DoNotAdjustResForFFT" flag. "DoNotAdjustResForFFT" will prevent resizing that occurs to make a more efficient FFT.
