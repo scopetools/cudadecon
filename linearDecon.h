@@ -143,7 +143,8 @@ void deskew_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
                 double deskewFactor, GPUBuffer &outBuf, int newNx, int extraShift);
 
 void rotate_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
-                GPUBuffer &rotMatrix, GPUBuffer &outBuf);
+                GPUBuffer &rotMatrix, GPUBuffer &outBuf,
+                int nx_out, int nz_out);
 
 void cropGPU(GPUBuffer &inBuf, int nx, int ny, int nz,
              int new_nx, int new_ny, int new_nz,

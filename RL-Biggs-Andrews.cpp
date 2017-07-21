@@ -320,15 +320,26 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   // Rotate decon result if requested:
   
   if (rotationMatrix.getSize()) {
-	  std::cout << "Rotating...";
-	  GPUBuffer d_rotatedResult(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem);
+    std::cout << "Rotating...";
 
-	  GPUBuffer d_rotMatrix(rotationMatrix, myGPUdevice, UseOnlyHostMem);
+    float *p = (float *) rotationMatrix.getPtr();
+    // Refer to rotMatrix definition in main():
+    int nz_afterRot = nz * p[3] / p[0];
+    int nx_afterRot = nx  * p[3] + nz * p[2] * p[2] / p[1];
+    GPUBuffer d_rotatedResult(nz_afterRot * nx_afterRot * ny * sizeof(float), myGPUdevice, UseOnlyHostMem);
+    GPUBuffer d_rotMatrix(rotationMatrix, myGPUdevice, UseOnlyHostMem);
 
-    rotate_GPU(X_k, nx, ny, nz, d_rotMatrix, d_rotatedResult);
+    rotate_GPU(X_k, nx, ny, nz, d_rotMatrix, d_rotatedResult, nx_afterRot, nz_afterRot);
+    if (nIter > 0)
+      cutilSafeCall(cudaHostUnregister(raw.data()));
+    raw.assign(nx_afterRot, ny, nz_afterRot);
+
+    if (nIter > 0)
+      cutilSafeCall(cudaHostRegister(raw.data(), nz_afterRot*nx_afterRot*ny*sizeof(float), cudaHostRegisterPortable));
     // Download from device memory back to "raw":
-    cutilSafeCall(cudaMemcpy(raw.data(), d_rotatedResult.getPtr(), nz*nxy*sizeof(float),
-		cudaMemcpyDefault));
+    cutilSafeCall(cudaMemcpy(raw.data(), d_rotatedResult.getPtr(),
+                             nz_afterRot * nx_afterRot * ny * sizeof(float),
+                             cudaMemcpyDefault));
 	std::cout << "Done." << std::endl;
   }
 

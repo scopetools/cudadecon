@@ -47,31 +47,34 @@ __host__ void deskew_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
 #endif
 }
 
-__global__ void rotate_kernel(float *in, int nx, int ny, int nz,
-                              float *out, float *rotMat)
+__global__ void rotate_kernel(float *in, int nx_in, int ny, int nz_in,
+                              float *out, int nx_out, int nz_out,
+							  float *rotMat)
 {
   unsigned xout = blockIdx.x * blockDim.x + threadIdx.x;
   unsigned yout = blockIdx.y;
   unsigned zout = blockIdx.z;
 
-  if (xout < nx) {
+  if (xout < nx_out) {
     float xout_centered, zout_centered;
-    xout_centered = xout - nx/2.;
-    zout_centered = zout - nz/2.;
+    xout_centered = xout - nx_out/2.;
+    zout_centered = zout - nz_out/2.;
 
-    unsigned nxy = nx * ny;
-    unsigned yind = yout * nx;
+	unsigned nxy_in = nx_in * ny;
+    unsigned nxy_out = nx_out * ny;
+    unsigned yind_out = yout * nx_out;
+	unsigned yind_in = yout * nx_in;
 
-    float zin = rotMat[0] * zout_centered + rotMat[1] * xout_centered + nz/2.;
-    float xin = rotMat[2] * zout_centered + rotMat[3] * xout_centered + nx/2.;
+    float zin = rotMat[0] * zout_centered + rotMat[1] * xout_centered + nz_in/2.;
+    float xin = rotMat[2] * zout_centered + rotMat[3] * xout_centered + nx_in/2.;
 
-    unsigned indout = (nz-1-zout) * nxy + yind + xout; // flip z indices
+    unsigned indout = (nz_out-1-zout) * nxy_out + yind_out + xout; // flip z indices
 
-    if (xin >= 0 && xin < nx-1 && zin >=0 && zin < nz-1) {
+    if (xin >= 0 && xin < nx_in-1 && zin >=0 && zin < nz_in-1) {
 
-      unsigned indin00 = (unsigned) floor(zin) * nxy + yind + (unsigned) floor(xin);
+      unsigned indin00 = (unsigned) floor(zin) * nxy_in + yind_in + (unsigned) floor(xin);
       unsigned indin01 = indin00 + 1;
-      unsigned indin10 = indin00 + nxy;
+      unsigned indin10 = indin00 + nxy_in;
       unsigned indin11 = indin10 + 1;
 
       float xoffset = xin - floor(xin);
@@ -85,15 +88,17 @@ __global__ void rotate_kernel(float *in, int nx, int ny, int nz,
 }
 
 __host__ void rotate_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
-                         GPUBuffer &rotMatrix, GPUBuffer &outBuf)
+                         GPUBuffer &rotMatrix, GPUBuffer &outBuf,
+						 int nx_out, int nz_out)
 {
   dim3 block(128, 1, 1);
-  unsigned nxBlocks = (unsigned ) ceil(nx / (float) block.x);
-  dim3 grid(nxBlocks, ny, nz);
+  unsigned nxBlocks = (unsigned ) ceil(nx_out / (float) block.x);
+  dim3 grid(nxBlocks, ny, nz_out);
 
   rotate_kernel<<<grid, block>>>((float *) inBuf.getPtr(),
                                  nx, ny, nz,
                                  (float *) outBuf.getPtr(),
+								 nx_out, nz_out,
                                  (float *) rotMatrix.getPtr());
 #ifndef NDEBUG
   std::cout<< "rotate_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
