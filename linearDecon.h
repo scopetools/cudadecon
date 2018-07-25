@@ -56,7 +56,7 @@ class fixed_tokens_typed_value : public po::typed_value< T, charT > {
 
  public:
 
-   fixed_tokens_typed_value( T * storeTo, unsigned min, unsigned max ) 
+   fixed_tokens_typed_value( T * storeTo, unsigned min, unsigned max )
      : _min(min), _max(max), base( storeTo ) {
        base::multitoken();
    }
@@ -81,7 +81,7 @@ class fixed_tokens_typed_value : public po::typed_value< T, charT > {
 };
 
 template< typename T >
-fixed_tokens_typed_value< T > 
+fixed_tokens_typed_value< T >
 fixed_tokens_value(unsigned min, unsigned max) {
     return fixed_tokens_typed_value< T >(0, min, max ); }
 
@@ -94,8 +94,8 @@ fixed_tokens_value(T * t, unsigned min, unsigned max) {
 
 
 // std::complex<float> otfinterpolate(std::complex<float> * otf, float kx, float ky, float kz, int nzotf, int nrotf);
-// void RichardsonLucy(CImg<> & raw, float dr, float dz, 
-//                       CImg<> & otf, float dkr_otf, float dkz_otf, 
+// void RichardsonLucy(CImg<> & raw, float dr, float dz,
+//                       CImg<> & otf, float dkr_otf, float dkz_otf,
 //                       float rcutoff, int nIter,
 //                       fftwf_plan rfftplan, fftwf_plan rfftplan_inv, CImg<> &fft);
 
@@ -105,8 +105,10 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         int napodize, int nZblend,
                         CPUBuffer &rotationMatrix,
                         cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU,
-						CImg<> & raw_deskewed, cudaDeviceProp* devprop, int myGPUdevice, bool bFlatStartGuess, 
-						float my_median, bool No_Bleach_correction, bool UseOnlyHostMem);
+                        CImg<> & raw_deskewed, cudaDeviceProp* devprop,
+                        int myGPUdevice, bool bFlatStartGuess,
+                        float my_median, bool No_Bleach_correction,
+                        bool bDupRevStack, bool UseOnlyHostMem);
 
 CImg<> MaxIntProj(CImg<> &input, int axis);
 
@@ -133,7 +135,7 @@ void calcCurrPrevDiff(GPUBuffer &X_k, GPUBuffer &Y_k, GPUBuffer &G_kminus1,
                       int nx, int ny, int nz, unsigned maxGridXdim);
 
 double calcAccelFactor(GPUBuffer &G_km1, GPUBuffer &G_km2,
-	int nx, int ny, int nz, float eps, int myGPUdevice);
+    int nx, int ny, int nz, float eps, int myGPUdevice);
 
 void updatePrediction(GPUBuffer &Y_k, GPUBuffer &X_k, GPUBuffer &X_kminus1,
                       double lambda, int nx, int ny, int nz, unsigned maxGridXdim);
@@ -153,6 +155,8 @@ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz, unsigned 
 void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale, unsigned maxGridXdim);
 void apodize_GPU(GPUBuffer* image, int nx, int ny, int nz, int napodize);
 void zBlend_GPU(GPUBuffer & image, int nx, int ny, int nz, int nZblend);
+
+void duplicateReversedStack_GPU(GPUBuffer & in, int nx, int ny, int nz);
 
 std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern, bool no_overwrite, bool MIPsOnly);
 std::string makeOutputFilePath(std::string inputFileName, std::string subdir="GPUdecon",
@@ -188,7 +192,7 @@ extern "C" {
  * outputWidth: if set to 0, then calculate the output width because of deskewing; otherwise use this value as the output width
  * OTF_file_name: file name of OTF
 */
-	CUDADECON_API int RL_interface_init(int nx, int ny, int nz, float dr, float dz, float dr_psf, float dz_psf, float deskewAngle, float rotationAngle, int outputWidth, char * OTF_file_name, int myGPUdevice);
+  CUDADECON_API int RL_interface_init(int nx, int ny, int nz, float dr, float dz, float dr_psf, float dz_psf, float deskewAngle, float rotationAngle, int outputWidth, char * OTF_file_name, int myGPUdevice);
 
 //! RL_interface() to run deconvolution
 /*!
@@ -199,7 +203,7 @@ extern "C" {
  * nIters: how many iterations to run
  * extraShift: in pixels; sometimes an extra shift in X is needed to center the deskewed image better
 */
-CUDADECON_API int RL_interface(const unsigned short * const raw_data, int nx, int ny, int nz, float * const result, float background, int nIters, int extraShift, int myGPUdevice);
+CUDADECON_API int RL_interface(const unsigned short * const raw_data, int nx, int ny, int nz, float * const result, float background, int nIters, int extraShift, bool bDupRevStack, int myGPUdevice);
 
 //! Call this before program quits to release global GPUBuffer d_interpOTF
 CUDADECON_API void RL_cleanup();

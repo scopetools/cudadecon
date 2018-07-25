@@ -1,8 +1,9 @@
 #include "GPUBuffer.h"
 #include "CPUBuffer.h"
 #include "PinnedCPUBuffer.h"
+#ifdef _WIN32
 #include <Windows.h>
-
+#endif
 
 bool firstcall = true;
 
@@ -40,11 +41,15 @@ device_(device), size_(size), ptr_(0), Hostptr_(0), UseCudaHostOnly_(UseCudaHost
           size_t total;
           cudaMemGetInfo(&free, &total);
 		  if (firstcall){
+#ifdef _WIN32
 			  HANDLE  hConsole;
 			  hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 			  SetConsoleTextAttribute(hConsole, 6); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+#endif
 			  std::cout << "Want new " << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
+#ifdef _WIN32
 			  SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+#endif
 		  }
           firstcall = false;
       }
@@ -163,11 +168,15 @@ void GPUBuffer::resize(size_t newsize) {
 					cudaMemGetInfo(&free, &total);
 					if (firstcall)
 					{
+#ifdef _WIN32
 						HANDLE  hConsole;
 						hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 						SetConsoleTextAttribute(hConsole, 6); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+#endif
 						std::cout << "Resizing buffer. " << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
+#ifdef _WIN32
 						SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+#endif
 					}
 					firstcall = false;
 					cudaDeviceSynchronize();

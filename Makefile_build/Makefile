@@ -16,6 +16,7 @@ CXXFLAGS += -I/usr/X11/include
 CXXFLAGS += -std=c++11
 CXXFLAGS      += -O2
 #CXXFLAGS      += -g
+CXXFLAGS += -fopenmp
 
 LDLIBS  = -lfftw3f -lfftw3f_threads -ltiff -lX11
 LDLIBS += -lboost_program_options -lboost_filesystem -lboost_regex -lboost_system
@@ -27,21 +28,20 @@ ifeq ($(shell uname),Darwin)
     LDFLAGS += -L/opt/local/lib -L/usr/X11/lib
 endif
 
+LDFLAGS += -fopenmp
+
 %.o: ../%.cpp
 	$(CXX) $(CXXFLAGS) -c $^ -o $@ 
 %.o: ../Buffers/%.cpp
 	$(CXX) $(CXXFLAGS) -c $^ -o $@ 
 
 %.o: ../%.cu
-	$(NVCC) -gencode arch=compute_20,code=sm_20 -gencode arch=compute_30,code=sm_30 --compiler-options="-Wall -O3 -I../Buffers" -c $^ 
+	$(NVCC) -gencode arch=compute_61,code=sm_61 -gencode arch=compute_60,code=sm_60 --compiler-options="-Wall -O3 -I../Buffers" -c $^ 
 #  -gencode arch=compute_35,code=sm_35 -gencode arch=compute_52,code=sm_52 -v
 
-
-#  -gencode arch=compute_30,code=sm_30
 # -I$(CUDA_INC_DIR)
 
 all: cudaDeconv radialft otfviewer
-
 
 cudaDeconv: linearDecon.o RL-Biggs-Andrews.o boostfs.o RLgpuImpl.o geometryTransform.o Buffer.o CPUBuffer.o GPUBuffer.o PinnedCPUBuffer.o
 	$(NVCC) -v -o $@ $^ $(LDFLAGS) $(LDLIBS)

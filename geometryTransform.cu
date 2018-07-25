@@ -143,3 +143,35 @@ __host__ void cropGPU(GPUBuffer &inBuf, int nx, int ny, int nz,
   std::cout<< "cropGPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
 #endif
 }
+
+// ******************************************************************//
+// Duplicate the first Z half of the "in" stack, in reverse-Z order,
+// into the 2nd Z half of it; essentially faking continuous structure
+// in Z to reduce Z ringing from FFT
+// ******************************************************************//
+__global__ void dupRevStack_kernel(float *in, unsigned nx, unsigned nxy, unsigned nz)
+{
+  unsigned xin = blockIdx.x * blockDim.x + threadIdx.x;
+  unsigned yin = blockIdx.y;
+  unsigned zin = blockIdx.z;
+
+  if (xin < nx) {
+	unsigned zout = (nz<<1) - zin - 1; // + and - take precedence over << and >>!!
+    unsigned indout = zout * nxy + yin * nx + xin;
+    unsigned indin  =  zin * nxy + yin * nx + xin;
+    in[indout] = in[indin];
+  }
+}
+
+__host__ void duplicateReversedStack_GPU(GPUBuffer &zExpanded, int nx, int ny, int nz)
+{
+  dim3 block(128, 1, 1);
+  unsigned nxBlocks = (unsigned ) ceil(nx / (float) block.x);
+  dim3 grid(nxBlocks, ny, nz);
+
+  dupRevStack_kernel<<<grid, block>>>((float *) zExpanded.getPtr(),
+									  nx, nx*ny, nz);
+#ifndef NDEBUG
+  std::cout<< "duplicateReversedStack_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
+}

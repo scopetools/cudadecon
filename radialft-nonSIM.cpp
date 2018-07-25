@@ -41,13 +41,16 @@ void rescale(std::complex<float> *otfkxkz, int nx, int nz);
 
 int main(int argc, char **argv)
 {
+#ifdef _WIN32
 	HANDLE  hConsole;
 	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 
 	SetConsoleTextAttribute(hConsole, 11); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+#endif
 	printf("Created at Howard Hughes Medical Institute Janelia Research Campus. Copyright 2017. All rights reserved.\n");
+#ifdef _WIN32
 	SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
-
+#endif
   std::string ifiles, ofiles;
   int nx, ny, nz, nxy;
   int i, j, z;

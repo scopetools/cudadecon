@@ -129,7 +129,6 @@ endif(WIN32)
 message(STATUS "CUDA version : ${CUDA_VERSION}")
 if(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
 	set(CUDA_NVCC_FLAGS "-O2;\
-		-gencode=arch=compute_20,code=sm_20;\
 		-gencode=arch=compute_30,code=sm_30;\
 		-gencode=arch=compute_35,code=sm_35;\
 		-gencode=arch=compute_37,code=sm_37;\
@@ -138,7 +137,6 @@ if(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
 		-gencode=arch=compute_61,code=sm_61") # compute capability 6.1 only avaiable in CUDA 8.0 or greater
 	else()
 		set(CUDA_NVCC_FLAGS "-O2;\
-		-gencode=arch=compute_20,code=sm_20;\
 		-gencode=arch=compute_30,code=sm_30;\
 		-gencode=arch=compute_35,code=sm_35;\
 		-gencode=arch=compute_37,code=sm_37;\
@@ -198,7 +196,7 @@ endif()
 
  CUDA_ADD_LIBRARY(
    libcudaDeconv
-   SHARED
+#   SHARED
    RL-Biggs-Andrews.cpp
    RLgpuImpl.cu
    geometryTransform.cu

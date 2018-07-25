@@ -5,15 +5,19 @@
 #include <string>
 #include <algorithm> // sort
 
-#include <windows.h> 
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 static boost::filesystem::path dataDir;
 
 
 std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern, bool no_overwrite, bool MIPsOnly)
 {
-	HANDLE  hConsole;
-	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+#ifdef _WIN32
+  HANDLE  hConsole;
+  hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+#endif
 	//std::cout << std::endl;
 	
 	//***************** make GPUdecon output folder ***************
