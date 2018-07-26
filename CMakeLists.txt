@@ -64,7 +64,9 @@ endif()
 
 # message(STATUS "2 Build type is '${CMAKE_BUILD_TYPE}'")
 
-if (NOT APPLE)
+if (APPLE)
+  set(CMAKE_CXX_FLAGS "-std=c++11 -stdlib=libc++")
+else()
   find_package(OpenMP)
   set( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${OpenMP_CXX_FLAGS}" )
 endif()
