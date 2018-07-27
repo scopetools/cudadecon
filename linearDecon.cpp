@@ -34,21 +34,21 @@ int load_next_thread(const char* my_path)
 }
 
 
-int save_in_thread(std::string inputFileName, const float * voxel_size, const char * description)
+int save_in_thread(std::string inputFileName, const float *const voxel_size, const char *const description)
 {
     ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), 0, voxel_size, description);
 
     return 0;
 }
 
-int U16save_in_thread(std::string inputFileName, const float * voxel_size, const char * description)
+int U16save_in_thread(std::string inputFileName, const float *const voxel_size, const char *const description)
 {
     U16ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), 0, voxel_size, description);
 
     return 0;
 }
 
-int DeSkewsave_in_thread(std::string inputFileName, const float * voxel_size, const char * description)
+int DeSkewsave_in_thread(std::string inputFileName, const float *const voxel_size, const char *const description)
 {
     DeskewedToSave.save_tiff(makeOutputFilePath(inputFileName, "Deskewed", "_deskewed").c_str(), 0, voxel_size, description);
     //raw_deskewed.save_tiff(makeOutputFilePath(*it,           "Deskewed", "_deskewed").c_str(), 0, voxel_size, description);
@@ -952,7 +952,7 @@ int main(int argc, char *argv[])
       if (bSaveDeskewedRaw) {
           if (!bSaveUshort){
               DeskewedToSave.assign(raw_deskewed);
-              tDeskewsave = std::thread(DeSkewsave_in_thread, *it); //start saving "Deskewed To Save" file.
+              tDeskewsave = std::thread(DeSkewsave_in_thread, *it, voxel_size, description); //start saving "Deskewed To Save" file.
               //raw_deskewed.save_tiff(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str(), 0, voxel_size, description);
           }
         else {
@@ -1004,16 +1004,23 @@ int main(int argc, char *argv[])
 
       //****************************Save Decon Image***********************************
       if (RL_iters || rotMatrix.getSize()) {
+        // Stupid to redefine these here... but couldn't get the Z voxel size to work
+        // correctly in ImageJ otherwise...
+        float voxel_size2 [] = { imgParams.dr, imgParams.dr, imgParams.dz };
+        std::string s2 = "ImageJ=1.50i\n"
+                        "spacing=" + std::to_string(imgParams.dz) + "\n"
+                        "unit=micron";
+        const char *description2 = s.c_str();
           if (!bSaveUshort){
 
               ToSave.assign(raw_image); //copy decon image (i.e. raw_image) to new image space for saving.
               // ToSave.save_tiff(makeOutputFilePath(*it).c_str(), 0, voxel_size, description);
 
-              tsave = std::thread(save_in_thread, *it, voxel_size, description); //start saving "To Save" file.
+              tsave = std::thread(save_in_thread, *it, voxel_size2, description2); //start saving "To Save" file.
           }
           else {
               U16ToSave = raw_image;
-              tsave = std::thread(U16save_in_thread, *it, voxel_size, description); //start saving "To Save" file.
+              tsave = std::thread(U16save_in_thread, *it, voxel_size2, description2); //start saving "To Save" file.
           }
       }
 
