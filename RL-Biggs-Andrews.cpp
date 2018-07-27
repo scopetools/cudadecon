@@ -220,7 +220,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
 /*  testing using 2D texture for OTF interpolation
   CImg<> realpart(otf.width()/2, otf.height()), imagpart(realpart);
-#pragma omp parallel for  
+#pragma omp parallel for
   cimg_forXY(realpart, x, y) {
     realpart(x, y) = otf(2*x  , y);
     imagpart(x, y) = otf(2*x+1, y);
@@ -283,13 +283,13 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
 
     std::cout << "Copy X_k to X_k-1. ";
-    cutilSafeCall(cudaMemcpyAsync(X_kminus1.getPtr(), X_k.getPtr(),             //copy previous guess to X_kminus1
-        X_k.getSize(), cudaMemcpyDefault));
+    cutilSafeCall(cudaMemcpyAsync(X_kminus1.getPtr(), X_k.getPtr(), //copy previous guess to X_kminus1
+                                  X_k.getSize(), cudaMemcpyDefault));
     
     if (k > 0){
         std::cout << "Copy G_k-1 to G_k-2. ";
         cutilSafeCall(cudaMemcpyAsync(G_kminus2.getPtr(), G_kminus1.getPtr(),
-            G_kminus1.getSize(), cudaMemcpyDefault));
+                                      G_kminus1.getSize(), cudaMemcpyDefault));
     }
     
     std::cout << "Filter1. ";
