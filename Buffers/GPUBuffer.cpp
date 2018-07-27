@@ -27,7 +27,9 @@ device_(device), size_(size), ptr_(0), Hostptr_(0), UseCudaHostOnly_(UseCudaHost
 
   if (!UseCudaHostOnly_){
 	  err = cudaMalloc((void**)&ptr_, size_);
-	  cudaDeviceSynchronize();
+	  #ifndef __APPLE__
+    cudaDeviceSynchronize();
+    #endif
   }
 
   if (err != cudaSuccess || UseCudaHostOnly_) {
@@ -35,7 +37,9 @@ device_(device), size_(size), ptr_(0), Hostptr_(0), UseCudaHostOnly_(UseCudaHost
       if (err != cudaSuccess) 
           throw std::runtime_error("cudaMalloc and cudaHostAlloc failed.");
       else {
-		  cudaDeviceSynchronize();
+		  #ifndef __APPLE__
+        cudaDeviceSynchronize();
+        #endif
           cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0);
           size_t free;
           size_t total;
@@ -95,7 +99,9 @@ GPUBuffer& GPUBuffer::operator=(const CPUBuffer& rhs) {
 }
 
 GPUBuffer::~GPUBuffer() {
-	cudaDeviceSynchronize();
+	#ifndef __APPLE__
+  cudaDeviceSynchronize();
+  #endif
 	if (Hostptr_){
         cudaError_t err = cudaFreeHost(Hostptr_);
         if (err != cudaSuccess) {
@@ -152,7 +158,9 @@ void GPUBuffer::resize(size_t newsize) {
 		if (newsize > 0) {
 			if (!UseCudaHostOnly_){
 				err = cudaMalloc((void**)&ptr_, size_);
-				cudaDeviceSynchronize();
+				#ifndef __APPLE__
+        cudaDeviceSynchronize();
+        #endif
 			}
 
 			if (err != cudaSuccess || UseCudaHostOnly_) { // if device allocation fails, try to allocate on Host
@@ -179,7 +187,9 @@ void GPUBuffer::resize(size_t newsize) {
 #endif
 					}
 					firstcall = false;
-					cudaDeviceSynchronize();
+					#ifndef __APPLE__
+          cudaDeviceSynchronize();
+          #endif
 				}
 			}
 
