@@ -4,6 +4,7 @@
 #include <vector>
 #include <algorithm>  // max(), min()
 #include <limits>  // epsilon()
+#include "../cutilSafeCall.h"
 
 //#include <helper_timer.h>
 

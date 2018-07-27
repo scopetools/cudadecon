@@ -1,6 +1,7 @@
 #include "GPUBuffer.h"
 #include "CPUBuffer.h"
 #include "PinnedCPUBuffer.h"
+#include "../cutilSafeCall.h"
 #ifdef _WIN32
 #include <Windows.h>
 #endif

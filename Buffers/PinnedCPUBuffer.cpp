@@ -1,6 +1,7 @@
 #include "PinnedCPUBuffer.h"
 #include "CPUBuffer.h"
 #include "GPUBuffer.h"
+#include "../cutilSafeCall.h"
 
 PinnedCPUBuffer::PinnedCPUBuffer() :
   size_(0), ptr_(0)

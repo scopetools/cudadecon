@@ -8,7 +8,7 @@
 #include <cuda_runtime.h>
 #include <ostream>
 #include <iostream>
-#include "../cutilSafeCall.h"
+
 
 class CPUBuffer;
 class PinnedCPUBuffer;

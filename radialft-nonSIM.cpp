@@ -425,7 +425,7 @@ bool fixorigin(std::complex<float> *otfkxkz, int nx, int nz, int kx2)
   // linear fit the value at kx=0 using kx in [1, kx2]
   double mean_kx = (kx2+1)/2.; // the mean of [1, 2, ..., n] is (n+1)/2
 
-  printf("In fixorigin(), kx2=%d\n", nx, nz, kx2);
+  printf("In fixorigin(), kx2=%d\n", kx2);
 
   for (int z=0; z<nz; z++) {
     std::complex<double> mean_val=0;

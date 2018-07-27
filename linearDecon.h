@@ -56,10 +56,10 @@ class fixed_tokens_typed_value : public po::typed_value< T, charT > {
 
  public:
 
-   fixed_tokens_typed_value( T * storeTo, unsigned min, unsigned max )
-     : _min(min), _max(max), base( storeTo ) {
-       base::multitoken();
-   }
+  fixed_tokens_typed_value( T * storeTo, unsigned min, unsigned max )
+    : base( storeTo ), _min(min), _max(max) {
+      base::multitoken();
+  }
 
    virtual base* min_tokens( unsigned min ) {
        _min = min;
