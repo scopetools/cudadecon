@@ -22,6 +22,9 @@ set(VERSION_MINOR "0")
 set(VERSION_PATCH "1")
 set(PROJECT_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 
+# set -fPIC for all targets (for shared libraries)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 ######################################################################
 #
 # Set permissions before adding subdirectories
@@ -198,7 +201,7 @@ endif()
 
  CUDA_ADD_LIBRARY(
    libcudaDeconv
-#   SHARED
+   SHARED
    RL-Biggs-Andrews.cpp
    RLgpuImpl.cu
    geometryTransform.cu

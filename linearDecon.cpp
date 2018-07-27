@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
   bool no_overwrite = false;
   int skip = 0;
   bool bDupRevStack = false;
-  
+
   TIFFSetWarningHandler(NULL);
 
   std::string datafolder, filenamePattern, otffiles, LSfile;
@@ -673,7 +673,7 @@ int main(int argc, char *argv[])
         else
           nz_const = new_nz;
         dkz = 1.0/(imgParams.dz * nz_const);
-          
+
         rdistcutoff = 2*NA/(imgParams.wave); // lateral resolution limit in 1/um
         float eps = std::numeric_limits<float>::epsilon();
 
