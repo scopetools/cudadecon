@@ -34,24 +34,24 @@ int load_next_thread(const char* my_path)
 }
 
 
-int save_in_thread(std::string inputFileName)
+int save_in_thread(std::string inputFileName, const float * voxel_size, const char * description)
 {
-    ToSave.save(makeOutputFilePath(inputFileName).c_str());
+    ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), 0, voxel_size, description);
 
     return 0;
 }
 
-int U16save_in_thread(std::string inputFileName)
+int U16save_in_thread(std::string inputFileName, const float * voxel_size, const char * description)
 {
-    U16ToSave.save(makeOutputFilePath(inputFileName).c_str());
+    U16ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), 0, voxel_size, description);
 
     return 0;
 }
 
-int DeSkewsave_in_thread(std::string inputFileName)
+int DeSkewsave_in_thread(std::string inputFileName, const float * voxel_size, const char * description)
 {
-    DeskewedToSave.save(makeOutputFilePath(inputFileName, "Deskewed", "_deskewed").c_str());
-    //raw_deskewed.save(makeOutputFilePath(*it,           "Deskewed", "_deskewed").c_str());
+    DeskewedToSave.save_tiff(makeOutputFilePath(inputFileName, "Deskewed", "_deskewed").c_str(), 0, voxel_size, description);
+    //raw_deskewed.save_tiff(makeOutputFilePath(*it,           "Deskewed", "_deskewed").c_str(), 0, voxel_size, description);
     return 0;
 }
 
@@ -785,6 +785,11 @@ int main(int argc, char *argv[])
       } // end if applying LS correction
 
 
+      float voxel_size [] = { imgParams.dr, imgParams.dr, imgParams.dz };
+      std::string s = "ImageJ=1.50i\n"
+                      "spacing=" + std::to_string(imgParams.dz) + "\n"
+                      "unit=micron";
+      const char *description = s.c_str();
       //****************************Pad image.  Use Mirror image in padded border region***********************************
 
       if (Pad){
@@ -830,8 +835,7 @@ int main(int argc, char *argv[])
               std::cout << "Saving padded image... " << std::endl;
               makeDeskewedDir("Padded");
               CImg<unsigned short> uint16Img(raw_image);
-              uint16Img.SetDescription(commandline_string);
-              uint16Img.save(makeOutputFilePath(*it, "Padded", "_padded").c_str());
+              uint16Img.save_tiff(makeOutputFilePath(*it, "Padded", "_padded").c_str(), 0, voxel_size, description);
           }
           std::cout << "Done." << std::endl;
       } // End Pad image creation.
@@ -948,14 +952,12 @@ int main(int argc, char *argv[])
       if (bSaveDeskewedRaw) {
           if (!bSaveUshort){
               DeskewedToSave.assign(raw_deskewed);
-              DeskewedToSave.SetDescription(commandline_string);
               tDeskewsave = std::thread(DeSkewsave_in_thread, *it); //start saving "Deskewed To Save" file.
-              //raw_deskewed.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
+              //raw_deskewed.save_tiff(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str(), 0, voxel_size, description);
           }
         else {
           CImg<unsigned short> uint16Img(raw_deskewed);
-          uint16Img.SetDescription(commandline_string);
-          uint16Img.save(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str());
+          uint16Img.save_tiff(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str(), 0, voxel_size, description);
          }
       }
 
@@ -969,39 +971,33 @@ int main(int argc, char *argv[])
           CImg<> proj = MaxIntProj(raw_image, 0);
           if (bSaveUshort){
               CImg<unsigned short> uint16Img(proj);
-              uint16Img.SetDescription(commandline_string);
-              uint16Img.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str());
+              uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str(), 0, voxel_size, description);
           }
           else
           {
-              proj.SetDescription(commandline_string);
-              proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str());
+              proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str(), 0, voxel_size, description);
           }
         }
         if (bDoMaxIntProj[1]) {
             CImg<> proj = MaxIntProj(raw_image, 1);
             if (bSaveUshort){
                 CImg<unsigned short> uint16Img(proj);
-                uint16Img.SetDescription(commandline_string);
-                uint16Img.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str());
+                uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str(), 0, voxel_size, description);
             }
             else
             {
-                proj.SetDescription(commandline_string);
-                proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str());
+                proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str(), 0, voxel_size, description);
             }
         }
         if (bDoMaxIntProj[2]) {
             CImg<> proj = MaxIntProj(raw_image, 2);
             if (bSaveUshort){
                 CImg<unsigned short> uint16Img(proj);
-                uint16Img.SetDescription(commandline_string);
-                uint16Img.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str());
+                uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str(), 0, voxel_size, description);
             }
             else
             {
-                proj.SetDescription(commandline_string);
-                proj.save(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str());
+                proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str(), 0, voxel_size, description);
             }
         }
       }
@@ -1011,15 +1007,13 @@ int main(int argc, char *argv[])
           if (!bSaveUshort){
 
               ToSave.assign(raw_image); //copy decon image (i.e. raw_image) to new image space for saving.
-              ToSave.SetDescription(commandline_string);
-              // ToSave.save(makeOutputFilePath(*it).c_str());
+              // ToSave.save_tiff(makeOutputFilePath(*it).c_str(), 0, voxel_size, description);
 
-              tsave = std::thread(save_in_thread, *it); //start saving "To Save" file.
+              tsave = std::thread(save_in_thread, *it, voxel_size, description); //start saving "To Save" file.
           }
           else {
               U16ToSave = raw_image;
-              U16ToSave.SetDescription(commandline_string);
-              tsave = std::thread(U16save_in_thread, *it); //start saving "To Save" file.
+              tsave = std::thread(U16save_in_thread, *it, voxel_size, description); //start saving "To Save" file.
           }
       }
 
