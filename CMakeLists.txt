@@ -212,6 +212,12 @@ add_dependencies(
    Buffer
    )
 
+if (APPLE)
+  set_target_properties(libcudaDeconv
+                        PROPERTIES
+                        OUTPUT_NAME cudaDeconv
+                        MACOSX_RPATH 1)
+endif()
 
 
 #####  cudaDeconv.exe ###########################################
