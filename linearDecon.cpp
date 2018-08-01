@@ -179,6 +179,7 @@ int main(int argc, char *argv[])
   bool bDontAdjustResolution = false;
   bool bDevQuery = false;
   float deskewAngle=0.0;
+  float padVal = 0.0;
   float rotationAngle=0.0;
   unsigned outputWidth;
   int extraShift=0;
@@ -188,7 +189,7 @@ int main(int argc, char *argv[])
   std::vector< CImg<> > MIprojections;
   int Pad = 0;
   bool bFlatStartGuess = false;
-  bool No_Bleach_correction = false;
+  bool bDoRescale = false;
   bool UseOnlyHostMem = false;
   bool no_overwrite = false;
   int skip = 0;
@@ -212,6 +213,7 @@ int main(int argc, char *argv[])
       ("NA,n", po::value<float>(&NA)->default_value(1.2), "Numerical aperture")
       ("RL,i", po::value<int>(&RL_iters)->default_value(15), "Run Richardson-Lucy, and set how many iterations")
       ("deskew,D", po::value<float>(&deskewAngle)->default_value(0.0), "Deskew angle; if not 0.0 then perform deskewing before deconv")
+      ("padval", po::value<float>(&padVal)->default_value(0.0), "Value to pad image with when deskewing")
       ("width,w", po::value<unsigned>(&outputWidth)->default_value(0), "If deskewed, the output image's width")
       ("shift,x", po::value<int>(&extraShift)->default_value(0), "If deskewed, the output image's extra shift in X (positive->left")
       ("rotate,R", po::value<float>(&rotationAngle)->default_value(0.0), "Rotation angle; if not 0.0 then perform rotation around y axis after deconv")
@@ -228,7 +230,7 @@ int main(int argc, char *argv[])
     ("Pad", po::value<int>(&Pad)->default_value(0), "Pad the image data with mirrored values to avoid edge artifacts. Currently only enabled when rotate and deskew are zero.")
     ("LSC", po::value<std::string>(&LSfile), "Lightsheet correction file")
     ("FlatStart", po::bool_switch(&bFlatStartGuess)->default_value(false), "Start the RL from a guess that is a flat image filled with the median image value.  This may supress noise.")
-    ("NoBleachCorrection", po::bool_switch(&No_Bleach_correction)->default_value(false), "Does not apply bleach correction when running multiple images in a single batch.")
+    ("bleachCorrection,p", po::bool_switch(&bDoRescale)->default_value(false), "Apply bleach correction when running multiple images in a single batch")
     ("skip", po::value<int>(&skip)->default_value(0), "Skip the first 'skip' number of files.")
     ("no_overwrite", po::bool_switch(&no_overwrite)->default_value(false), "Don't reprocess files that are already deconvolved (i.e. exist in the GPUdecon folder).")
     // ("UseOnlyHostMem", po::bool_switch(&UseOnlyHostMem)->default_value(false), "Just use Host Mapped Memory, and not GPU. For debugging only.")
@@ -894,7 +896,7 @@ int main(int argc, char *argv[])
         RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters, deskewFactor,
                            deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
                            rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp, myGPUdevice,
-                           bFlatStartGuess, my_median, No_Bleach_correction, bDupRevStack, UseOnlyHostMem);
+                           bFlatStartGuess, my_median, bDoRescale, padVal, bDupRevStack, UseOnlyHostMem);
       }
       else {
         std::cerr << "Nothing is performed\n";

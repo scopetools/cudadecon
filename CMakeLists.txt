@@ -205,6 +205,8 @@ endif()
    RL-Biggs-Andrews.cpp
    RLgpuImpl.cu
    geometryTransform.cu
+   camcor.cpp
+   camcor.cu
    )
 
 add_dependencies(
@@ -239,16 +241,16 @@ add_dependencies(
   
 #####  RL_interface_driver.exe ###########################################
 
-CUDA_ADD_EXECUTABLE(
-  RL_interface_driver
-  RL_interface_driver.cpp
-  )
-
-target_link_libraries(
-  RL_interface_driver
-  libcudaDeconv
-  ${TIFF_LIBRARIES}
-  )
+# CUDA_ADD_EXECUTABLE(
+#   RL_interface_driver
+#   RL_interface_driver.cpp
+#   )
+# 
+# target_link_libraries(
+#   RL_interface_driver
+#   libcudaDeconv
+#   ${TIFF_LIBRARIES}
+#   )
 
 #####  radialft.exe ###########################################
 add_executable(radialft radialft-nonSIM.cpp)

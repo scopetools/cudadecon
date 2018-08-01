@@ -107,8 +107,9 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         cufftHandle rfftplanGPU, cufftHandle rfftplanInvGPU,
                         CImg<> & raw_deskewed, cudaDeviceProp* devprop,
                         int myGPUdevice, bool bFlatStartGuess,
-                        float my_median, bool No_Bleach_correction,
-                        bool bDupRevStack, bool UseOnlyHostMem);
+                        float my_median, bool bDoRescale,
+                        float padVal = 0, bool bDupRevStack = false,
+                        bool UseOnlyHostMem = false);
 
 CImg<> MaxIntProj(CImg<> &input, int axis);
 
@@ -142,11 +143,24 @@ void updatePrediction(GPUBuffer &Y_k, GPUBuffer &X_k, GPUBuffer &X_kminus1,
 
 
 void deskew_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
-                double deskewFactor, GPUBuffer &outBuf, int newNx, int extraShift);
+                double deskewFactor, GPUBuffer &outBuf, int newNx, int extraShift, float padVal = 0);
 
 void rotate_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
                 GPUBuffer &rotMatrix, GPUBuffer &outBuf,
                 int nx_out, int nz_out);
+
+void affine_GPU(cudaArray *cuArray, int nx, int ny, int nz, float * result, GPUBuffer &affMat);
+
+void affine_GPU_RA(cudaArray *cuArray, int nx, int ny, int nz, float dx, float dy, float dz, float * result, GPUBuffer &affMat);
+
+void camcor_GPU(int nx, int ny, int nz, GPUBuffer &outBuf);
+
+void setupConst(int nx, int ny, int nz);
+
+void setupCamCor(int nx, int ny, float * h_caparam);
+
+void setupData(int nx, int ny, int nz, unsigned * h_data);
+
 
 void cropGPU(GPUBuffer &inBuf, int nx, int ny, int nz,
              int new_nx, int new_ny, int new_nz,
@@ -177,41 +191,88 @@ void makeDeskewedDir(std::string subdirname);
 
 
 
-//! All DLL interface calls start HERE:
+
+// ***************************************************************
+//                   SHARED LIBRARY CALLS                        *
+// ***************************************************************
+
+
 extern "C" {
 
 //! Call RL_interface_init() as the first step
-/*!
- * nx, ny, and nz: raw image dimensions
- * dr: raw image pixel size
- * dz: raw image Z step
- * dr_psf: PSF pixel size
- * dz_psf: PSF Z step
- * deskewAngle: deskewing angle; usually -32.8 on Bi-chang scope and 32.8 on Wes scope
- * rotationAngle: if 0 then no final rotation is done; otherwise set to the same as deskewAngle
- * outputWidth: if set to 0, then calculate the output width because of deskewing; otherwise use this value as the output width
- * OTF_file_name: file name of OTF
-*/
-  CUDADECON_API int RL_interface_init(int nx, int ny, int nz, float dr, float dz, float dr_psf, float dz_psf, float deskewAngle, float rotationAngle, int outputWidth, char * OTF_file_name, int myGPUdevice);
+  /*!
+   * nx, ny, and nz: raw image dimensions
+   * dr: raw image pixel size
+   * dz: raw image Z step
+   * dr_psf: PSF pixel size
+   * dz_psf: PSF Z step
+   * deskewAngle: deskewing angle; usually -32.8 on Bi-chang scope and 32.8 on Wes scope
+   * rotationAngle: if 0 then no final rotation is done;
+     otherwise set to the same as deskewAngle
+   * outputWidth: if set to 0, then calculate the output width because of deskewing;
+     otherwise use this value as the output width
+   * OTF_file_name: file name of OTF
+  */
+  CUDADECON_API int RL_interface_init(int nx, int ny, int nz,
+          float dr, float dz, float dr_psf, float dz_psf,
+          float deskewAngle, float rotationAngle,
+          int outputWidth, char * OTF_file_name, int myGPUdevice = 0);
 
 //! RL_interface() to run deconvolution
 /*!
  * raw_data: uint16 pointer to raw data buffer
  * nx, ny, and nz: raw image dimensions
- * result: float pointer to pre-allocated result buffer; the results' dimension can be different than raw_data's; see RL_interface_driver.cpp for an example
+ * result: float pointer to pre-allocated result buffer;
+   the results' dimension can be different than raw_data's;
+   see RL_interface_driver.cpp for an example
  * background: camera dark current (~100)
  * nIters: how many iterations to run
- * extraShift: in pixels; sometimes an extra shift in X is needed to center the deskewed image better
+ * extraShift: in pixels; sometimes an extra shift in X is
+   needed to center the deskewed image better
 */
-CUDADECON_API int RL_interface(const unsigned short * const raw_data, int nx, int ny, int nz, float * const result, float background, int nIters, int extraShift, bool bDupRevStack, int myGPUdevice);
+CUDADECON_API int RL_interface(const unsigned short * const raw_data,
+                      int nx, int ny, int nz, float * result,
+                      float * raw_deskewed_result,
+                      float background, bool bDoRescale,
+                      bool bSaveDeskewedRaw,
+                      int nIters, int extraShift,
+                      float padVal = 0, bool bDupRevStack = false,
+                      int myGPUdevice = 0);
 
+
+CUDADECON_API int Deskew_interface(const float * const raw_data,
+                     int nx, int ny, int nz,
+                     float dz, float dr, float deskewAngle,
+                     float * const result,
+                     int outputWidth, int extraShift, float padVal = 0);
+  
+CUDADECON_API int Affine_interface(const float * const raw_data,
+                     int nx, int ny, int nz,
+                     float * const result,
+                     const float * affMat);
+
+CUDADECON_API int Affine_interface_RA(const float * const raw_data,
+                     int nx, int ny, int nz,
+                     float dx, float dy, float dz,
+                     float * const result,
+                     const float * affMat);
+
+CUDADECON_API int camcor_interface_init(int nx, int ny, int nz,
+                     const float * const camparam);
+
+CUDADECON_API int camcor_interface(const unsigned short * const raw_data,
+                     int nx, int ny, int nz,
+                     unsigned short * const result);
+  
 //! Call this before program quits to release global GPUBuffer d_interpOTF
 CUDADECON_API void RL_cleanup();
+CUDADECON_API void cuda_reset();
 
-//! The following are for retrieving the calculated output dimensions; can be used to allocate result buffer before calling RL_interface()
-CUDADECON_API  unsigned get_output_nx();
-CUDADECON_API  unsigned get_output_ny();
-CUDADECON_API  unsigned get_output_nz();
+//! The following are for retrieving the calculated output dimensions;
+//  can be used to allocate result buffer before calling RL_interface()
+  CUDADECON_API  unsigned get_output_nx();
+  CUDADECON_API  unsigned get_output_ny();
+  CUDADECON_API  unsigned get_output_nz();
 }
 
 
