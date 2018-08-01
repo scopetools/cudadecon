@@ -516,6 +516,7 @@ int RL_interface(const unsigned short * const raw_data,
                  bool bSaveDeskewedRaw,
                  int nIters,
                  int extraShift,
+                 int napodize, int nZblend,
                  float padVal,
                  bool bDupRevStack,
                  int myGPUdevice
@@ -537,7 +538,7 @@ int RL_interface(const unsigned short * const raw_data,
   }
 
   RichardsonLucy_GPU(raw_image, background, d_interpOTF, nIters,
-                     deskewFactor, deskewedXdim, extraShift, 15, 10, rotMatrix,
+                     deskewFactor, deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
                      rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp, myGPUdevice,
                      false, 1, bDoRescale, padVal, bDupRevStack, false);
 

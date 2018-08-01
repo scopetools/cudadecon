@@ -236,6 +236,7 @@ CUDADECON_API int RL_interface(const unsigned short * const raw_data,
                       float background, bool bDoRescale,
                       bool bSaveDeskewedRaw,
                       int nIters, int extraShift,
+                      int napodize = 0, int nZblend = 0,
                       float padVal = 0, bool bDupRevStack = false,
                       int myGPUdevice = 0);
 
