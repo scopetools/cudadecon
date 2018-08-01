@@ -3,7 +3,7 @@
 
 __global__ void deskew_kernel(float *in, int nx, int ny, int nz,
                               float *out, int nxOut, int extraShift,
-                              double deskewFactor)
+                              double deskewFactor, float padVal)
 {
   unsigned xout = blockIdx.x * blockDim.x + threadIdx.x;
   unsigned yout = blockIdx.y;
@@ -26,13 +26,13 @@ __global__ void deskew_kernel(float *in, int nx, int ny, int nz,
       out[indout] = (1-offset) * in[indin] + offset * in[indin+1];
     }
     else
-      out[indout] = 0.f;
+      out[indout] = padVal;
   }
 }
 
 __host__ void deskew_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
                          double deskewFactor, GPUBuffer &outBuf,
-                         int newNx, int extraShift)
+                         int newNx, int extraShift, float padVal)
 {
   dim3 block(128, 1, 1);
   unsigned nxBlocks = (unsigned ) ceil(newNx / (float) block.x);
@@ -41,7 +41,7 @@ __host__ void deskew_GPU(GPUBuffer &inBuf, int nx, int ny, int nz,
   deskew_kernel<<<grid, block>>>((float *) inBuf.getPtr(),
                                  nx, ny, nz, 
                                  (float *) outBuf.getPtr(), newNx,
-                                 extraShift, deskewFactor);
+                                 extraShift, deskewFactor, padVal);
 #ifndef NDEBUG
   std::cout<< "deskew_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
 #endif
@@ -174,4 +174,163 @@ __host__ void duplicateReversedStack_GPU(GPUBuffer &zExpanded, int nx, int ny, i
 #ifndef NDEBUG
   std::cout<< "duplicateReversedStack_GPU(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
 #endif
+}
+
+
+texture<float, cudaTextureType3D, cudaReadModeElementType> texRef;
+
+
+// Simple transformation kernel
+__global__ void transformKernel(float *output,
+                                int nx, int ny, int nz,
+                                float *mat)
+{
+
+    // Calculate texture coordinates
+    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+    unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (x >= nx || y >= ny || z >= nz) {
+        return;
+    }
+
+    // for normalized coordinates
+    //float u = x / (float)nx;
+    //float v = y / (float)ny;
+    //float w = z / (float)nz;
+
+    float u = x;
+    float v = y;
+    float w = z;
+
+    float tu = mat[0]*u + mat[1]*v + mat[2] *w +  mat[3] + 0.5f;
+    float tv = mat[4]*u + mat[5]*v + mat[6] *w +  mat[7] + 0.5f;
+    float tw = mat[8]*u + mat[9]*v + mat[10]*w + mat[11] + 0.5f;
+
+    // Read from texture and write to global memory
+    int idx = z * (nx*ny) + y * nx + x;
+    output[idx] = tex3D(texRef, tu, tv, tw);
+}
+
+// Simple transformation kernel
+__global__ void transformKernelRA(float *output,
+                                int nx, int ny, int nz,
+                                float dx, float dy, float dz,
+                                float *mat)
+{
+
+    // Calculate texture coordinates
+    unsigned int x = blockIdx.x * blockDim.x + threadIdx.x;
+    unsigned int y = blockIdx.y * blockDim.y + threadIdx.y;
+    unsigned int z = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (x >= nx || y >= ny || z >= nz) {
+        return;
+    }
+
+    float u = x;
+    float v = y;
+    float w = z;
+
+    // intrinsic coords to world
+    u = 0.5 + (u - 0.5) * dx;
+    v = 0.5 + (v - 0.5) * dy;
+    w = 0.5 + (w - 0.5) * dz;
+
+    // transform coordinates in world coordinate frame
+    float tu = mat[0]*u + mat[1]*v + mat[2] *w +  mat[3];
+    float tv = mat[4]*u + mat[5]*v + mat[6] *w +  mat[7];
+    float tw = mat[8]*u + mat[9]*v + mat[10]*w + mat[11];
+
+    // world coords to intrinsic
+    tu = 0.5 + (tu - 0.5) / dx;
+    tv = 0.5 + (tv - 0.5) / dy;
+    tw = 0.5 + (tw - 0.5) / dz;
+
+    // Read from texture and write to global memory
+    int idx = z * (nx*ny) + y * nx + x;
+    output[idx] = tex3D(texRef, tu, tv, tw);
+}
+
+
+// host data
+__host__ void affine_GPU(cudaArray *cuArray, int nx, int ny, int nz,
+                         float * result, GPUBuffer &affMat)
+{
+
+    // Allocate CUDA array in device memory
+    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(
+        32, 0, 0, 0, cudaChannelFormatKindFloat);
+
+    // Set texture reference parameters
+    texRef.addressMode[0] = cudaAddressModeBorder;
+    texRef.addressMode[1] = cudaAddressModeBorder;
+    texRef.addressMode[2] = cudaAddressModeBorder;
+    texRef.filterMode = cudaFilterModeLinear;
+    texRef.normalized = false;
+
+    // Bind the array to the texture reference
+    cudaBindTextureToArray(texRef, cuArray, channelDesc);
+
+    // Allocate result of transformation in device memory
+    float* output;
+    cudaMalloc(&output, nx * ny * nz * sizeof(float));
+
+    // Invoke kernel dim3
+    dim3 dimBlock(16,16,4);
+    dim3 dimGrid((nx + dimBlock.x - 1) / dimBlock.x,
+                 (ny + dimBlock.y - 1) / dimBlock.y,
+                 (nz + dimBlock.z - 1) / dimBlock.z);
+
+    transformKernel<<<dimGrid, dimBlock>>>(output, nx, ny, nz, (float *) affMat.getPtr());
+    CudaCheckError();
+
+    //transfer result back to host
+    cudaMemcpy(result, output, nz * nx * ny * sizeof(float), cudaMemcpyDeviceToHost);
+
+    // Free device memory
+    cudaFreeArray(cuArray);
+    cudaFree(output);
+}
+
+// host data
+__host__ void affine_GPU_RA(cudaArray *cuArray, int nx, int ny, int nz,
+                         float dx, float dy, float dz,
+                         float * result, GPUBuffer &affMat)
+{
+
+    // Allocate CUDA array in device memory
+    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(
+        32, 0, 0, 0, cudaChannelFormatKindFloat);
+
+    // Set texture reference parameters
+    texRef.addressMode[0] = cudaAddressModeBorder;
+    texRef.addressMode[1] = cudaAddressModeBorder;
+    texRef.addressMode[2] = cudaAddressModeBorder;
+    texRef.filterMode = cudaFilterModeLinear;
+    texRef.normalized = false;
+
+    // Bind the array to the texture reference
+    cudaBindTextureToArray(texRef, cuArray, channelDesc);
+
+    // Allocate result of transformation in device memory
+    float* output;
+    cudaMalloc(&output, nx * ny * nz * sizeof(float));
+
+    // Invoke kernel dim3
+    dim3 dimBlock(16,16,4);
+    dim3 dimGrid((nx + dimBlock.x - 1) / dimBlock.x,
+                 (ny + dimBlock.y - 1) / dimBlock.y,
+                 (nz + dimBlock.z - 1) / dimBlock.z);
+
+    transformKernelRA<<<dimGrid, dimBlock>>>(output, nx, ny, nz, dx, dy, dz, (float *) affMat.getPtr());
+    CudaCheckError();
+
+    //transfer result back to host
+    cudaMemcpy(result, output, nz * nx * ny * sizeof(float), cudaMemcpyDeviceToHost);
+
+    // Free device memory
+    cudaFreeArray(cuArray);
+    cudaFree(output);
 }
