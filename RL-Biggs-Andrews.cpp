@@ -56,12 +56,13 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         int napodize, int nZblend,
                         CPUBuffer &rotationMatrix, cufftHandle rfftplanGPU, 
                         cufftHandle rfftplanInvGPU, CImg<> & raw_deskewed,
-                        cudaDeviceProp *devProp, int myGPUdevice,
+                        cudaDeviceProp *devProp,
                         bool bFlatStartGuess, float my_median,
                         bool bDoRescale,
                         float padVal,
                         bool bDupRevStack,
-                        bool UseOnlyHostMem)
+                        bool UseOnlyHostMem,
+                        int myGPUdevice)
 {
   size_t free; //for GPU memory profiling
   size_t total;//for GPU memory profiling
@@ -178,7 +179,9 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     /***** Duplicate reversed stack to minimize ringing in Z ******/
     if (bDupRevStack) {
       GPUBuffer X_k2(nz*2 * nxy * sizeof(float), myGPUdevice, false);
-      std::cout << "Copy X_k into X_k2. " ;
+      #ifndef NDEBUG
+        std::cout << "Copy X_k into X_k2. " ;
+      #endif
       cutilSafeCall(cudaMemcpy(X_k2.getPtr(), X_k.getPtr(),
                                nz*nxy*sizeof(float),
                                cudaMemcpyDefault));
@@ -282,36 +285,46 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     
     else
     {
-        std::cout << "Copy X_k to Y_k. ";
+        #ifndef NDEBUG
+          std::cout << "Copy X_k to Y_k. ";
+        #endif
         Y_k = X_k; // copy data (not pointer) from X_k to Y_k (= operator has been redefined)
     }
 
-
-    std::cout << "Copy X_k to X_k-1. ";
+    #ifndef NDEBUG
+      std::cout << "Copy X_k to X_k-1. ";
+    #endif
     cutilSafeCall(cudaMemcpyAsync(X_kminus1.getPtr(), X_k.getPtr(), //copy previous guess to X_kminus1
                                   X_k.getSize(), cudaMemcpyDefault));
     
     if (k > 0){
-        std::cout << "Copy G_k-1 to G_k-2. ";
+        #ifndef NDEBUG
+          std::cout << "Copy G_k-1 to G_k-2. ";
+        #endif
         cutilSafeCall(cudaMemcpyAsync(G_kminus2.getPtr(), G_kminus1.getPtr(),
                                       G_kminus1.getSize(), cudaMemcpyDefault));
     }
     
-    std::cout << "Filter1. ";
+    #ifndef NDEBUG
+      std::cout << "Filter1. ";
+    #endif
     // b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
     CC = Y_k;
     filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
               false, devProp->maxGridSize[2]);
 
-    std::cout << "LRcore. ";
-
+    #ifndef NDEBUG
+      std::cout << "LRcore. ";
+    #endif
     calcLRcore(CC, rawGPUbuf, nx, ny, nz, devProp->maxGridSize[2]);
 
     
     // c. Determine next iteration image & apply positivity constraint
     // X_kminus1 = X_k;
 
-    std::cout << "Filter2. ";
+    #ifndef NDEBUG
+      std::cout << "Filter2. ";
+    #endif
     filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
               true, devProp->maxGridSize[2]);
 
@@ -319,7 +332,12 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
     // G_kminus2 = G_kminus1;
     calcCurrPrevDiff(X_k, Y_k, G_kminus1, nx, ny, nz, devProp->maxGridSize[2]); //G_kminus1 = X_k - Y_k change from RL
-    std::cout << "Done. " << std::endl;
+    
+    #ifndef NDEBUG
+      std::cout << "Done. " << std::endl;
+    #else
+      std::cout << std::endl;
+    #endif
   }
 
   //************************************************************************************
@@ -539,8 +557,8 @@ int RL_interface(const unsigned short * const raw_data,
 
   RichardsonLucy_GPU(raw_image, background, d_interpOTF, nIters,
                      deskewFactor, deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
-                     rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp, myGPUdevice,
-                     false, 1, bDoRescale, padVal, bDupRevStack, false);
+                     rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp,
+                     false, 1, bDoRescale, padVal, bDupRevStack, false, myGPUdevice);
 
   // Copy deconvolved data, stored in raw_image, to "result" for return:
   memcpy(result, raw_image.data(), raw_image.size() * sizeof(float));
