@@ -177,7 +177,6 @@ int main(int argc, char *argv[])
   int RL_iters=0;
   bool bSaveDeskewedRaw = false;
   bool bDontAdjustResolution = false;
-  bool bDevQuery = false;
   float deskewAngle=0.0;
   float padVal = 0.0;
   float rotationAngle=0.0;
@@ -225,7 +224,6 @@ int main(int argc, char *argv[])
     ("otf-file", po::value<std::string>(&otffiles)->required(), "OTF file")
     ("filename-pattern", po::value<std::string>(&filenamePattern)->required(), "File name pattern to find input images to process")
     ("DoNotAdjustResForFFT,a", po::bool_switch(&bDontAdjustResolution)->default_value(false), "Don't change data resolution size. Otherwise data is cropped to perform faster, more memory efficient FFT: size factorable into 2,3,5,7)")
-    ("DevQuery,q", po::bool_switch(&bDevQuery)->default_value(false), "Show info and indices of available GPUs")
     //("GPUdevice", po::value<int>(&myGPUdevice)->default_value(0), "Index of GPU device to use (0=first device)")
     ("Pad", po::value<int>(&Pad)->default_value(0), "Pad the image data with mirrored values to avoid edge artifacts. Currently only enabled when rotate and deskew are zero.")
     ("LSC", po::value<std::string>(&LSfile), "Lightsheet correction file")
@@ -234,6 +232,7 @@ int main(int argc, char *argv[])
     ("skip", po::value<int>(&skip)->default_value(0), "Skip the first 'skip' number of files.")
     ("no_overwrite", po::bool_switch(&no_overwrite)->default_value(false), "Don't reprocess files that are already deconvolved (i.e. exist in the GPUdecon folder).")
     // ("UseOnlyHostMem", po::bool_switch(&UseOnlyHostMem)->default_value(false), "Just use Host Mapped Memory, and not GPU. For debugging only.")
+    ("DevQuery,Q", "Show info and indices of available GPUs")
     ("help,h", "This help message.")
     ;
   po::positional_options_description p;
@@ -266,6 +265,33 @@ int main(int argc, char *argv[])
           return 0;
       }
 
+      //****************************Query GPU devices***********************************
+      if (varsmap.count("DevQuery")) {
+        int deviceCount = 0;
+        cudaGetDeviceCount(&deviceCount);
+        // This function call returns 0 if there are no CUDA capable devices.
+        if (deviceCount != 0)
+          printf("Detected %d CUDA Capable device(s)\n", deviceCount);
+
+        int dev, driverVersion = 0, runtimeVersion = 0;
+
+        for (dev = 0; dev < deviceCount; ++dev)
+        {
+          cudaSetDevice(dev);
+          cudaDeviceProp mydeviceProp;
+          cudaGetDeviceProperties(&mydeviceProp, dev);
+          printf("\nDevice %d: \"%s\"\n", dev, mydeviceProp.name);
+
+          cudaDriverGetVersion(&driverVersion);
+          cudaRuntimeGetVersion(&runtimeVersion);
+          printf("  CUDA Driver Version / Runtime Version          %d.%d / %d.%d\n", driverVersion / 1000, (driverVersion % 100) / 10, runtimeVersion / 1000, (runtimeVersion % 100) / 10);
+          printf("  CUDA Capability Major/Minor version number:    %d.%d\n", mydeviceProp.major, mydeviceProp.minor);
+          printf("  Total amount of global memory:                 %.0f MBytes (%llu bytes)\n",
+                 (float)mydeviceProp.totalGlobalMem / 1048576.0f, (unsigned long long) mydeviceProp.totalGlobalMem);
+        }
+        return 0; // added return because I want query to simply query and quit
+      }
+
       notify(varsmap);
 
       // if (varsmap.count("crop")) {
@@ -294,31 +320,6 @@ int main(int argc, char *argv[])
   }
   if (deviceCount == 0)
       printf("There are no available device(s) that support CUDA\n");
-
-  //****************************Query GPU devices***********************************
-  if (bDevQuery) {
-      // This function call returns 0 if there are no CUDA capable devices.
-      if (deviceCount != 0)
-          printf("Detected %d CUDA Capable device(s)\n", deviceCount);
-
-      int dev, driverVersion = 0, runtimeVersion = 0;
-
-      for (dev = 0; dev < deviceCount; ++dev)
-      {
-          cudaSetDevice(dev);
-          cudaDeviceProp mydeviceProp;
-          cudaGetDeviceProperties(&mydeviceProp, dev);
-          printf("\nDevice %d: \"%s\"\n", dev, mydeviceProp.name);
-
-          cudaDriverGetVersion(&driverVersion);
-          cudaRuntimeGetVersion(&runtimeVersion);
-          printf("  CUDA Driver Version / Runtime Version          %d.%d / %d.%d\n", driverVersion / 1000, (driverVersion % 100) / 10, runtimeVersion / 1000, (runtimeVersion % 100) / 10);
-          printf("  CUDA Capability Major/Minor version number:    %d.%d\n", mydeviceProp.major, mydeviceProp.minor);
-          printf("  Total amount of global memory:                 %.0f MBytes (%llu bytes)\n",
-              (float)mydeviceProp.totalGlobalMem / 1048576.0f, (unsigned long long) mydeviceProp.totalGlobalMem);
-      }
-      cudaSetDevice(myGPUdevice);
-  }
 
 
   cudaSetDeviceFlags(cudaDeviceMapHost);
