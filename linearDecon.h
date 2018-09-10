@@ -242,39 +242,39 @@ CUDADECON_API int RL_interface(const unsigned short * const raw_data,
                       int myGPUdevice = 0);
 
 
-CUDADECON_API int Deskew_interface(const float * const raw_data,
-                     int nx, int ny, int nz,
-                     float dz, float dr, float deskewAngle,
-                     float * const result,
-                     int outputWidth, int extraShift, float padVal = 0);
-  
-CUDADECON_API int Affine_interface(const float * const raw_data,
-                     int nx, int ny, int nz,
-                     float * const result,
-                     const float * affMat);
-
-CUDADECON_API int Affine_interface_RA(const float * const raw_data,
-                     int nx, int ny, int nz,
-                     float dx, float dy, float dz,
-                     float * const result,
-                     const float * affMat);
-
-CUDADECON_API int camcor_interface_init(int nx, int ny, int nz,
-                     const float * const camparam);
-
-CUDADECON_API int camcor_interface(const unsigned short * const raw_data,
-                     int nx, int ny, int nz,
-                     unsigned short * const result);
+//CUDADECON_API int Deskew_interface(const float * const raw_data,
+//                     int nx, int ny, int nz,
+//                     float dz, float dr, float deskewAngle,
+//                     float * const result,
+//                     int outputWidth, int extraShift, float padVal = 0);
+//  
+//CUDADECON_API int Affine_interface(const float * const raw_data,
+//                     int nx, int ny, int nz,
+//                     float * const result,
+//                     const float * affMat);
+//
+//CUDADECON_API int Affine_interface_RA(const float * const raw_data,
+//                     int nx, int ny, int nz,
+//                     float dx, float dy, float dz,
+//                     float * const result,
+//                     const float * affMat);
+//
+//CUDADECON_API int camcor_interface_init(int nx, int ny, int nz,
+//                     const float * const camparam);
+//
+//CUDADECON_API int camcor_interface(const unsigned short * const raw_data,
+//                     int nx, int ny, int nz,
+//                     unsigned short * const result);
   
 //! Call this before program quits to release global GPUBuffer d_interpOTF
 CUDADECON_API void RL_cleanup();
-CUDADECON_API void cuda_reset();
+// CUDADECON_API void cuda_reset();
 
 //! The following are for retrieving the calculated output dimensions;
 //  can be used to allocate result buffer before calling RL_interface()
-  CUDADECON_API  unsigned get_output_nx();
-  CUDADECON_API  unsigned get_output_ny();
-  CUDADECON_API  unsigned get_output_nz();
+//  CUDADECON_API  unsigned get_output_nx();
+//  CUDADECON_API  unsigned get_output_ny();
+//  CUDADECON_API  unsigned get_output_nz();
 }
 
 

@@ -100,6 +100,7 @@ find_package(CUDA REQUIRED)
 
 if (WIN32)
   set (FFTW3_ROOT_DIR C:/fftw3)
+  set (FFTW3_INCLUDE_DIR C:/fftw3)
   set (FFTW3F_LIBRARY libfftw3f-3)
   find_package(FFTW3 COMPONENTS single)
 
@@ -205,8 +206,8 @@ endif()
    RL-Biggs-Andrews.cpp
    RLgpuImpl.cu
    geometryTransform.cu
-   camcor.cpp
-   camcor.cu
+#   camcor.cpp
+#   camcor.cu
    )
 
 add_dependencies(
@@ -220,6 +221,55 @@ if (APPLE)
                         OUTPUT_NAME cudaDeconv
                         MACOSX_RPATH 1)
 endif()
+
+
+#####  libLLSpy.dll ###########################################
+
+ CUDA_ADD_LIBRARY(
+   libLLSpy
+   SHARED
+   geometryTransform.cu
+   camcor.cu
+   llspy.cpp
+   )
+
+add_dependencies(
+   libLLSpy
+   Buffer
+   )
+
+if (APPLE)
+  set_target_properties(libLLSpy
+                        PROPERTIES
+                        OUTPUT_NAME LLSpy
+                        MACOSX_RPATH 1)
+endif()
+
+
+#####  libradialft.dll ###########################################
+
+ add_library(
+   libradialft
+   SHARED
+   radialft_interface.cpp
+   )
+
+add_dependencies(
+   libradialft
+   Buffer
+   )
+
+if (WIN32)
+  set_property(TARGET libradialft PROPERTY POSITION_INDEPENDENT_CODE ON)
+else()
+  set_target_properties(libradialft
+                        PROPERTIES
+                        OUTPUT_NAME radialft
+                        MACOSX_RPATH 1
+                        POSITION_INDEPENDENT_CODE ON)
+endif()
+
+
 
 
 #####  cudaDeconv.exe ###########################################
@@ -294,6 +344,12 @@ target_link_libraries(
   ${X11_X11_LIB}
   )
 
+target_link_libraries(
+  libLLSpy
+  Buffer
+  ${X11_X11_LIB}
+  )
+
 
 target_link_libraries(
   libcudaDeconv
@@ -310,6 +366,20 @@ target_link_libraries(
   )
 CUDA_ADD_CUFFT_TO_TARGET(libcudaDeconv)
 
+
+target_link_libraries(
+  libradialft
+#  Buffer
+  ${FFTW3F_LIBRARY}
+#  ${FFTW3F_THREADS_LIBRARY}
+  ${X11_X11_LIB}
+#  ${Boost_PROGRAM_OPTIONS_LIBRARY}
+#  ${Boost_FILESYSTEM_LIBRARY}
+#  ${Boost_PREDICATE_LIBRARY}
+#  ${Boost_REGEX_LIBRARY}
+#  ${Boost_SYSTEM_LIBRARY}
+  ${TIFF_LIBRARIES}
+  )
 
 
 CUDA_ADD_CUFFT_TO_TARGET(cudaDeconv)
