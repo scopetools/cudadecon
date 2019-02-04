@@ -49,7 +49,8 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
 
 	  // Skip if no match.  This won't be a match.
 	  std::smatch what;
-	  if (!std::regex_match(i->path().string(), what, my_filter)) continue;
+    std::string tmps=i->path().string(); // regex_match no longer permits temporary strings 
+	  if (!std::regex_match(tmps, what, my_filter)) continue;
 
 	  all_decon_files.push_back(i->path().stem().string());
   }
@@ -74,7 +75,8 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
     std::smatch what;
 
     // Skip if no match
-    if( !std::regex_match( i->path().string(), what, my_filter ) ) continue;
+    std::string tmps=i->path().string(); // regex_match no longer permits temporary strings 
+    if( !std::regex_match( tmps, what, my_filter ) ) continue;
 
 	// Skip if we are not "overwriting" and if the file exists in the output folder already
 	if (no_overwrite)
