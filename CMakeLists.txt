@@ -12,6 +12,7 @@
 
 cmake_minimum_required (VERSION 2.6)
 cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
+cmake_policy(SET CMP0012 NEW) #Set IF statements to use values of numbers and booleans rather than pretend that they could be variables
 
 project (cudaDeconv)
 
@@ -121,14 +122,27 @@ if (NOT WIN32)
 endif()
 
 if(WIN32)
+  set (BOOST_ROOT C:/boost/boost_1_69_0) # give hint where to find Boost
   find_package( Boost )
 else()
   find_package( Boost REQUIRED COMPONENTS program_options filesystem system)
 endif(WIN32)
 
 message(STATUS "CUDA version : ${CUDA_VERSION}")
-if(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
-	set(CUDA_NVCC_FLAGS "-O2;\
+if(NOT(CUDA_VERSION LESS 10.0))  # if CUDA version is > or = 10.0
+    set(CUDA_NVCC_FLAGS "-O2;\
+    -gencode=arch=compute_30,code=sm_30;\
+    -gencode=arch=compute_35,code=sm_35;\
+    -gencode=arch=compute_37,code=sm_37;\
+    -gencode=arch=compute_50,code=sm_50;\
+    -gencode=arch=compute_52,code=sm_52;\
+    -gencode=arch=compute_61,code=sm_61;\
+    -gencode=arch=compute_62,code=sm_62;\
+    -gencode=arch=compute_70,code=sm_70;\
+    -gencode=arch=compute_72,code=sm_72;\
+    -gencode=arch=compute_75,code=sm_75") 
+  elseif(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
+	  set(CUDA_NVCC_FLAGS "-O2;\
 		-gencode=arch=compute_20,code=sm_20;\
 		-gencode=arch=compute_30,code=sm_30;\
 		-gencode=arch=compute_35,code=sm_35;\
@@ -147,7 +161,9 @@ if(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
 											  # compute capability 6.1 only avaiable in CUDA 8.0 or greater
 endif()
 
-# Specifies which compute capabilities are supported by the built .exe http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#gpu-feature-list 
+# Specifies which compute capabilities are supported by the built .exe 
+# http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list 
+# http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#gpu-feature-list 
 # Need to add to these if different GPUs are targeted.
 #--ptxas-options=-v;
 
