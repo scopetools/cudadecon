@@ -1,7 +1,6 @@
 *** You must have an NVIDIA GPU and use a display driver that supports CUDA 10.0 (i.e. get the latest NVIDIA driver).  A card with 12GB of video RAM is suggested.  Run "deviceQueryDrv.exe" to get the details on your GPU.
 
-*** You need to have installed the x64 version of "Microsoft Visual C++ Redistributable for Visual Studio 2017" (vc_redist.x64.exe).  It may have already been installed, or it can be found here : https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads
-
+*** If you have errors about missing .dlls, you may need to install the x64 version of "Microsoft Visual C++ Redistributable for Visual Studio 2017" (vc_redist.x64.exe).  It can be found here : https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads
 
 *** Single GPU ***
 If you are processing on the GPU that drives the display, Windows will terminate cudaDecon.exe if an iteration takes too long.  To set the windows display driver timeout to something larger (like 30 seconds instead of default 5 seconds) :
@@ -21,25 +20,33 @@ After correct card placement, use "C:\Program Files\NVIDIA Corporation\NVSMI\NVI
 
 *** Example usage for CudaDecon ***
 
-This assumes that you've copied the "GPU_decon" contents into e:\Cuda.  
+* This assumes that you've copied the "GPU_decon" contents into E:\GPU_decon.  
 
-First test the installation and hardware by running "CudaDeconvTest.bat" which will process the example data in "2016_02_19_example_decon_deskew_data". If that succeeds you can follow the rest to see how it works.  If not, try to run "deviceQueryDrv.exe" to get the details on your GPU.
+* First test the installation and hardware by running "CudaDeconvTest.bat" which will process the example data in "2016_02_19_example_decon_deskew_data". If that succeeds you can follow the rest to see how it works.  If not, try to run "deviceQueryDrv.exe" to get the details on your GPU.
+
+* Edit the otfgen.bat file and put in the full path for where your radialft.exe is.  
+
+* Next navigate to the folder that contains either the PSF (for the OTF gen) or the data (for the decon/deskew) from a command prompt.  An easy way to do this, is to navigate to the folder in windows explorer.  Then in the address bar type "cmd" and ENTER.  That will create a command prompt at your location.  Or you can type in the "change directory" command into the command prompt: 
+
+cd "E:\GPU_decon\2016_02_19_example_decon_deskew_data"
 
 
+* Make the OTF. Run this command from the PSF folder:
 
-Edit the otfgen.bat file and put in the full path for where your radialft.exe is.  
+"E:\GPU_decon\otfgen.bat" mbPSF_560_NAp5nap42_z100nm.tif mbOTF_560_NAp5nap42_z100nm.tif
 
-Next navigate to the folder that contains either the PSF (for the OTF gen) or the data (for the decon/deskew) from a command prompt.  An easy way to do this, is to navigate to the folder in windows explorer.  Then in the address bar type "cmd" and ENTER.  That will create a command prompt at your location. 
 
-Make the OTF. Run this command from the PSF folder:
-"e:\Cuda\otfgen.bat" mbPSF_560_NAp5nap42_z100nm.tif mbOTF_560_NAp5nap42_z100nm.tif
+* Change to the data folder :
 
-Process the data (note that the path to the OTF file is the relative path from the current directory):
-"e:\Cuda\cudaDeconv" -z .36 -D 32.8 -R 32.8 -i 15 -M 0 0 1 -S --input-dir . --filename-pattern sample_scan_560_20ms_zp36_cell1 --otf-file ../mbOTF_560_NAp5nap42_z100nm.tif --NoBleachCorrection 
+cd "E:\GPU_decon\2016_02_19_example_decon_deskew_data\ERTKR"
 
-Note that you will need a GPU with enough memory to process the dataset. Also, note that the file extension is required for the OTF file, but should not be included in the name/string for the image.  The image string is just a character match, so it will process all files in the folder containing that string.
 
-You can type cudaDeconv -h for a list of available parameters.
+* Process the data (note that the path to the OTF file is the relative path from the current directory):
+
+E:\GPU_decon\cudaDeconv.exe -z .36 -D 32.8 -R 32.8 -i 15 -M 0 0 1 -S --input-dir . --filename-pattern sample_scan_560 --otf-file ../mbOTF_560_NAp5nap42_z100nm.tif --NoBleachCorrection 
+
+
+* You will need a GPU with enough memory to process the dataset. Also, note that the file extension is required for the OTF file, but should not be included in the name/string for the image.  The image string is just a character match, so it will process all files in the folder containing that string.  You can type cudaDeconv -h for a list of available parameters.
 
 
 *** Best practices ***
@@ -52,7 +59,7 @@ REM ****488****
 
 SET myotf=Z:\2017-03-10\488otf_zp1_camA_2.tif
 
-SET DECON=D:\GPU_decon\build\cudaDeconv.exe --drdata 0.105 -z .3 -Z .1 -D 32.8 -R 32.8 -l 0.488 -i 15 -u -M 0 0 1 -S --NoBleachCorrection --Pad 20
+SET DECON=E:\GPU_decon\build\cudaDeconv.exe --drdata 0.105 -z .3 -Z .1 -D 32.8 -R 32.8 -l 0.488 -i 15 -u -M 0 0 1 -S --NoBleachCorrection --Pad 20
 
 SET mypath1=Z:\2017-03-10\data1\Cell1
 SET mypath2=Z:\2017-03-10\data1\Cell2
@@ -65,7 +72,7 @@ REM ****560****
 
 SET myotf=Z:\2017-03-10\560otf_zp1_camA_2.tif
 
-SET DECON=D:\GPU_decon\build\cudaDeconv.exe --drdata 0.105 -z .3 -Z .1 -D 32.8 -R 32.8 -l 0.560 -i 15 -u -M 0 0 1 -S --NoBleachCorrection --Pad 20
+SET DECON=E:\GPU_decon\build\cudaDeconv.exe --drdata 0.105 -z .3 -Z .1 -D 32.8 -R 32.8 -l 0.560 -i 15 -u -M 0 0 1 -S --NoBleachCorrection --Pad 20
 
 SET mypath1=Z:\2017-03-10\data1\Cell1
 SET mypath2=Z:\2017-03-10\data1\Cell2
