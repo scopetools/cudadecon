@@ -1,5 +1,7 @@
 *** You must have an NVIDIA GPU and use a display driver that supports CUDA 10.0 (i.e. get the latest NVIDIA driver).  A card with 12GB of video RAM is suggested.  Run "deviceQueryDrv.exe" to get the details on your GPU.
 
+*** You need to have installed the x64 version of "Microsoft Visual C++ Redistributable for Visual Studio 2017" (vc_redist.x64.exe).  It may have already been installed, or it can be found here : https://support.microsoft.com/en-us/help/2977003/the-latest-supported-visual-c-downloads
+
 
 *** Single GPU ***
 If you are processing on the GPU that drives the display, Windows will terminate cudaDecon.exe if an iteration takes too long.  To set the windows display driver timeout to something larger (like 30 seconds instead of default 5 seconds) :
