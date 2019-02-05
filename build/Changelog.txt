@@ -1,3 +1,14 @@
+2019-02-04
+* Updated libraries so it can run on latest RTX cards.  
+
+CUDA 10
+libtiff 4.0.10
+zlib-1.2.11
+boost 1.69.0
+FFTW 3.3.5
+
+
+
 2017-04-18
 * Added boilerplate.
 

@@ -140,7 +140,8 @@ if(NOT(CUDA_VERSION LESS 10.0))  # if CUDA version is > or = 10.0
     -gencode=arch=compute_62,code=sm_62;\
     -gencode=arch=compute_70,code=sm_70;\
     -gencode=arch=compute_72,code=sm_72;\
-    -gencode=arch=compute_75,code=sm_75") 
+    -gencode=arch=compute_75,code=sm_75,\
+    -gencode=arch=compute_75,code=compute_75") # make available to future hardware see JIT compilation : https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#just-in-time-compilation
   elseif(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
 	  set(CUDA_NVCC_FLAGS "-O2;\
 		-gencode=arch=compute_20,code=sm_20;\

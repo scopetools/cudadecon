@@ -1,3 +1,3 @@
-@rem In the following, change "C:\cudaDecon_bin" to wherever cudaDeconv executables are stored
+@rem In the following, change "e:\Cuda" to wherever cudaDeconv executables are stored
 
-"D:\Dropbox (HHMI)\For Rainer\Cuda\radialft.exe" %1 %2 --nocleanup --fixorigin 10
+"e:\Cuda\radialft.exe" %1 %2 --nocleanup --fixorigin 10

@@ -66,34 +66,45 @@ nmake /f makefile.vc
 1.e. Install CUDA SDK (I'm using 10.0). Reboot.
 
 1.f. Install Boost C++ Libraries.
-* Download source code : https://www.boost.org/users/download/ into C:\boost folder, and build :
+* Download source code : https://www.boost.org/users/download/ into C:\boost folder, and build via:
 
 cd C:\boost\boost_1_69_0
 bootstrap
 .\b2 address-model=64
 
-1.g. Make a subdirectory under where the source code (or this README) is located; call it "cmake".  Then copy \\dm11\betziglab\shaol\FindFFTW3.cmake into this folder (FYI, you don't need to do this, since this is now in the SVN repo.)
 
 2. Generate makefiles:
 2.a. Make a subdirectory under where the source code (or this README) is located; let's call it "build"
-2.b. From the VS command prompt window, cd into the "build" directory just created and build:
+2.b. From the VS command prompt window, cd into the "build" directory just created and build like this:
 
 cd C:\CudaDecon\build
 cmake -D CMAKE_BUILD_TYPE=Release -G "NMake Makefiles" ..
 
-Make sure there's no error message. To generate makefiles from scratch, the entire content of "build" folder has to be deleted first. 
 
-3. Compile the libraries and executables:
+* Make sure there's no error message. To generate makefiles from scratch, the entire content of "build" folder has to be deleted first. 
+
+3. Copy runtime .dlls :
+* Copy "libfftw3f-3.dll" from C:\fftw3 into the directory with the cudaDeconv.exe
+* Copy "cufft64_100.dll" and "cudart64_100.dll" into the directoy as well :
+
+cp c:\fftw3\libfftw3f-3.dll c:\CudaDecon\build
+cp "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\bin\cudart64_*.dll" c:\CudaDecon\build
+cp "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\bin\cufft64_*.dll"  c:\CudaDecon\build
+
+
+
+4. Compile the libraries and executables:
 
 cd C:\CudaDecon\build
 nmake 
 
-4. To generate the .sln files for Visual Studio (so that you have a nice IDE to view the source files), you can create a folder, call it "VS", then run this command within the "VS" folder:
+
+
+
+5. To generate the .sln files for Visual Studio (so that you have a nice IDE to view the source files), you can create a folder, call it "VS", then run this command within the "VS" folder:
 
 cd C:\CudaDecon\VS
 cmake .. -G "Visual Studio 15 Wind64"
-
-5. Copy "libfftw3f-3.dll" from C:\fftw3 into the directory with the CudaDecon.exe
 
 ********************* Notes ***************
 
