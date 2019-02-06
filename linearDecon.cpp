@@ -33,25 +33,26 @@ int load_next_thread(const char* my_path)
     return 0;
 }
 
+unsigned compression = 0;
 
 int save_in_thread(std::string inputFileName, const float *const voxel_size, const char *const description)
 {
-    ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), 0, voxel_size, description);
+    ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), compression, voxel_size, description);
 
     return 0;
 }
 
 int U16save_in_thread(std::string inputFileName, const float *const voxel_size, const char *const description)
 {
-    U16ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), 0, voxel_size, description);
+    U16ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), compression, voxel_size, description);
 
     return 0;
 }
 
 int DeSkewsave_in_thread(std::string inputFileName, const float *const voxel_size, const char *const description)
 {
-    DeskewedToSave.save_tiff(makeOutputFilePath(inputFileName, "Deskewed", "_deskewed").c_str(), 0, voxel_size, description);
-    //raw_deskewed.save_tiff(makeOutputFilePath(*it,           "Deskewed", "_deskewed").c_str(), 0, voxel_size, description);
+    DeskewedToSave.save_tiff(makeOutputFilePath(inputFileName, "Deskewed", "_deskewed").c_str(), compression, voxel_size, description);
+    //raw_deskewed.save_tiff(makeOutputFilePath(*it,           "Deskewed", "_deskewed").c_str(), compression, voxel_size, description);
     return 0;
 }
 
@@ -229,6 +230,7 @@ int main(int argc, char *argv[])
     ("LSC", po::value<std::string>(&LSfile), "Lightsheet correction file")
     ("FlatStart", po::bool_switch(&bFlatStartGuess)->default_value(false), "Start the RL from a guess that is a flat image filled with the median image value.  This may supress noise.")
     ("bleachCorrection,p", po::bool_switch(&bDoRescale)->default_value(false), "Apply bleach correction when running multiple images in a single batch")
+    ("compression", po::value< >(&compression)->default_value(0), "Tiff compression (0=none, 1=LZW)")
     ("skip", po::value<int>(&skip)->default_value(0), "Skip the first 'skip' number of files.")
     ("no_overwrite", po::bool_switch(&no_overwrite)->default_value(false), "Don't reprocess files that are already deconvolved (i.e. exist in the GPUdecon folder).")
     // ("UseOnlyHostMem", po::bool_switch(&UseOnlyHostMem)->default_value(false), "Just use Host Mapped Memory, and not GPU. For debugging only.")
