@@ -410,7 +410,15 @@ GPUBuffer d_interpOTF(0, false); // since this is a global for th RL_interface d
 
 unsigned get_output_nx()
 {
-  return deskewedXdim; //output_nx;
+
+  if (rotMatrix.getSize() > 0) {
+    float *p = (float *)rotMatrix.getPtr();
+    int nx_afterRot = deskewedXdim  * p[3] + output_nz * p[2] * p[2] / p[1];
+    return nx_afterRot;
+  } else {
+    return deskewedXdim;
+  }
+
 }
 
 unsigned get_output_ny()
@@ -419,7 +427,16 @@ unsigned get_output_ny()
 }
 unsigned get_output_nz()
 {
-  return output_nz;
+
+  if (rotMatrix.getSize() > 0) {
+    float *p = (float *)rotMatrix.getPtr();
+    int nz_afterRot = output_nz * p[3] / p[0];
+    return nz_afterRot;
+  } else {
+    return output_nz;
+  }
+
+  
 }
 
 int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
