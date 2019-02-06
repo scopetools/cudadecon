@@ -477,7 +477,7 @@ int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
     deskewFactor = cos(deskewAngle * M_PI/180.) * dz / dr;
     if (outputWidth ==0)
       deskewedXdim += floor(output_nz * dz * 
-                            fabs(cos(deskewAngle * M_PI/180.)) / dr)/4.; // TODO /4.
+                            fabs(cos(deskewAngle * M_PI/180.)) / dr); // TODO /4.
     else
       deskewedXdim = outputWidth; // use user-provided output width if available
 
