@@ -123,8 +123,8 @@ int Deskew_interface(const float * const raw_data,
 
 
    // allocate buffers in GPU device 0
-  GPUBuffer d_rawData(nz * nx * ny * sizeof(float), 0);
-  GPUBuffer d_deskewedResult(nz * ny * deskewedXdim * sizeof(float), 0);
+  GPUBuffer d_rawData(nz * nx * ny * sizeof(float), 0, false);
+  GPUBuffer d_deskewedResult(nz * ny * deskewedXdim * sizeof(float), 0, false);
   //CImg<> deskewedResult_host(deskewedXdim, ny, nz);
 
   // pagelock data memory on host

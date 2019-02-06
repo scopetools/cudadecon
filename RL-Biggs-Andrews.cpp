@@ -428,9 +428,10 @@ int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
                       float deskewAngle, // deskew
                       float rotationAngle,
                       int outputWidth,
-                      char * OTF_file_name, int myGPUdevice) // device might not work, since d_interpOTF is a global and device is set at compile time.
+                      char * OTF_file_name) // device might not work, since d_interpOTF is a global and device is set at compile time.
 {
-    cudaSetDevice(myGPUdevice);
+
+  //cudaSetDevice(myGPUdevice);
   // Find the optimal dimensions nearest to the originals to meet CUFFT demands
   bCrop = false;
   output_ny = findOptimalDimension(ny);
@@ -536,18 +537,18 @@ int RL_interface(const unsigned short * const raw_data,
                  int extraShift,
                  int napodize, int nZblend,
                  float padVal,
-                 bool bDupRevStack,
-                 int myGPUdevice
+                 bool bDupRevStack
                  )
 {
-  cudaSetDevice(myGPUdevice);
+
+
   CImg<> raw_image(raw_data, nx, ny, nz);
 
   if (bCrop)
     raw_image.crop(0, 0, 0, 0, output_nx-1, output_ny-1, output_nz-1, 0);
 
   cudaDeviceProp deviceProp;
-  cudaGetDeviceProperties(&deviceProp, myGPUdevice); 
+  cudaGetDeviceProperties(&deviceProp, 0); 
 
   // Finally do calculation including deskewing, decon, rotation:
   CImg<> raw_deskewed;
@@ -555,10 +556,12 @@ int RL_interface(const unsigned short * const raw_data,
     raw_deskewed.assign(deskewedXdim, output_ny, output_nz);
   }
 
+  bool bFlatStartGuess = false;
+  float my_median = 1;
   RichardsonLucy_GPU(raw_image, background, d_interpOTF, nIters,
                      deskewFactor, deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
                      rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp,
-                     false, 1, bDoRescale, padVal, bDupRevStack, false, myGPUdevice);
+                     bFlatStartGuess, my_median, bDoRescale, padVal, bDupRevStack, false);
 
   // Copy deconvolved data, stored in raw_image, to "result" for return:
   memcpy(result, raw_image.data(), raw_image.size() * sizeof(float));
@@ -619,8 +622,8 @@ int Deskew_interface(const float * const raw_data,
 
 
    // allocate buffers in GPU device 0
-  GPUBuffer d_rawData(nz * nx * ny * sizeof(float), 0);
-  GPUBuffer d_deskewedResult(nz * ny * deskewedXdim * sizeof(float), 0);
+  GPUBuffer d_rawData(nz * nx * ny * sizeof(float), 0, false);
+  GPUBuffer d_deskewedResult(nz * ny * deskewedXdim * sizeof(float), 0, false);
   //CImg<> deskewedResult_host(deskewedXdim, ny, nz);
 
   // pagelock data memory on host
@@ -648,7 +651,7 @@ int Affine_interface(const float * const raw_data,
 {
   CImg<> raw_image(raw_data, nx, ny, nz);
 
-  GPUBuffer d_affMatrix(16 * sizeof(float), 0);
+  GPUBuffer d_affMatrix(16 * sizeof(float), 0, false);
   cudaMemcpy(d_affMatrix.getPtr(), affMat, 16 * sizeof(float), cudaMemcpyHostToDevice);
 
   // Allocate CUDA array in device memory
@@ -689,7 +692,7 @@ int Affine_interface_RA(const float * const raw_data,
 {
   CImg<> raw_image(raw_data, nx, ny, nz);
 
-  GPUBuffer d_affMatrix(16 * sizeof(float), 0);
+  GPUBuffer d_affMatrix(16 * sizeof(float), 0, false);
   cudaMemcpy(d_affMatrix.getPtr(), affMat, 16 * sizeof(float), cudaMemcpyHostToDevice);
 
   // Allocate CUDA array in device memory
@@ -721,3 +724,36 @@ int Affine_interface_RA(const float * const raw_data,
 
   return 1;
 }
+
+
+// putting this here for now until I can clean up the camcor problem
+
+
+
+
+int camcor_interface_init(int nx, int ny, int nz,
+                     const float * const camparam)
+{
+  CImg<> h_camparam(camparam, nx, ny, 3);
+  setupConst(nx, ny, nz);
+  setupCamCor(nx, ny, h_camparam.data());
+  return 1;
+}
+
+
+int camcor_interface(const unsigned short * const raw_data,
+                     int nx, int ny, int nz,
+                     unsigned short * const result)
+{
+  CImg<unsigned short> input(raw_data, nx, ny, nz);
+  CImg<unsigned> raw_image(input);
+  GPUBuffer d_correctedResult(nx * ny * nz * sizeof(unsigned short), 0, false);
+  setupData(nx, ny, nz, raw_image.data());
+  camcor_GPU(nx, ny, nz, d_correctedResult);
+  //transfer result back to host
+  cudaMemcpy(result, d_correctedResult.getPtr(), nx * ny * nz * sizeof(unsigned short), cudaMemcpyDeviceToHost);
+  return 1;
+}
+
+
+
