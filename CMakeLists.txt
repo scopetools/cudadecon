@@ -18,8 +18,8 @@ project (cudaDeconv)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 set(VERSION_MAJOR "0")
-set(VERSION_MINOR "0")
-set(VERSION_PATCH "1")
+set(VERSION_MINOR "4")
+set(VERSION_PATCH "0")
 set(PROJECT_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 
 # set -fPIC for all targets (for shared libraries)
@@ -207,7 +207,7 @@ endif()
    RLgpuImpl.cu
    geometryTransform.cu
 #   camcor.cpp
-#   camcor.cu
+   camcor.cu
    )
 
 add_dependencies(
@@ -219,31 +219,32 @@ if (APPLE)
   set_target_properties(libcudaDeconv
                         PROPERTIES
                         OUTPUT_NAME cudaDeconv
-                        MACOSX_RPATH 1)
+                        MACOSX_RPATH 1
+                        POSITION_INDEPENDENT_CODE ON)
 endif()
 
 
 #####  libLLSpy.dll ###########################################
 
- CUDA_ADD_LIBRARY(
-   libLLSpy
-   SHARED
-   geometryTransform.cu
-   camcor.cu
-   llspy.cpp
-   )
-
-add_dependencies(
-   libLLSpy
-   Buffer
-   )
-
-if (APPLE)
-  set_target_properties(libLLSpy
-                        PROPERTIES
-                        OUTPUT_NAME LLSpy
-                        MACOSX_RPATH 1)
-endif()
+#  CUDA_ADD_LIBRARY(
+#    libLLSpy
+#    SHARED
+#    geometryTransform.cu
+#    camcor.cu
+#    llspy.cpp
+#    )
+# 
+# add_dependencies(
+#    libLLSpy
+#    Buffer
+#    )
+# 
+# if (APPLE)
+#   set_target_properties(libLLSpy
+#                         PROPERTIES
+#                         OUTPUT_NAME LLSpy
+#                         MACOSX_RPATH 1)
+# endif()
 
 
 #####  libradialft.dll ###########################################
@@ -281,6 +282,7 @@ CUDA_ADD_EXECUTABLE(
   boostfs.cpp
   RLgpuImpl.cu
   geometryTransform.cu
+  camcor.cu
   )
 
 add_dependencies(
@@ -344,11 +346,11 @@ target_link_libraries(
   ${X11_X11_LIB}
   )
 
-target_link_libraries(
-  libLLSpy
-  Buffer
-  ${X11_X11_LIB}
-  )
+# target_link_libraries(
+#   libLLSpy
+#   Buffer
+#   ${X11_X11_LIB}
+#   )
 
 
 target_link_libraries(
