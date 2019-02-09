@@ -9,6 +9,7 @@
 #pragma warning(disable : 4305) // Disregard loss of data from double to float.
 #endif
 
+std::string version_number = "0.4.0";
 CImg<> next_raw_image;
 CImg<> ToSave;
 CImg<unsigned short> U16ToSave;
@@ -192,13 +193,14 @@ int main(int argc, char *argv[])
   bool bDoRescale = false;
   bool UseOnlyHostMem = false;
   bool no_overwrite = false;
+  bool lzw = false;
   int skip = 0;
   bool bDupRevStack = false;
 
   TIFFSetWarningHandler(NULL);
 
   std::string datafolder, filenamePattern, otffiles, LSfile;
-  po::options_description progopts;
+  po::options_description progopts("cudaDeconv compiled for LLSpy.  Version: " + version_number + "\n");
   progopts.add_options()
       ("drdata", po::value<float>(&imgParams.dr)->default_value(.104), "Image x-y pixel size (um)")
       ("dzdata,z", po::value<float>(&imgParams.dz)->default_value(.25), "Image z step (um)")
@@ -230,12 +232,13 @@ int main(int argc, char *argv[])
     ("LSC", po::value<std::string>(&LSfile), "Lightsheet correction file")
     ("FlatStart", po::bool_switch(&bFlatStartGuess)->default_value(false), "Start the RL from a guess that is a flat image filled with the median image value.  This may supress noise.")
     ("bleachCorrection,p", po::bool_switch(&bDoRescale)->default_value(false), "Apply bleach correction when running multiple images in a single batch")
-    ("compression", po::value< >(&compression)->default_value(0), "Tiff compression (0=none, 1=LZW)")
+    ("lzw", po::bool_switch(&lzw)->default_value(false), "Use LZW tiff compression")
     ("skip", po::value<int>(&skip)->default_value(0), "Skip the first 'skip' number of files.")
     ("no_overwrite", po::bool_switch(&no_overwrite)->default_value(false), "Don't reprocess files that are already deconvolved (i.e. exist in the GPUdecon folder).")
     // ("UseOnlyHostMem", po::bool_switch(&UseOnlyHostMem)->default_value(false), "Just use Host Mapped Memory, and not GPU. For debugging only.")
     ("DevQuery,Q", "Show info and indices of available GPUs")
     ("help,h", "This help message.")
+    ("version,v", "show version and quit")
     ;
   po::positional_options_description p;
   p.add("input-dir", 1);
@@ -266,6 +269,12 @@ int main(int argc, char *argv[])
           std::cout << progopts << "\n";
           return 0;
       }
+
+      if (varsmap.count("version")) {
+          std::cout << version_number << "\n";
+          return 0;
+      }
+
 
       //****************************Query GPU devices***********************************
       if (varsmap.count("DevQuery")) {
@@ -357,7 +366,9 @@ int main(int argc, char *argv[])
   int border_x = 0;
   int border_y = 0;
   int border_z = 0;
-
+  if (lzw) {
+    compression = 1;
+  }
   //****************************Main processing***********************************
   // Loop over all matching input TIFFs, :
   try {
