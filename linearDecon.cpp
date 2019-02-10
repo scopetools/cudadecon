@@ -1074,7 +1074,9 @@ int main(int argc, char *argv[])
           }
       }
 
-
+      /// please leave this here for LLSpy
+      printf(">>>file_finished\n");
+      
       iter_duration = (std::clock() - start_t) / (double)CLOCKS_PER_SEC / (it - (all_matching_files.begin() + skip) + 1 );
     } // iteration over all_matching_files
 
