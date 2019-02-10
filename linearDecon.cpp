@@ -987,15 +987,15 @@ int main(int argc, char *argv[])
         if (bDoRawMaxIntProj.size() == 3) {
           if (bDoRawMaxIntProj[0]) {
             CImg<> proj = MaxIntProj(raw_image, 0);
-            proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str(), compression, voxel_size, description);
+            proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_x").c_str(), compression, voxel_size, description);
           }
           if (bDoRawMaxIntProj[1]) {
             CImg<> proj = MaxIntProj(raw_image, 1);
-            proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str(), compression, voxel_size, description);
+            proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_y").c_str(), compression, voxel_size, description);
           }
           if (bDoRawMaxIntProj[2]) {
             CImg<> proj = MaxIntProj(raw_image, 2);
-            proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str(), compression, voxel_size, description);
+            proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_z").c_str(), compression, voxel_size, description);
           }
         }
       }
