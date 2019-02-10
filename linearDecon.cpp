@@ -378,9 +378,9 @@ int main(int argc, char *argv[])
 
     std::cout << "Looking for files to process... " ;
     // Gather all files in 'datafolder' and matching the file name pattern:
-    bool MIPsOnly = (RL_iters == 0 && bDoMaxIntProj.size() == 3);
+    //bool MIPsOnly = (RL_iters == 0 && bDoMaxIntProj.size() == 3);
 
-    std::vector< std::string > all_matching_files = gatherMatchingFiles(datafolder, filenamePattern, no_overwrite, MIPsOnly);
+    std::vector< std::string > all_matching_files = gatherMatchingFiles(datafolder, filenamePattern, no_overwrite);
     std::cout << "Found " << all_matching_files.size() << " file(s)." << std::endl ;
 
 #ifdef _WIN32
@@ -408,7 +408,6 @@ int main(int argc, char *argv[])
 
     for (std::vector<std::string>::iterator it= all_matching_files.begin() + skip;
          it != all_matching_files.end(); it++) {
-
 
       int number_of_files_left = all_matching_files.end() - it;
 
@@ -808,6 +807,7 @@ int main(int argc, char *argv[])
                       "spacing=" + std::to_string(imgParams.dz) + "\n"
                       "unit=micron";
       const char *description = s.c_str();
+
       //****************************Pad image.  Use Mirror image in padded border region***********************************
 
       if (Pad){
@@ -858,6 +858,12 @@ int main(int argc, char *argv[])
           std::cout << "Done." << std::endl;
       } // End Pad image creation.
 
+      // moved here from boostfs.cpp in order to make it conditional on actually performing decon
+      // this MAY cause some bugs
+      if (RL_iters || rotMatrix.getSize()) {
+        if (it == all_matching_files.begin()) //make directory only on first call, and if we are saving Deskewed.
+          makeNewDir("GPUdecon");
+      }
 
       // initialize the raw_deskewed size everytime in case it is cropped on an earlier iteration
       if (bSaveDeskewedRaw && (fabs(deskewAngle) > 0.0) ) {
@@ -981,31 +987,36 @@ int main(int argc, char *argv[])
 
 
       //****************************Save Deskewed MIPs***********************************
-      if (it == all_matching_files.begin() && bDoRawMaxIntProj.size() && bSaveDeskewedRaw){
-        makeNewDir("Deskewed/MIPs");
+      if (bDoRawMaxIntProj.size() && bSaveDeskewedRaw){
+        if(it == all_matching_files.begin())
+          makeNewDir("Deskewed/MIPs");
 
         if (bDoRawMaxIntProj.size() == 3) {
           if (bDoRawMaxIntProj[0]) {
-            CImg<> proj = MaxIntProj(raw_image, 0);
+            CImg<> proj = MaxIntProj(raw_deskewed, 0);
             proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_x").c_str(), compression, voxel_size, description);
           }
           if (bDoRawMaxIntProj[1]) {
-            CImg<> proj = MaxIntProj(raw_image, 1);
+            CImg<> proj = MaxIntProj(raw_deskewed, 1);
             proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_y").c_str(), compression, voxel_size, description);
           }
           if (bDoRawMaxIntProj[2]) {
-            CImg<> proj = MaxIntProj(raw_image, 2);
+            CImg<> proj = MaxIntProj(raw_deskewed, 2);
             proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_z").c_str(), compression, voxel_size, description);
           }
         }
       }
 
-
       //****************************Save MIPs***********************************
-      if (it == all_matching_files.begin() + skip && bDoMaxIntProj.size())
-        makeNewDir("GPUdecon/MIPs");
 
-      if (bDoMaxIntProj.size() == 3) {
+      // I had to modify this a bit to save the behavior of --saveDeskewedRaw when NO RL is being performed...
+      // otherwise, it was trying to create folders it shouldn't...
+      // this might have unintended side effects (notably with weiner filtering only... and maybe others)
+      if (bDoMaxIntProj.size() == 3 && RL_iters && (bDoMaxIntProj[0] || bDoMaxIntProj[1] || bDoMaxIntProj[2])){
+        if (it == all_matching_files.begin() + skip) {
+          makeNewDir("GPUdecon/MIPs");
+        }
+
         if (bDoMaxIntProj[0]) {
           CImg<> proj = MaxIntProj(raw_image, 0);
           if (bSaveUshort){

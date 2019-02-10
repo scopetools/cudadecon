@@ -12,7 +12,7 @@
 static boost::filesystem::path dataDir;
 
 
-std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern, bool no_overwrite, bool MIPsOnly)
+std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern, bool no_overwrite)
 {
 #ifdef _WIN32
   HANDLE  hConsole;
@@ -25,14 +25,7 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
   // Create output subfolder "GPUdecon/" just under the data folder:
   dataDir = target_path;
   boost::filesystem::path outputDir;
-
-  if (MIPsOnly)
-	 outputDir = dataDir / "GPUdecon" / "MIPs"; //if we are just creating MIPs
-  else
-	 outputDir = dataDir / "GPUdecon";
-  
-  if (! boost::filesystem::exists(outputDir) )
-    boost::filesystem::create_directory(outputDir);
+	outputDir = dataDir / "GPUdecon";
 
   //***************** make regex filter ***************
   pattern.insert(0, ".*");  // '.' is the wildcard in Perl regexp; '*' just means "repeat".
@@ -45,18 +38,23 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
   //***************** make vector of files we have already created ***************
   std::vector< std::string > all_decon_files;
 
-  boost::filesystem::directory_iterator end_decon_itr; // Constructs the end iterator.
-  for (boost::filesystem::directory_iterator i(outputDir); i != end_decon_itr; ++i){
+  if ( boost::filesystem::exists(outputDir) ){
 
-	  // Skip if not a file. This won't be a match.
-	  if (!boost::filesystem::is_regular_file(i->status())) continue;
+    boost::filesystem::directory_iterator end_decon_itr; // Constructs the end iterator.
+    for (boost::filesystem::directory_iterator i(outputDir); i != end_decon_itr; ++i){
 
-	  // Skip if no match.  This won't be a match.
-	  std::smatch what;
-	  if (!std::regex_match(i->path().string(), what, my_filter)) continue;
+  	  // Skip if not a file. This won't be a match.
+  	  if (!boost::filesystem::is_regular_file(i->status())) continue;
 
-	  all_decon_files.push_back(i->path().stem().string());
+  	  // Skip if no match.  This won't be a match.
+  	  std::smatch what;
+  	  if (!std::regex_match(i->path().string(), what, my_filter)) continue;
+
+  	  all_decon_files.push_back(i->path().stem().string());
+    }
+
   }
+
 
   //*********************************************
 
