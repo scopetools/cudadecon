@@ -176,7 +176,7 @@ void duplicateReversedStack_GPU(GPUBuffer & in, int nx, int ny, int nz);
 std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern, bool no_overwrite, bool MIPsOnly);
 std::string makeOutputFilePath(std::string inputFileName, std::string subdir="GPUdecon",
                                std::string insert="_decon");
-void makeDeskewedDir(std::string subdirname);
+void makeNewDir(std::string subdirname);
 
 
 

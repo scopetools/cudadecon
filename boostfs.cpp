@@ -127,7 +127,7 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
   return all_matching_files;
 }
 
-void makeDeskewedDir(std::string subdirname)
+void makeNewDir(std::string subdirname)
 {
   boost::filesystem::path outputDir = dataDir/subdirname;
   if (! boost::filesystem::exists(outputDir) )

@@ -187,6 +187,7 @@ int main(int argc, char *argv[])
   std::vector<int> final_CropTo_boundaries;
   bool bSaveUshort = false;
   std::vector<bool> bDoMaxIntProj;
+  std::vector<bool> bDoRawMaxIntProj;
   std::vector< CImg<> > MIprojections;
   int Pad = 0;
   bool bFlatStartGuess = false;
@@ -222,6 +223,7 @@ int main(int argc, char *argv[])
       ("saveDeskewedRaw,S", po::bool_switch(&bSaveDeskewedRaw)->default_value(false), "Save deskewed raw data to files")
       ("crop,C", fixed_tokens_value< std::vector<int> >(&final_CropTo_boundaries, 6, 6), "Crop final image size to [x1:x2, y1:y2, z1:z2]; takes 6 integers separated by space: x1 x2 y1 y2 z1 z2; ")
       ("MIP,M", fixed_tokens_value< std::vector<bool> >(&bDoMaxIntProj, 3, 3), "Save max-intensity projection along x, y, or z axis; takes 3 binary numbers separated by space: 0 0 1")
+      ("rMIP,m", fixed_tokens_value< std::vector<bool> >(&bDoRawMaxIntProj, 3, 3), "Save max-intensity projection of raw deskewed data along x, y, or z axis; takes 3 binary numbers separated by space: 0 0 1")
     ("uint16,u", po::bool_switch(&bSaveUshort)->implicit_value(true), "Save result in uint16 format; should be used only if no actual decon is performed")
     ("input-dir", po::value<std::string>(&datafolder)->required(), "Folder of input images")
     ("otf-file", po::value<std::string>(&otffiles)->required(), "OTF file")
@@ -849,7 +851,7 @@ int main(int argc, char *argv[])
           //***debug padded image.
           if (false){
               std::cout << "Saving padded image... " << std::endl;
-              makeDeskewedDir("Padded");
+              makeNewDir("Padded");
               CImg<unsigned short> uint16Img(raw_image);
               uint16Img.save_tiff(makeOutputFilePath(*it, "Padded", "_padded").c_str(), 0, voxel_size, description);
           }
@@ -862,7 +864,7 @@ int main(int argc, char *argv[])
           raw_deskewed.assign(deskewedXdim, new_ny, new_nz);
 
           if (it == all_matching_files.begin() + skip) //make directory only on first call, and if we are saving Deskewed.
-               makeDeskewedDir("Deskewed");
+               makeNewDir("Deskewed");
       }
 
 
@@ -973,47 +975,68 @@ int main(int argc, char *argv[])
           }
         else {
           CImg<unsigned short> uint16Img(raw_deskewed);
-          uint16Img.save_tiff(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str(), 0, voxel_size, description);
+          uint16Img.save_tiff(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str(), compression, voxel_size, description);
          }
+      }
+
+
+      //****************************Save Deskewed MIPs***********************************
+      if (it == all_matching_files.begin() && bDoRawMaxIntProj.size() && bSaveDeskewedRaw){
+        makeNewDir("Deskewed/MIPs");
+
+        if (bDoRawMaxIntProj.size() == 3) {
+          if (bDoRawMaxIntProj[0]) {
+            CImg<> proj = MaxIntProj(raw_image, 0);
+            proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str(), compression, voxel_size, description);
+          }
+          if (bDoRawMaxIntProj[1]) {
+            CImg<> proj = MaxIntProj(raw_image, 1);
+            proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str(), compression, voxel_size, description);
+          }
+          if (bDoRawMaxIntProj[2]) {
+            CImg<> proj = MaxIntProj(raw_image, 2);
+            proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str(), compression, voxel_size, description);
+          }
+        }
       }
 
 
       //****************************Save MIPs***********************************
       if (it == all_matching_files.begin() + skip && bDoMaxIntProj.size())
-        makeDeskewedDir("GPUdecon/MIPs");
+        makeNewDir("GPUdecon/MIPs");
 
       if (bDoMaxIntProj.size() == 3) {
         if (bDoMaxIntProj[0]) {
           CImg<> proj = MaxIntProj(raw_image, 0);
           if (bSaveUshort){
               CImg<unsigned short> uint16Img(proj);
-              uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str(), 0, voxel_size, description);
+              uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str(), compression, voxel_size, description);
           }
           else
           {
-              proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str(), 0, voxel_size, description);
+              proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str(), compression, voxel_size, description);
           }
         }
         if (bDoMaxIntProj[1]) {
             CImg<> proj = MaxIntProj(raw_image, 1);
             if (bSaveUshort){
                 CImg<unsigned short> uint16Img(proj);
-                uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str(), 0, voxel_size, description);
+                uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str(), compression, voxel_size, description);
             }
             else
             {
-                proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str(), 0, voxel_size, description);
+                proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str(), compression, voxel_size, description);
             }
         }
         if (bDoMaxIntProj[2]) {
             CImg<> proj = MaxIntProj(raw_image, 2);
             if (bSaveUshort){
                 CImg<unsigned short> uint16Img(proj);
-                uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str(), 0, voxel_size, description);
+                uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str(), compression, voxel_size, description);
             }
             else
             {
-                proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str(), 0, voxel_size, description);
+                proj.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str(), compression, voxel_size, description);
             }
         }
       }
@@ -1030,7 +1053,7 @@ int main(int argc, char *argv[])
           if (!bSaveUshort){
 
               ToSave.assign(raw_image); //copy decon image (i.e. raw_image) to new image space for saving.
-              // ToSave.save_tiff(makeOutputFilePath(*it).c_str(), 0, voxel_size, description);
+              // ToSave.save_tiff(makeOutputFilePath(*it).c_str(), compression, voxel_size, description);
 
               tsave = std::thread(save_in_thread, *it, voxel_size2, description2); //start saving "To Save" file.
           }
