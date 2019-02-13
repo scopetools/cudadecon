@@ -973,7 +973,7 @@ int main(int argc, char *argv[])
 
 
       //****************************Save Deskewed Raw***********************************
-      if (bSaveDeskewedRaw) {
+      if (bSaveDeskewedRaw && (fabs(deskewAngle) > 0.0)) {
           if (!bSaveUshort){
               DeskewedToSave.assign(raw_deskewed);
               tDeskewsave = std::thread(DeSkewsave_in_thread, *it, voxel_size, description); //start saving "Deskewed To Save" file.
@@ -987,24 +987,23 @@ int main(int argc, char *argv[])
 
 
       //****************************Save Deskewed MIPs***********************************
-      if (bDoRawMaxIntProj.size() && bSaveDeskewedRaw){
-        if(it == all_matching_files.begin())
+      if (bDoRawMaxIntProj.size() == 3 && bSaveDeskewedRaw){
+        if(it == all_matching_files.begin() && (bDoRawMaxIntProj[0] || bDoRawMaxIntProj[1] || bDoRawMaxIntProj[2]))
           makeNewDir("Deskewed/MIPs");
 
-        if (bDoRawMaxIntProj.size() == 3) {
-          if (bDoRawMaxIntProj[0]) {
-            CImg<> proj = MaxIntProj(raw_deskewed, 0);
-            proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_x").c_str(), compression, voxel_size, description);
-          }
-          if (bDoRawMaxIntProj[1]) {
-            CImg<> proj = MaxIntProj(raw_deskewed, 1);
-            proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_y").c_str(), compression, voxel_size, description);
-          }
-          if (bDoRawMaxIntProj[2]) {
-            CImg<> proj = MaxIntProj(raw_deskewed, 2);
-            proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_z").c_str(), compression, voxel_size, description);
-          }
+        if (bDoRawMaxIntProj[0]) {
+          CImg<> proj = MaxIntProj(raw_deskewed, 0);
+          proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_x").c_str(), compression, voxel_size, description);
         }
+        if (bDoRawMaxIntProj[1]) {
+          CImg<> proj = MaxIntProj(raw_deskewed, 1);
+          proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_y").c_str(), compression, voxel_size, description);
+        }
+        if (bDoRawMaxIntProj[2]) {
+          CImg<> proj = MaxIntProj(raw_deskewed, 2);
+          proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_z").c_str(), compression, voxel_size, description);
+        }
+    
       }
 
       //****************************Save MIPs***********************************
