@@ -9,7 +9,7 @@
 #pragma warning(disable : 4305) // Disregard loss of data from double to float.
 #endif
 
-std::string version_number = "0.4.0";
+std::string version_number = "0.4.1";
 CImg<> next_raw_image;
 CImg<> ToSave;
 CImg<unsigned short> U16ToSave;
@@ -36,15 +36,23 @@ int load_next_thread(const char* my_path)
 
 unsigned compression = 0;
 
-int save_in_thread(std::string inputFileName, const float *const voxel_size, const char *const description)
+int save_in_thread(std::string inputFileName, const float *const voxel_size, float dz)
 {
+    std::string temp = "ImageJ=1.50i\n"
+                    "spacing=" + std::to_string(dz) + "\n"
+                    "unit=micron";
+    const char *description = temp.c_str();
     ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), compression, voxel_size, description);
 
     return 0;
 }
 
-int U16save_in_thread(std::string inputFileName, const float *const voxel_size, const char *const description)
+int U16save_in_thread(std::string inputFileName, const float *const voxel_size, float dz)
 {
+    std::string temp = "ImageJ=1.50i\n"
+                    "spacing=" + std::to_string(dz) + "\n"
+                    "unit=micron";
+    const char *description = temp.c_str();
     U16ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), compression, voxel_size, description);
 
     return 0;
@@ -1055,21 +1063,21 @@ int main(int argc, char *argv[])
       if (RL_iters || rotMatrix.getSize()) {
         // Stupid to redefine these here... but couldn't get the Z voxel size to work
         // correctly in ImageJ otherwise...
-        float voxel_size2 [] = { imgParams.dr, imgParams.dr, imgParams.dz };
-        std::string s2 = "ImageJ=1.50i\n"
-                        "spacing=" + std::to_string(imgParams.dz) + "\n"
-                        "unit=micron";
-        const char *description2 = s.c_str();
+        float imdz = imgParams.dz;
+        if (rotMatrix.getSize()) {
+          imdz = imgParams.dr;
+        }
+        float voxel_size2 [] = { imgParams.dr, imgParams.dr, imdz };
           if (!bSaveUshort){
 
               ToSave.assign(raw_image); //copy decon image (i.e. raw_image) to new image space for saving.
               // ToSave.save_tiff(makeOutputFilePath(*it).c_str(), compression, voxel_size, description);
 
-              tsave = std::thread(save_in_thread, *it, voxel_size2, description2); //start saving "To Save" file.
+              tsave = std::thread(save_in_thread, *it, voxel_size2, imdz); //start saving "To Save" file.
           }
           else {
               U16ToSave = raw_image;
-              tsave = std::thread(U16save_in_thread, *it, voxel_size2, description2); //start saving "To Save" file.
+              tsave = std::thread(U16save_in_thread, *it, voxel_size2, imdz); //start saving "To Save" file.
           }
       }
 
