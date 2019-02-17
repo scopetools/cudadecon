@@ -104,9 +104,9 @@ if (WIN32)
   set (FFTW3F_LIBRARY libfftw3f-3)
   find_package(FFTW3 COMPONENTS single)
 
-  if (EXISTS C:/libtiff/libtiff)
-	set (TIFF_LIBRARY C:/libtiff/libtiff)
-	set (TIFF_INCLUDE_DIR C:/libtiff/libtiff)
+  if (EXISTS C:/tiff-4.0.10/libtiff)
+	set (TIFF_LIBRARY C:/tiff-4.0.10/libtiff)
+	set (TIFF_INCLUDE_DIR C:/tiff-4.0.10/libtiff)
   else()
 	set (TIFF_LIBRARY C:/libtiff)
 	set (TIFF_INCLUDE_DIR C:/libtiff)
@@ -133,7 +133,18 @@ else()
 endif(WIN32)
 
 message(STATUS "CUDA version : ${CUDA_VERSION}")
-if(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
+
+if(NOT(CUDA_VERSION LESS 10.0))  # if CUDA version is > or = 10.0
+  set(CUDA_NVCC_FLAGS "-O2;\
+    -gencode=arch=compute_30,code=sm_30;\
+    -gencode=arch=compute_35,code=sm_35;\
+    -gencode=arch=compute_37,code=sm_37;\
+    -gencode=arch=compute_50,code=sm_50;\
+    -gencode=arch=compute_52,code=sm_52;\
+    -gencode=arch=compute_61,code=sm_61;\
+    -gencode=arch=compute_70,code=sm_70;\
+    -gencode=arch=compute_75,code=sm_75;") # compute capability 7.5 only avaiable in CUDA 10.0 or greater 
+elseif(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
 	set(CUDA_NVCC_FLAGS "-O2;\
 		-gencode=arch=compute_30,code=sm_30;\
 		-gencode=arch=compute_35,code=sm_35;\
@@ -141,7 +152,7 @@ if(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
 		-gencode=arch=compute_50,code=sm_50;\
 		-gencode=arch=compute_52,code=sm_52;\
 		-gencode=arch=compute_61,code=sm_61") # compute capability 6.1 only avaiable in CUDA 8.0 or greater
-	else()
+else()
 		set(CUDA_NVCC_FLAGS "-O2;\
 		-gencode=arch=compute_30,code=sm_30;\
 		-gencode=arch=compute_35,code=sm_35;\
