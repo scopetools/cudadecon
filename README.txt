@@ -36,6 +36,9 @@ Build the solution. (F7 or from "Build" menu)
 1.d. Unzip Libtiff library into C:\libtiff, then build:
 cmake -G "Visual Studio 12 2013 Win64" -DZLIB_LIBRARY:STRING=C:\zlib\zlib-1.2.11\contrib\vstudio\vc12\x64\ZlibStatRelease\zlibstat.lib -DZLIB_INCLUDE_DIR:STRING=C:\zlib\zlib-1.2.11
 
+    I then needed: nmake /f makefile.vc clean
+    -Talley
+    
 This generates the cmake files and should identify that it found zlib.  Next run :
 
 cmake --build . --config Release
