@@ -1,6 +1,4 @@
-To get this. Please use Subversion (aka SVN.  If on windows, use TortoiseSVN) and perform a check out of :
-https://subversion.int.janelia.org/betziglab/projects/
-to :
+To get this. Please use Git and clone to :
 C:\CudaDecon
 
 
@@ -21,7 +19,7 @@ Then configure this Command Prompt window for 64-bit command-line builds that ta
 
 1.b. Install CMAKE v2.6 and later
 
-1.c. Intall FFTW3
+1.c. Install FFTW3
 * Download the 64-bit version dlls here : http://fftw.org/install/windows.html
 * Unzip FFTW3 library into C:\fftw3 then created the x64 .lib files:
 
@@ -41,8 +39,9 @@ lib /machine:x64 /def:libfftw3f-3.def
 
 * I needed to change libtiff a little bit to deal with custom tiff tags.  please SVN checkout into c:\libtiff from : 
 https://subversion.int.janelia.org/betziglab/tool_codes/libtiff/trunk/libtiff
+(Now it's git clone from dmilkie/libtiff_for_cudaDecon
 
-* in the revisions you will see the changes that I made.  If upgrading to new libtiff version, I would recommend : 1. checkout latest SVN version.  Unzip the latest libtiff download, and overwrite c:\libtiff.  Look at the svn entry for the changes I made (i.e. rev 60), and right click each of the files in rev 60 and "compare with working copy" to merge the additions I made in the left file with the right file.  Then build.
+* in the revisions you will see the changes that I made.  If upgrading to new libtiff version, I would recommend : 1. checkout/clone latest version.  Unzip the latest libtiff version online and overwrite c:\libtiff.  Look at the svn entry for the changes I made (i.e. rev 60), and right click each of the files in rev 60 and "compare with working copy" to merge the additions I made in the left file with the right file.  Then build.
 
 
 * I think this is old.  : 
