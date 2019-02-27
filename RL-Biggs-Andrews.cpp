@@ -4,6 +4,43 @@
 #include <vector>
 #include <algorithm>  // max(), min()
 #include <limits>  // epsilon()
+#include <stdio.h> // print to GPUmessage
+
+// CUDA Profiling
+#ifndef _WINDLL
+#define USE_NVTX
+#endif
+#ifdef USE_NVTX //https://devblogs.nvidia.com/parallelforall/cuda-pro-tip-generate-custom-application-profile-timelines-nvtx/ 
+#include <cuda_profiler_api.h>
+// How to add to VS : https://stackoverflow.com/questions/14717203/use-of-nvidia-tools-extension-under-visual-studio-2010
+// Need to have dll from here : C:\Program Files\NVIDIA Corporation\NvToolsExt\bin\x64
+#include "nvToolsExt.h"
+
+const uint32_t colors[] = { 0x0000ff00, 0x000000ff, 0x00ffff00, 0x00ff00ff, 0x0000ffff, 0x00ff0000, 0x00ffffff };
+const int num_colors = sizeof(colors) / sizeof(uint32_t);
+
+#define PUSH_RANGE(name,cid) { \
+int color_id = cid; \
+color_id = color_id%num_colors; \
+nvtxEventAttributes_t eventAttrib = { 0 }; \
+eventAttrib.version = NVTX_VERSION; \
+eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE; \
+eventAttrib.colorType = NVTX_COLOR_ARGB; \
+eventAttrib.color = colors[color_id]; \
+eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII; \
+eventAttrib.message.ascii = name; \
+nvtxRangePushEx(&eventAttrib); \
+}
+#define POP_RANGE nvtxRangePop();
+#define MARKIT(name) { nvtxMarkA(name);}
+
+#else
+#define PUSH_RANGE(name,cid)
+#define POP_RANGE
+#define MARKIT(name)
+#endif
+
+
 
 //#include <helper_timer.h>
 
@@ -60,6 +97,8 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 {
 	size_t free; //for GPU memory profiling
 	size_t total;//for GPU memory profiling
+
+
 
   // "raw" contains the raw image, also used as the initial guess X_0
   unsigned int nx = raw.width();
@@ -241,6 +280,10 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   // R-L iteration
   for (int k = 0; k < nIter; k++) {
     std::cout << "Iteration " << k << ". ";
+	char GPUmessage[50];
+	sprintf(GPUmessage, "Iter %d", k);
+	PUSH_RANGE(GPUmessage, k)
+	
     // a. Make an image predictions for the next iteration    
 	if (k > 1) {
 		lambda = calcAccelFactor(G_kminus1, G_kminus2, nx, ny, nz, eps, myGPUdevice); // (G_km1 dot G_km2) / (G_km2 dot G_km2)
@@ -280,36 +323,40 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 		cutilSafeCall(cudaMemcpyAsync(G_kminus2.getPtr(), G_kminus1.getPtr(),
 			G_kminus1.getSize(), cudaMemcpyDefault));
 	}
-    
+
+	
 	std::cout << "Filter1. ";
 	// b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
     CC = Y_k;
     filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
               false, devProp->maxGridSize[2]);
-
+	
 	
     // if (k==0) {
     //   CPUBuffer CC_cpu(CC);
     //   CImg<> CCimg((float *) CC_cpu.getPtr(), nx, ny, nz, 1, true);
     //   CCimg.save_tiff("afterFilter0.tif");
     // }
+		
 	std::cout << "LRcore. ";
 
     calcLRcore(CC, rawGPUbuf, nx, ny, nz, devProp->maxGridSize[2]);
-
+	
 	
     // c. Determine next iteration image & apply positivity constraint
     // X_kminus1 = X_k;
-
+		
 	std::cout << "Filter2. ";
     filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
               true, devProp->maxGridSize[2]);
+	
 
     updateCurrEstimate(X_k, CC, Y_k, nx, ny, nz, devProp->maxGridSize[2]); //updated current estimate: Y_k * CC plus positivity constraint. "X_k" is updated upon return.
 
     // G_kminus2 = G_kminus1;
     calcCurrPrevDiff(X_k, Y_k, G_kminus1, nx, ny, nz, devProp->maxGridSize[2]); //G_kminus1 = X_k - Y_k change from RL
 	std::cout << "Done. " << std::endl;
+	POP_RANGE
   }
 
   //************************************************************************************

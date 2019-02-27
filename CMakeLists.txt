@@ -168,6 +168,18 @@ endif()
 # Need to add to these if different GPUs are targeted.
 #--ptxas-options=-v;
 
+## Add CUDA's NVTX library
+if (WIN32)
+  set (NVTX_LIB_DIR C:/PROGRA~1/NVIDIA~1/NVTOOL~1/lib/x64)  # I don't know how to use CMAKE, but this will get the nvToolsExt64_1.lib added.
+  set (NVTX_LIBRARY nvToolsExt64_1)
+  set (NVTX_INCLUDE_DIR C:/PROGRA~1/NVIDIA~1/NVTOOL~1/include)
+endif()
+
+
+message(STATUS "NVidia tools extension library found in " ${NVTX_LIB_DIR})
+message(STATUS "NVidia tools extension include found in " ${NVTX_INCLUDE_DIR})
+
+
 ######################################################################
 #
 # Add subdirectories
@@ -187,9 +199,9 @@ include_directories(
 
 if(WIN32)
   set(CUDA_NVCC_FLAGS
-    ${CUDA_NVCC_FLAGS};--use-local-env;--cl-version=2013)
-  link_directories ( ${Boost_LIBRARY_DIRS} ${FFTW3_INCLUDE_DIR} ${TIFF_LIBRARY} )
-  include_directories( ${Boost_INCLUDE_DIRS} ${FFTW3_INCLUDE_DIR}  ${TIFF_INCLUDE_DIR}
+    ${CUDA_NVCC_FLAGS};--use-local-env)
+  link_directories ( ${Boost_LIBRARY_DIRS} ${FFTW3_INCLUDE_DIR} ${TIFF_LIBRARY} ${NVTX_LIB_DIR})
+  include_directories( ${Boost_INCLUDE_DIRS} ${FFTW3_INCLUDE_DIR}  ${TIFF_INCLUDE_DIR} ${NVTX_INCLUDE_DIR}
     "$ENV{NVCUDASAMPLES_ROOT}/common/inc" )
 else()
   include_directories( ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc )
@@ -283,6 +295,7 @@ target_link_libraries(
 #  ${Boost_REGEX_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
+  ${NVTX_LIBRARY}
   )
 
 target_link_libraries(
@@ -313,6 +326,7 @@ target_link_libraries(
 #  ${Boost_REGEX_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
+  ${NVTX_LIBRARY}
   )
 CUDA_ADD_CUFFT_TO_TARGET(libcudaDeconv)
 
