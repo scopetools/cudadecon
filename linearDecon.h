@@ -38,7 +38,7 @@ using namespace cimg_library;
 
 // CUDA Profiling
 #ifndef _WINDLL
-#define USE_NVTX
+//#define USE_NVTX //uncomment this to use NVIDIA Profiler
 #endif
 #ifdef USE_NVTX //https://devblogs.nvidia.com/parallelforall/cuda-pro-tip-generate-custom-application-profile-timelines-nvtx/ 
 #include <cuda_profiler_api.h>
@@ -65,7 +65,7 @@ nvtxRangePushEx(&eventAttrib); \
 #define POP_RANGE nvtxRangePop();
 #define MARKIT(name) { nvtxMarkA(name);}
 
-#else
+#else // If not using NVTX, then just make these do nothing.
 #define PUSH_RANGE(name,cid)
 #define POP_RANGE
 #define MARKIT(name)

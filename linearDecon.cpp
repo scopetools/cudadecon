@@ -631,7 +631,8 @@ int main(int argc, char *argv[])
           }
 		  std::cout << "FFT plans allocated.    ";
 		  cudaMemGetInfo(&GPUfree, &GPUtotal);
-		  std::cout << std::setw(8) << (GPUfree_prev - GPUfree) / (1024 * 1024) << "MB" << std::setw(8) << GPUfree / (1024 * 1024) << "MB free" << std::endl;
+		  std::cout << std::setw(8) << (GPUfree_prev - GPUfree) / (1024 * 1024) << "MB" << std::setw(8) << GPUfree / (1024 * 1024) 
+			  << "MB free" << " nz=" << new_nz << ", ny=" << new_ny << ", nx=" << deskewedXdim << std::endl;
 
         }
 
