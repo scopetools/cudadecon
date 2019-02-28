@@ -119,6 +119,7 @@
 #pragma warning(disable : 4244) // Disregard loss of data from float to int.
 #pragma warning(disable : 4267) // Disregard loss of data from size_t to unsigned int.
 #pragma warning(disable : 4305) // Disregard loss of data from double to float.
+#pragma warning(disable : 4319) // Disregard zero extending unsigned long to double
 #ifndef _CRT_SECURE_NO_DEPRECATE
 #define _CRT_SECURE_NO_DEPRECATE 1
 #endif
