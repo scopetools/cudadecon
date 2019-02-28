@@ -851,6 +851,10 @@ int main(int argc, char *argv[])
 		  if (bFlatStartGuess)
 			my_median = raw_image.median();
 
+#ifdef USE_NVTX
+			  cudaProfilerStart();
+#endif
+
 		  //**********************************************************************************************************
 		  //****************************Run RL GPU********************************************************************
 		  //**********************************************************************************************************
@@ -858,6 +862,9 @@ int main(int argc, char *argv[])
                            deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
 						   rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp, myGPUdevice, 
 						   bFlatStartGuess, my_median, No_Bleach_correction, UseOnlyHostMem);
+#ifdef USE_NVTX
+			cudaProfilerStop();
+#endif
       }
       else {
         std::cerr << "Nothing is performed\n";        

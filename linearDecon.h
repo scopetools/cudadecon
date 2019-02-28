@@ -36,6 +36,46 @@
 using namespace cimg_library;
 
 
+// CUDA Profiling
+#ifndef _WINDLL
+#define USE_NVTX
+#endif
+#ifdef USE_NVTX //https://devblogs.nvidia.com/parallelforall/cuda-pro-tip-generate-custom-application-profile-timelines-nvtx/ 
+#include <cuda_profiler_api.h>
+#include <nvToolsExtCudaRt.h>
+// How to add to VS : https://stackoverflow.com/questions/14717203/use-of-nvidia-tools-extension-under-visual-studio-2010
+// Need to have dll from here : C:\Program Files\NVIDIA Corporation\NvToolsExt\bin\x64
+#include "nvToolsExt.h"
+
+const uint32_t colors[] = { 0x0000ff00, 0x000000ff, 0x00ffff00, 0x00ff00ff, 0x0000ffff, 0x00ff0000, 0x00ffffff };
+const int num_colors = sizeof(colors) / sizeof(uint32_t);
+
+#define PUSH_RANGE(name,cid) { \
+int color_id = cid; \
+color_id = color_id%num_colors; \
+nvtxEventAttributes_t eventAttrib = { 0 }; \
+eventAttrib.version = NVTX_VERSION; \
+eventAttrib.size = NVTX_EVENT_ATTRIB_STRUCT_SIZE; \
+eventAttrib.colorType = NVTX_COLOR_ARGB; \
+eventAttrib.color = colors[color_id]; \
+eventAttrib.messageType = NVTX_MESSAGE_TYPE_ASCII; \
+eventAttrib.message.ascii = name; \
+nvtxRangePushEx(&eventAttrib); \
+}
+#define POP_RANGE nvtxRangePop();
+#define MARKIT(name) { nvtxMarkA(name);}
+
+#else
+#define PUSH_RANGE(name,cid)
+#define POP_RANGE
+#define MARKIT(name)
+#endif
+
+
+
+
+
+
 struct ImgParams {
   float dr, dz, wave;
 };
