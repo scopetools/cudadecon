@@ -811,6 +811,11 @@ int main(int argc, char *argv[])
 
 
       float voxel_size [] = { imgParams.dr, imgParams.dr, imgParams.dz };
+      float imdz = imgParams.dz;
+      if (rotMatrix.getSize()) {
+        imdz = imgParams.dr;
+      }
+      float voxel_size_decon [] = { imgParams.dr, imgParams.dr, imdz };
       std::string s = "ImageJ=1.50i\n"
                       "spacing=" + std::to_string(imgParams.dz) + "\n"
                       "unit=micron";
@@ -1063,21 +1068,17 @@ int main(int argc, char *argv[])
       if (RL_iters || rotMatrix.getSize()) {
         // Stupid to redefine these here... but couldn't get the Z voxel size to work
         // correctly in ImageJ otherwise...
-        float imdz = imgParams.dz;
-        if (rotMatrix.getSize()) {
-          imdz = imgParams.dr;
-        }
-        float voxel_size2 [] = { imgParams.dr, imgParams.dr, imdz };
+
           if (!bSaveUshort){
 
               ToSave.assign(raw_image); //copy decon image (i.e. raw_image) to new image space for saving.
               // ToSave.save_tiff(makeOutputFilePath(*it).c_str(), compression, voxel_size, description);
 
-              tsave = std::thread(save_in_thread, *it, voxel_size2, imdz); //start saving "To Save" file.
+              tsave = std::thread(save_in_thread, *it, voxel_size_decon, imdz); //start saving "To Save" file.
           }
           else {
               U16ToSave = raw_image;
-              tsave = std::thread(U16save_in_thread, *it, voxel_size2, imdz); //start saving "To Save" file.
+              tsave = std::thread(U16save_in_thread, *it, voxel_size_decon, imdz); //start saving "To Save" file.
           }
       }
 
