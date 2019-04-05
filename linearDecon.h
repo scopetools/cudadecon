@@ -38,8 +38,14 @@ using namespace cimg_library;
 
 // CUDA Profiling
 #ifndef _WINDLL
+#define USE_CUDNN // uncomment this to use NVIDIA Deep Neural Network
 //#define USE_NVTX //uncomment this to use NVIDIA Profiler
 #endif
+
+#ifdef USE_CUDNN
+#include <cudnn.h>
+#endif
+
 #ifdef USE_NVTX //https://devblogs.nvidia.com/parallelforall/cuda-pro-tip-generate-custom-application-profile-timelines-nvtx/ 
 #include <cuda_profiler_api.h>
 #include <nvToolsExtCudaRt.h>
