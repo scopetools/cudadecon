@@ -1,6 +1,8 @@
 To get this. Please use Git and clone to :
 C:\CudaDecon
 
+** DO NOT use the "Download as .zip" button on Github.  This will NOT download the large files stored via Git Large File Storage (LFS). **   You must use Git (I use "TortoiseGit", others Github desktop, or whatever flavor you like)
+
 
 DLL build instructions:
 
