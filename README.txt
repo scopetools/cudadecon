@@ -64,7 +64,7 @@ nmake /f makefile.vc
 * You should have new libtiff.lib file in c:\libtiff\libtiff
 
 
-1.e. Install CUDA SDK (I'm using 10.0). Reboot.
+1.e. Install CUDA SDK (I'm using 10.1). Reboot.
 
 1.f. Install Boost C++ Libraries.
 * Download source code : https://www.boost.org/users/download/ into C:\boost folder, and build via:
@@ -88,9 +88,9 @@ cmake -D CMAKE_BUILD_TYPE=Release -G "NMake Makefiles" ..
 * Copy "libfftw3f-3.dll" from C:\fftw3 into the directory with the cudaDeconv.exe
 * Copy "cufft64_100.dll" and "cudart64_100.dll" into the directoy as well :
 
-cp c:\fftw3\libfftw3f-3.dll c:\CudaDecon\build
-cp "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\bin\cudart64_*.dll" c:\CudaDecon\build
-cp "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\bin\cufft64_*.dll"  c:\CudaDecon\build
+copy c:\fftw3\libfftw3f-3.dll c:\CudaDecon\build
+copy "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1\bin\cudart64_*.dll" c:\CudaDecon\build
+copy "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1\bin\cufft64_*.dll"  c:\CudaDecon\build
 
 
 
