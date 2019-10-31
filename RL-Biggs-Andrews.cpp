@@ -143,7 +143,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 		std::cout << "Copy deskewedRaw back to X_k. ";
 		X_k = deskewedRaw;
 		
-	  
+			  
 		nx = deskewedNx;
 		nxy = nx * ny;
 		nxy2 = (nx / 2 + 1)*ny; // x=N3, y=N2, z=N1 see: http://docs.nvidia.com/cuda/cufft/#multi-dimensional
@@ -170,7 +170,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
           return;
       }
 		std::cout << "Done." << std::endl;
-    }
+    } // deskewedRaw should be destructed and that memory freed.
 
 
 	//**************************** Z blend ***********************************
@@ -251,7 +251,14 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   
   // R-L iteration
   for (int k = 0; k < nIter; k++) {
-    std::cout << "Iteration " << k << ". ";
+	
+	
+	  std::cout << "Iteration ";
+	  int OldstdoutWidth = std::cout.width(2); 
+	  std::cout << k;
+	  std::cout.width(OldstdoutWidth);
+	  std::cout << ". ";
+	
 	char GPUmessage[50];
 	sprintf(GPUmessage, "Iter %d", k);
 	PUSH_RANGE(GPUmessage, k)
