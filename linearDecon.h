@@ -38,7 +38,7 @@ using namespace cimg_library;
 
 // CUDA Profiling
 #ifndef _WINDLL
-#define USE_CUDNN // uncomment this to use NVIDIA Deep Neural Network
+//#define USE_CUDNN // uncomment this to use NVIDIA Deep Neural Network
 //#define USE_NVTX //uncomment this to use NVIDIA Profiler
 #endif
 
