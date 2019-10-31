@@ -227,7 +227,7 @@ int main(int argc, char *argv[])
 	("NoBleachCorrection", po::bool_switch(&No_Bleach_correction)->default_value(false), "Does not apply bleach correction when running multiple images in a single batch.")
 	("skip", po::value<int>(&skip)->default_value(0), "Skip the first 'skip' number of files.")
 	("no_overwrite", po::bool_switch(&no_overwrite)->default_value(false), "Don't reprocess files that are already deconvolved (i.e. exist in the GPUdecon folder).")
-	// ("UseOnlyHostMem", po::bool_switch(&UseOnlyHostMem)->default_value(false), "Just use Host Mapped Memory, and not GPU. For debugging only.")
+    // ("UseOnlyHostMem", po::bool_switch(&UseOnlyHostMem)->default_value(false), "Just use Host Mapped Memory, and not GPU. For debugging only.")
     ("help,h", "This help message.")
     ;
   po::positional_options_description p;
@@ -645,20 +645,32 @@ int main(int argc, char *argv[])
 					cudaMemGetInfo(&GPUfree, &GPUtotal);
 					std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
 
-					cufftEstimate3d(new_nz, new_ny, deskewedXdim, CUFFT_R2C, &workSizeR2C);
+					cuFFTErr = cufftEstimate3d(new_nz, new_ny, deskewedXdim, CUFFT_R2C, &workSizeR2C);
+					if (cuFFTErr != CUFFT_SUCCESS) 
+						std::cerr << "cufftEstimate3d() failed. " << new_nz << " x " << new_ny << " x " << deskewedXdim << " Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
+
 					std::cerr << "R2C FFT Plan desires " << workSizeR2C / (1024 * 1024) << " MB. " << std::endl;
 					throw std::runtime_error("cufftMakePlan3d() r2c failed.");
 				}
 
 				cuFFTErr = cufftCreate(&rfftplanInvGPU);						// create object.
+				if (cuFFTErr != CUFFT_SUCCESS) 
+					std::cerr << "cufftCreate(&rfftplanInvGPU) failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl; 
+				
 				cuFFTErr = cufftSetAutoAllocation(rfftplanInvGPU, autoAllocate);
+				if (cuFFTErr != CUFFT_SUCCESS)
+					std::cerr << "cufftSetAutoAllocation(rfftplanInvGPU, autoAllocate) failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
+				
 				cuFFTErr = cufftMakePlan3d(rfftplanInvGPU, new_nz, new_ny, deskewedXdim, CUFFT_C2R, &workSizeC2R);// make plan, get workSize	
 				if (cuFFTErr != CUFFT_SUCCESS) {
-					std::cerr << "cufftMakePlan3d() c2r failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
+					std::cerr << "cufftMakePlan3d() c2r failed. " << new_nz << " x " << new_ny << " x " << deskewedXdim << " Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
 					cudaMemGetInfo(&GPUfree, &GPUtotal);
 					std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
 
-					cufftEstimate3d(new_nz, new_ny, deskewedXdim, CUFFT_C2R, &workSizeC2R);
+					cuFFTErr = cufftEstimate3d(new_nz, new_ny, deskewedXdim, CUFFT_C2R, &workSizeC2R);
+					if (cuFFTErr != CUFFT_SUCCESS)
+						std::cerr << "cufftEstimate3d() failed. " << new_nz << " x " << new_ny << " x " << deskewedXdim << " Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
+
 					std::cerr << "C2R FFT Plan desires " << workSizeC2R / (1024 * 1024) << " MB. " << std::endl;
 					throw std::runtime_error("cufftMakePlan3d() c2r failed.");
 				}
