@@ -31,8 +31,10 @@ device_(device), size_(size), ptr_(0), Hostptr_(0), UseCudaHostOnly_(UseCudaHost
 
   if (err != cudaSuccess || UseCudaHostOnly_) {
       err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped); // if device allocation fails, try to allocate on Host
-      if (err != cudaSuccess) 
-          throw std::runtime_error("cudaMalloc and cudaHostAlloc failed.");
+	  if (err != cudaSuccess) {
+		  std::cout << std::endl << "Error code : " << err << "  Trying to allocate size: " << size_ / (1024 * 1024) << " MB ";
+		  throw std::runtime_error("cudaHostAlloc failed during GPUBuffer creation. ");
+	  }
       else {
 		  cudaDeviceSynchronize();
           cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0);
@@ -146,7 +148,7 @@ void GPUBuffer::resize(size_t newsize) {
 
 		if (newsize > 0) {
 			if (!UseCudaHostOnly_){
-				err = cudaMalloc((void**)&ptr_, size_);
+				err = cudaMalloc((void**)&ptr_, size_); // err checked below
 				cudaDeviceSynchronize();
 			}
 

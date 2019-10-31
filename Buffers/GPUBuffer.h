@@ -52,7 +52,7 @@ class GPUBuffer : public Buffer {
     GPUBuffer& operator=(const CPUBuffer& rhs);
 
     /** Destructor.  Frees the GPU memory managed by this GPUBuffer.*/
-    virtual ~GPUBuffer();
+    virtual ~GPUBuffer() noexcept(false);
 
     virtual size_t getSize() const { return size_; } ;
     virtual void* getPtr() { return ptr_; } ;

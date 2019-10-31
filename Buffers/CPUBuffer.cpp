@@ -33,7 +33,7 @@ CPUBuffer& CPUBuffer::operator=(const Buffer& rhs) {
   return *this;
 }
 
-CPUBuffer::~CPUBuffer() {
+CPUBuffer::~CPUBuffer() noexcept(false) {
   if (ptr_) {
     delete [] ptr_;
   }
@@ -140,17 +140,15 @@ void CPUBuffer::dump(std::ostream& stream, int numCols,
 
 bool CPUBuffer::hasNaNs(bool verbose) const
 {
-  int numEntries = size_ / sizeof(float);
+  size_t numEntries = size_ / sizeof(float);
   float* arr = (float*)ptr_;
-  int i = 0;
+  size_t i = 0;
   bool haveNaNs = false;
   if (verbose) {
     for (i = 0; i < numEntries; ++i) {
-#ifndef _WIN32
+
       bool in = std::isnan(arr[i]);
-#else
-      bool in = _isnan(arr[i]);
-#endif
+
       if (in) {
         std::cout << "NaN entry in array at: " << i << std::endl;
       }
@@ -158,12 +156,10 @@ bool CPUBuffer::hasNaNs(bool verbose) const
     }
   } else {
     while ((!haveNaNs) && i < numEntries) {
-#ifndef _WIN32
+
       haveNaNs |= std::isnan(arr[i]);
-#else
-      haveNaNs |= _isnan(arr[i]);
-#endif
-      ++i;
+
+	  ++i;
     }
   }
   return haveNaNs;

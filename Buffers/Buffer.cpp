@@ -1,6 +1,6 @@
 #include "Buffer.h"
 
-Buffer::~Buffer() {
+Buffer::~Buffer() noexcept(false) {
 }
 
 void Buffer::dump(std::ostream& s, int numCols)

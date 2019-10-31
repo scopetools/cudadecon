@@ -22,7 +22,7 @@ class Buffer {
 
   public:
     /** Destructor*/
-    virtual ~Buffer();
+    virtual ~Buffer() noexcept(false);
 
     /** Get current size of buffer.*/
     virtual size_t getSize() const = 0;

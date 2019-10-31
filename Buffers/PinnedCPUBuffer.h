@@ -24,7 +24,7 @@ class PinnedCPUBuffer : public CPUBuffer {
     /** Assignment operator.*/
     PinnedCPUBuffer& operator=(const Buffer& rhs);
     /** Destructor.*/
-    virtual ~PinnedCPUBuffer();
+    virtual ~PinnedCPUBuffer() noexcept(false);
 
     /** Get current size of buffer.*/
     virtual size_t getSize() const { return size_; } ;

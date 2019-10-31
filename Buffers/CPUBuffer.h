@@ -28,7 +28,7 @@ class CPUBuffer : public Buffer {
     /** Assignment operator.*/
     CPUBuffer& operator=(const Buffer& rhs);
     /** Destructor.*/
-    virtual ~CPUBuffer();
+    virtual ~CPUBuffer() noexcept(false);
 
     /** Get current size of buffer.*/
     virtual size_t getSize() const { return size_; } ;
