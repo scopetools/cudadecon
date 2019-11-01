@@ -65,12 +65,12 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
 
   // "raw" contains the raw image, also used as the initial guess X_0
-  unsigned int nx = raw.width();
-  unsigned int ny = raw.height();
-  unsigned int nz = raw.depth();
+  size_t nx = raw.width();
+  size_t ny = raw.height();
+  size_t nz = raw.depth();
 
-  unsigned int nxy = nx * ny;
-  unsigned int nxy2 = (nx/2 + 1)*ny; // x=N3, y=N2, z=N1 see: http://docs.nvidia.com/cuda/cufft/#multi-dimensional
+  size_t nxy = nx * ny;
+  size_t nxy2 = (nx/2 + 1)*ny; // x=N3, y=N2, z=N1 see: http://docs.nvidia.com/cuda/cufft/#multi-dimensional
 
 #ifndef NDEBUG
 #ifdef _WIN32

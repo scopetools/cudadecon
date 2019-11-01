@@ -25,14 +25,23 @@ device_(device), size_(size), ptr_(0), Hostptr_(0), UseCudaHostOnly_(UseCudaHost
   }
 
   if (!UseCudaHostOnly_){
-	  err = cudaMalloc((void**)&ptr_, size_);
+	  err = cudaMalloc((void**)&ptr_, size_); //try cudaMalloc
+	  if (err != cudaSuccess) {
+		  err = cudaMallocManaged((void**)&ptr_, size_); // try cudaMallocManaged.  Oversubscription (i.e. allocating arrays bigger than GPU ram) doesn’t sound possible on Windows. Stinky pants. http://disq.us/p/1ji735f
+
+		  if (err != cudaSuccess) {
+			  //int value;
+			  //cudaDeviceGetAttribute(&value, cudaDevAttrConcurrentManagedAccess, device); // cudaDevAttrConcurrentManagedAccess is required for Oversubscription: https://docs.nvidia.com/cuda/cuda-driver-api/group__CUDA__MEM.html
+			  //std::cout << std::endl << "Error code : " << err << "  cudaMallocManaged to allocate size: " << size_ / (1024 * 1024) << " MB. And ConcurrentManagedAccess = " << value << std::endl;	 
+		  }
+	  }
 	  cudaDeviceSynchronize();
   }
 
   if (err != cudaSuccess || UseCudaHostOnly_) {
       err = cudaHostAlloc((void**)&Hostptr_, size_, cudaHostAllocMapped); // if device allocation fails, try to allocate on Host
 	  if (err != cudaSuccess) {
-		  std::cout << std::endl << "Error code : " << err << "  Trying to allocate size: " << size_ / (1024 * 1024) << " MB ";
+		  std::cout << std::endl << "Error code: " << err << " : '" << cudaGetErrorString(err) << "', while trying to cudaHostAlloc size: " << size_ / (1024 * 1024) << " MB. ";
 		  throw std::runtime_error("cudaHostAlloc failed during GPUBuffer creation. ");
 	  }
       else {

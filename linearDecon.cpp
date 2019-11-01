@@ -336,8 +336,8 @@ int main(int argc, char *argv[])
   unsigned new_ny, new_nz, new_nx;
   int deskewedXdim = 0;
   cufftHandle rfftplanGPU = NULL, rfftplanInvGPU = NULL;
-  GPUBuffer d_interpOTF(0, myGPUdevice, UseOnlyHostMem);
-  GPUBuffer workArea(0, myGPUdevice, UseOnlyHostMem);
+  GPUBuffer d_interpOTF(1, myGPUdevice, UseOnlyHostMem);
+  GPUBuffer workArea(1, myGPUdevice, UseOnlyHostMem);
 
   cudaDeviceProp deviceProp;
   cudaGetDeviceProperties(&deviceProp, myGPUdevice);
