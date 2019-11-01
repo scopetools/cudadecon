@@ -89,7 +89,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   std::cout << std::setw(8) << X_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free " ;
 
 
-  std::cout << "Pinning Host RAM.  ";
+  std::cout << "Pinning raw.data's Host RAM.  ";
   cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable)); //pin the host RAM
   // transfer host data to GPU
   std::cout << "Copy raw.data to X_k HostToDevice.  ";
