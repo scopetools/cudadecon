@@ -7,24 +7,24 @@
 #pragma warning(disable : 4267) // Disregard loss of data from size_t to unsigned int.
 #pragma warning(disable : 4305) // Disregard loss of data from double to float.
 
-CImg<> next_raw_image;
+CImg<> next_file_image;
 CImg<> ToSave;
 CImg<unsigned short> U16ToSave;
 CImg<> DeskewedToSave;
 
 int load_next_thread(const char* my_path)
 {
-	next_raw_image.assign(my_path);
+	next_file_image.assign(my_path);
 	if (false)
 	{
-		float img_max = next_raw_image(0, 0, 0);
-		float img_min = next_raw_image(0, 0, 0);
-		cimg_forXYZ(next_raw_image, x, y, z){
-			img_max = std::max(next_raw_image(x, y, z), img_max);
-			img_min = std::min(next_raw_image(x, y, z), img_min);
+		float img_max = next_file_image(0, 0, 0);
+		float img_min = next_file_image(0, 0, 0);
+		cimg_forXYZ(next_file_image, x, y, z){
+			img_max = std::max(next_file_image(x, y, z), img_max);
+			img_min = std::min(next_file_image(x, y, z), img_min);
 		}
-		std::cout << "next_raw_image : " << next_raw_image.width() << " x " << next_raw_image.height() << " x " << next_raw_image.depth() << ". " << std::endl;
-		std::cout << "         next_raw_image max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
+		std::cout << "next_file_image : " << next_file_image.width() << " x " << next_file_image.height() << " x " << next_file_image.depth() << ". " << std::endl;
+		std::cout << "         next_file_image max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
 		std::cout << "Loaded from " << my_path << std::endl;
 	}
 
@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
   int napodize, nZblend;
   float background;
   float NA=1.2;
-  ImgParams imgParams;
+  ImgParams imgParams, imgParamsOld;
   float dz_psf, dr_psf;
   float wiener;
 
@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
   bool bDevQuery = false;
   float deskewAngle=0.0;
   float rotationAngle=0.0;
-  unsigned outputWidth;
+  unsigned outputWidth; 
   int extraShift=0;
   std::vector<int> final_CropTo_boundaries;
   bool bSaveUshort = false;
@@ -190,6 +190,8 @@ int main(int argc, char *argv[])
   bool UseOnlyHostMem = false;
   bool no_overwrite = false;
   int skip = 0;
+  int tile_size=0;
+  int tile_requested = 0;
 
   TIFFSetWarningHandler(NULL);
 
@@ -228,6 +230,7 @@ int main(int argc, char *argv[])
 	("skip", po::value<int>(&skip)->default_value(0), "Skip the first 'skip' number of files.")
 	("no_overwrite", po::bool_switch(&no_overwrite)->default_value(false), "Don't reprocess files that are already deconvolved (i.e. exist in the GPUdecon folder).")
     // ("UseOnlyHostMem", po::bool_switch(&UseOnlyHostMem)->default_value(false), "Just use Host Mapped Memory, and not GPU. For debugging only.")
+	("tile", po::value<int>(&tile_requested)->default_value(0), "Tile the decon (in Y only) to attempt to fit image into GPU. 0=no tiling. -1=auto tile. >0=use this tile size.")
     ("help,h", "This help message.")
     ;
   po::positional_options_description p;
@@ -276,6 +279,7 @@ int main(int argc, char *argv[])
   }
 
   bool bAdjustResolution = !bDontAdjustResolution;
+  imgParamsOld = imgParams; // Copy image Params
 
   //****************************Check to see if we have a proper GPU device***********************************
   int deviceCount = 0;
@@ -325,7 +329,7 @@ int main(int argc, char *argv[])
   SetConsoleTextAttribute(hConsole, 13); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
   std::cout << std::endl << "Built : " << __DATE__ << " " << __TIME__ << ".  GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total on " << mydeviceProp.name << std::endl;
 
-  CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed, LSImage;
+  CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed, LSImage, sub_image, file_image;
   CImg<float> AverageLS;
   float dkr_otf, dkz_otf;
   float dkx, dky, dkz, rdistcutoff;
@@ -342,7 +346,7 @@ int main(int argc, char *argv[])
   cudaDeviceProp deviceProp;
   cudaGetDeviceProperties(&deviceProp, myGPUdevice);
 
-  unsigned nx, ny, nz;
+  unsigned nx, ny, nz = 0;
 
   int border_x = 0;
   int border_y = 0;
@@ -385,7 +389,7 @@ int main(int argc, char *argv[])
 
 	  
 	  SetConsoleTextAttribute(hConsole, 10); // colors are 9=blue 10=green and so on to 15=white 
-	  std::cout << std::endl << "Loading raw_image: " << it - all_matching_files.begin() + 1 << " out of " << all_matching_files.size() << ".   ";
+	  std::cout << std::endl << "Loading file_image: " << it - all_matching_files.begin() + 1 << " out of " << all_matching_files.size() << ".   ";
 	  if (it > all_matching_files.begin() + skip) // if this isn't the first iteration.
 	  {
 		  int seconds = number_of_files_left * iter_duration;
@@ -400,19 +404,19 @@ int main(int argc, char *argv[])
 
 	  std::cout << std::endl << *it << std::endl;
 	  std::cout << "Waiting for separate thread to finish loading image... " ;
-	  t1.join();		// wait for loading thread to finish reading next_raw_image into memory.
+	  t1.join();		// wait for loading thread to finish reading next_file_image into memory.
 	  t1.~thread();		// destroy thread.
 
-	  std::cout << "Image loaded. Copying to raw... " ;
-	  raw_image.assign(next_raw_image); // Copy to raw_image. 
+	  std::cout << "Image loaded. Copying to file_image... " ;
+	  file_image.assign(next_file_image); // Copy to file_image. 
 	  
-	  float img_max = raw_image(0, 0);
-	  float img_min = raw_image(0, 0);
+	  float img_max = file_image(0, 0);
+	  float img_min = file_image(0, 0);
 
 #ifndef NDEBUG
-	  cimg_forXYZ(raw_image, x, y, z){
-		  img_max = std::max(raw_image(x, y, z), img_max);
-		  img_min = std::min(raw_image(x, y, z), img_min);
+	  cimg_forXYZ(file_image, x, y, z){
+		  img_max = std::max(file_image(x, y, z), img_max);
+		  img_min = std::min(file_image(x, y, z), img_min);
 	  }
 
 	  std::cout << "         raw img max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
@@ -425,8 +429,47 @@ int main(int argc, char *argv[])
 	// start reading the next image
 	next_it++; // increment next_it.  This will now have the next file to read.
 	if (it < all_matching_files.end() - 1)  // If there are more files to process...
-		t1 = std::thread(load_next_thread, next_it->c_str());		//start new thread and load the next file, while we process raw_image
-	  
+		t1 = std::thread(load_next_thread, next_it->c_str());		//start new thread and load the next file, while we process file_image
+	 
+	//**************************** Tiling setup ***********************************
+	int number_of_tiles = 1;
+	int number_of_overlaps = 0;
+	double tile_overlap = 0;
+
+	
+	if (tile_requested < 0) { tile_size = std::min(           128, file_image.height()); }
+	if (tile_requested > 0) { tile_size = std::min(tile_requested, file_image.height()); }
+	
+	number_of_tiles = ceil((double)file_image.height() / ((double)tile_size - 12)); // try for 12 pixel overlap
+	number_of_overlaps = number_of_tiles - 1;
+	tile_overlap = (((double)tile_size * number_of_tiles) - file_image.height()) / number_of_overlaps;
+	tile_overlap = floor(tile_overlap); //
+	
+
+	if (tile_requested == 0) { number_of_tiles = 1; tile_size = file_image.height(); tile_overlap = 0; number_of_overlaps = 0; }
+	std::cout << std::endl << "Number of tiles: " << number_of_tiles << ".  Number of overlaps: " << number_of_overlaps << ". Tile size: " << tile_size << ". Overlap: " << tile_overlap << std::endl;
+
+	for (int tile_index = 0; tile_index < number_of_tiles; tile_index++) {
+		int tile_y_offset = floor( (double)tile_index*(tile_size - tile_overlap) );
+		std::cout << std::endl << "tile_y_offset: " << tile_y_offset;
+
+		if (number_of_tiles > 1) {
+			raw_image = file_image.get_crop(0,
+				tile_y_offset,
+				0,
+				0,
+				file_image.width() - 1,
+				std::min(file_image.height(), tile_size + tile_y_offset) - 1,
+				file_image.depth() - 1,
+				0); // get sub_image. raw_image = sub_image 
+			SetConsoleTextAttribute(hConsole, 10); // colors are 9=blue 10=green and so on to 15=white 
+			std::cout << std::endl << "Number of tile: " << tile_index + 1 << " out of " << number_of_tiles << ".   " << std::endl;
+			SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+		}
+		else
+			raw_image = file_image;
+		
+
 
       // If it's the first input file, initialize a bunch including:
       // 1. crop image to make dimensions nice factorizable numbers
@@ -448,11 +491,11 @@ int main(int argc, char *argv[])
 
 	  
 	  //**************************** If first image OR if raw_img has changed size ***********************************
-      if (it == all_matching_files.begin() + skip || bDifferent_sized_raw_img ) {
+      if (nx == 0 || bDifferent_sized_raw_img ) {
         nx = raw_image.width();
         ny = raw_image.height();
         nz = raw_image.depth();
-
+		imgParams = imgParamsOld;
 		
 
 			
@@ -968,19 +1011,42 @@ int main(int argc, char *argv[])
 	  std::cout << "output_image : " << raw_image.width() << " x " << raw_image.height() << " x " << raw_image.depth() << ". " << std::endl;
 	  std::cout << "         output_image max, min : " << std::setw(8) << img_max << ", " << std::setw(8) << img_min << std::endl;
 #endif
+	  
+	  //****************************Stitch tiles***********************************
+
+	  if (number_of_tiles > 1) { // are we tiling?
+
+		  if (tile_index == 0) {
+			  file_image(raw_image.width(), raw_image.height()*number_of_tiles - tile_overlap * number_of_overlaps, raw_image.depth(), 1, 0); // initialize destination file_image.
+		  }
+		  cimg_forXYZ(raw_image, x, y, z) {
+			  double blend = 1;
+			  if (y < tile_overlap && tile_index > 1) // front overlap region?
+				  blend = (double)y / tile_overlap;
+			  else if (y > (raw_image.height() - tile_overlap) && tile_index + 1 < number_of_tiles) // back overlap region?
+				  blend = (double)(raw_image.height() - y) / tile_overlap;
+			  else blend = 1;
+
+			  file_image(x, y + tile_y_offset, z) += raw_image(x, y, z) * blend; // insert into image with blend in overlap region
+		  }
+	  }
+
+} // end tiling loop
+
+	  
 
 	  //****************************Crop***********************************
 
 	  //remove padding
 	  if (Pad)
-		  raw_image.crop(
+		  file_image.crop(
 			  border_x, border_y,	// X, Y
 			  border_z, 0,			// Z, C
 			  border_x + nx, border_y + ny,	// X, Y
 			  border_z + nz, 0);			// Z, C
 				
 	  if (! final_CropTo_boundaries.empty()) {
-        raw_image.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],  // X, Y
+        file_image.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],  // X, Y
                        final_CropTo_boundaries[4], 0,							// Z, C
                        final_CropTo_boundaries[1], final_CropTo_boundaries[3],	// X, Y
                        final_CropTo_boundaries[5], 0);							// Z, C
@@ -1028,7 +1094,7 @@ int main(int argc, char *argv[])
 
       if (bDoMaxIntProj.size() == 3) {
         if (bDoMaxIntProj[0]) {
-          CImg<> proj = MaxIntProj(raw_image, 0);
+          CImg<> proj = MaxIntProj(file_image, 0);
 		  if (bSaveUshort){
 			  CImg<unsigned short> uint16Img(proj);
 			  uint16Img.SetDescription(commandline_string);
@@ -1041,7 +1107,7 @@ int main(int argc, char *argv[])
 		  }
         }
 		if (bDoMaxIntProj[1]) {
-			CImg<> proj = MaxIntProj(raw_image, 1);
+			CImg<> proj = MaxIntProj(file_image, 1);
 			if (bSaveUshort){
 				CImg<unsigned short> uint16Img(proj);
 				uint16Img.SetDescription(commandline_string);
@@ -1054,7 +1120,7 @@ int main(int argc, char *argv[])
 			}
 		}
         if (bDoMaxIntProj[2]) {
-			CImg<> proj = MaxIntProj(raw_image, 2);
+			CImg<> proj = MaxIntProj(file_image, 2);
 			if (bSaveUshort){
 				CImg<unsigned short> uint16Img(proj);
 				uint16Img.SetDescription(commandline_string);
@@ -1072,14 +1138,14 @@ int main(int argc, char *argv[])
 	  if (RL_iters || rotMatrix.getSize()) {
 		  if (!bSaveUshort){
 
-			  ToSave.assign(raw_image); //copy decon image (i.e. raw_image) to new image space for saving.
+			  ToSave.assign(file_image); //copy decon image (i.e. file_image) to new image space for saving.
 			  ToSave.SetDescription(commandline_string);
 			  // ToSave.save(makeOutputFilePath(*it).c_str());
 
 			  tsave = std::thread(save_in_thread, *it); //start saving "To Save" file.
 		  }
 		  else {
-			  U16ToSave = raw_image;
+			  U16ToSave = file_image;
 			  U16ToSave.SetDescription(commandline_string);
 			  tsave = std::thread(U16save_in_thread, *it); //start saving "To Save" file.
 		  }
