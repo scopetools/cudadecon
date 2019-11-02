@@ -182,6 +182,11 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
   GPUBuffer rawGPUbuf(X_k, myGPUdevice, UseOnlyHostMem);  // make a copy of raw image
   
+  GPUBuffer CC(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // RL factor to apply to Y_k to get X_k
+  std::cout << "CC allocated.           ";
+  cudaMemGetInfo(&free, &total);
+  std::cout << std::setw(8) << CC.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+
   std::cout << "rawGPUbuf allocated.    " ;
   cudaMemGetInfo(&free, &total);
   std::cout << std::setw(8) << rawGPUbuf.getSize() / (1024*1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
@@ -198,11 +203,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   cudaMemGetInfo(&free, &total);
   std::cout << std::setw(8) << Y_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
-  GPUBuffer CC(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // RL factor to apply to Y_k to get X_k
-  std::cout << "CC allocated.           ";
-  cudaMemGetInfo(&free, &total);
-  std::cout << std::setw(8) << CC.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
-
+  
   GPUBuffer G_kminus1(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // X_k - Y_k (RL change)
   std::cout << "G_kminus1 allocated.    ";
   cudaMemGetInfo(&free, &total);

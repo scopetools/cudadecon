@@ -329,7 +329,7 @@ int main(int argc, char *argv[])
   SetConsoleTextAttribute(hConsole, 13); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
   std::cout << std::endl << "Built : " << __DATE__ << " " << __TIME__ << ".  GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total on " << mydeviceProp.name << std::endl;
 
-  CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed, LSImage, sub_image, file_image;
+  CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed, LSImage, sub_image, file_image, stitch_image;
   CImg<float> AverageLS;
   float dkr_otf, dkz_otf;
   float dkx, dky, dkz, rdistcutoff;
@@ -407,8 +407,8 @@ int main(int argc, char *argv[])
 	  t1.join();		// wait for loading thread to finish reading next_file_image into memory.
 	  t1.~thread();		// destroy thread.
 
-	  std::cout << "Image loaded. Copying to file_image... " ;
-	  file_image.assign(next_file_image); // Copy to file_image. 
+	  std::cout << "Image loaded. Copying to 'file_image'... " ;
+	  file_image.assign(next_file_image, false); // Copy to file_image.  CImg<T>& assign(const CImg<t>& img, const bool is_shared)
 	  
 	  float img_max = file_image(0, 0);
 	  float img_min = file_image(0, 0);
@@ -440,34 +440,57 @@ int main(int argc, char *argv[])
 	if (tile_requested < 0) { tile_size = std::min(           128, file_image.height()); }
 	if (tile_requested > 0) { tile_size = std::min(tile_requested, file_image.height()); }
 	
-	number_of_tiles = ceil((double)file_image.height() / ((double)tile_size - 12)); // try for 12 pixel overlap
+	number_of_tiles = ceil((double)file_image.height() / ((double)tile_size - 20)); // try for 20 pixel overlap
 	number_of_overlaps = number_of_tiles - 1;
 	tile_overlap = (((double)tile_size * number_of_tiles) - file_image.height()) / number_of_overlaps;
 	tile_overlap = floor(tile_overlap); //
 	
 
 	if (tile_requested == 0) { number_of_tiles = 1; tile_size = file_image.height(); tile_overlap = 0; number_of_overlaps = 0; }
-	std::cout << std::endl << "Number of tiles: " << number_of_tiles << ".  Number of overlaps: " << number_of_overlaps << ". Tile size: " << tile_size << ". Overlap: " << tile_overlap << std::endl;
+	std::cout << std::endl << "# of tiles: " << number_of_tiles << ". # of overlaps: " << number_of_overlaps << ". Tile size: " << tile_size << " Y pix. Overlap: " << tile_overlap << " Y pix. " << std::endl;
 
 	for (int tile_index = 0; tile_index < number_of_tiles; tile_index++) {
 		int tile_y_offset = floor( (double)tile_index*(tile_size - tile_overlap) );
-		std::cout << std::endl << "tile_y_offset: " << tile_y_offset;
+		//std::cout << std::endl << "tile_y_offset: " << tile_y_offset;
 
 		if (number_of_tiles > 1) {
+
+			int y_end = std::min(file_image.height(), tile_size + tile_y_offset);
+			
+			
 			raw_image = file_image.get_crop(0,
 				tile_y_offset,
 				0,
 				0,
 				file_image.width() - 1,
-				std::min(file_image.height(), tile_size + tile_y_offset) - 1,
+				y_end - 1,
 				file_image.depth() - 1,
 				0); // get sub_image. raw_image = sub_image 
+			
+			
+			
+			//for (int y = tile_y_offset; y < y_end; ++y) {
+
+				//cimg_forXZ(file_image, x, z) {
+					//raw_image(x, y_raw_index, z) = (unsigned long) file_image(x, y, z);
+				//}
+				//y_raw_index = y_raw_index + 1;
+			//}
+			//raw_image = file_image.get_crop(0,
+			//	tile_y_offset,
+			//	0,
+			//	0,
+			//	file_image.width() - 1,
+			//	std::min(file_image.height(), tile_size + tile_y_offset) - 1,
+			//	file_image.depth() - 1,
+			//	0); // get sub_image. raw_image = sub_image 
 			SetConsoleTextAttribute(hConsole, 10); // colors are 9=blue 10=green and so on to 15=white 
-			std::cout << std::endl << "Number of tile: " << tile_index + 1 << " out of " << number_of_tiles << ".   " << std::endl;
+			std::cout << std::endl << "Tile: " << tile_index + 1 << " out of " << number_of_tiles << ".   " << std::endl;
 			SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+			// raw_image.save(makeOutputFilePath(it->c_str(), "tile", "_tile").c_str()); //for debugging
 		}
 		else
-			raw_image = file_image;
+			raw_image.assign(file_image);
 		
 
 
@@ -1017,19 +1040,39 @@ int main(int argc, char *argv[])
 	  if (number_of_tiles > 1) { // are we tiling?
 
 		  if (tile_index == 0) {
-			  file_image(raw_image.width(), raw_image.height()*number_of_tiles - tile_overlap * number_of_overlaps, raw_image.depth(), 1, 0); // initialize destination file_image.
+			  stitch_image.assign(raw_image.width(), raw_image.height()*number_of_tiles - tile_overlap * number_of_overlaps, raw_image.depth()); // initialize destination stitch_image.
+			  std::cout << "         stitch_image : " << stitch_image.width() << " x " << stitch_image.height() << " x " << stitch_image.depth() << ". " << std::endl;
+			  stitch_image.fill(0);
 		  }
+		  std::cout <<     "           tile_image : " << raw_image.width() << " x " << raw_image.height() << " x " << raw_image.depth() << ". " << std::endl;
+
+		  int no_zone = floor((float)tile_overlap / 3) ;
+		  int blend_zone = tile_overlap - no_zone - no_zone;
+		  std::cout << " no_zone: " << no_zone << ". blend_zone: " << blend_zone << ". tile_y_offset:" << tile_y_offset << ". " << std::endl;
 		  cimg_forXYZ(raw_image, x, y, z) {
 			  double blend = 1;
-			  if (y < tile_overlap && tile_index > 1) // front overlap region?
-				  blend = (double)y / tile_overlap;
-			  else if (y > (raw_image.height() - tile_overlap) && tile_index + 1 < number_of_tiles) // back overlap region?
-				  blend = (double)(raw_image.height() - y) / tile_overlap;
-			  else blend = 1;
 
-			  file_image(x, y + tile_y_offset, z) += raw_image(x, y, z) * blend; // insert into image with blend in overlap region
+			  if ( (y > no_zone && tile_index > 1)  && (y < raw_image.height() - no_zone && tile_index + 1 < number_of_tiles)) {
+
+				  if (y > no_zone && y < tile_overlap - no_zone) // front blend region?
+					  blend = (double)(y - no_zone) / blend_zone;
+				  else if (y > (raw_image.height() - tile_overlap + no_zone) && y < raw_image.height() - no_zone) // back blend region?
+					  blend = (double)(raw_image.height() - no_zone - y) / blend_zone;
+				  else if (y <= no_zone || y >= raw_image.height() - no_zone) // no_zone?
+					  blend = 0;
+				  else blend = 1; // middle zone
+			  }
+			  else blend = 1; // front overlap region of 1st tile, or back overlap region of last tile
+			  
+			  if (y + tile_y_offset < stitch_image.height()) {
+				  //stitch_image(x, y + tile_y_offset, z) = raw_image(x, y, z); // insert into image directly without blend in overlap region
+				  stitch_image(x, y + tile_y_offset, z) += raw_image(x, y, z) * blend; // insert into image with blend in overlap region
+			  }
+			  
 		  }
 	  }
+	  else
+		  stitch_image.assign(raw_image, false);
 
 } // end tiling loop
 
@@ -1039,14 +1082,14 @@ int main(int argc, char *argv[])
 
 	  //remove padding
 	  if (Pad)
-		  file_image.crop(
+		  stitch_image.crop(
 			  border_x, border_y,	// X, Y
 			  border_z, 0,			// Z, C
 			  border_x + nx, border_y + ny,	// X, Y
 			  border_z + nz, 0);			// Z, C
 				
 	  if (! final_CropTo_boundaries.empty()) {
-        file_image.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],  // X, Y
+        stitch_image.crop(final_CropTo_boundaries[0], final_CropTo_boundaries[2],  // X, Y
                        final_CropTo_boundaries[4], 0,							// Z, C
                        final_CropTo_boundaries[1], final_CropTo_boundaries[3],	// X, Y
                        final_CropTo_boundaries[5], 0);							// Z, C
@@ -1094,7 +1137,7 @@ int main(int argc, char *argv[])
 
       if (bDoMaxIntProj.size() == 3) {
         if (bDoMaxIntProj[0]) {
-          CImg<> proj = MaxIntProj(file_image, 0);
+          CImg<> proj = MaxIntProj(stitch_image, 0);
 		  if (bSaveUshort){
 			  CImg<unsigned short> uint16Img(proj);
 			  uint16Img.SetDescription(commandline_string);
@@ -1107,7 +1150,7 @@ int main(int argc, char *argv[])
 		  }
         }
 		if (bDoMaxIntProj[1]) {
-			CImg<> proj = MaxIntProj(file_image, 1);
+			CImg<> proj = MaxIntProj(stitch_image, 1);
 			if (bSaveUshort){
 				CImg<unsigned short> uint16Img(proj);
 				uint16Img.SetDescription(commandline_string);
@@ -1120,7 +1163,7 @@ int main(int argc, char *argv[])
 			}
 		}
         if (bDoMaxIntProj[2]) {
-			CImg<> proj = MaxIntProj(file_image, 2);
+			CImg<> proj = MaxIntProj(stitch_image, 2);
 			if (bSaveUshort){
 				CImg<unsigned short> uint16Img(proj);
 				uint16Img.SetDescription(commandline_string);
@@ -1138,14 +1181,14 @@ int main(int argc, char *argv[])
 	  if (RL_iters || rotMatrix.getSize()) {
 		  if (!bSaveUshort){
 
-			  ToSave.assign(file_image); //copy decon image (i.e. file_image) to new image space for saving.
+			  ToSave.assign(stitch_image); //copy decon image (i.e. stitch_image) to new image space for saving.
 			  ToSave.SetDescription(commandline_string);
 			  // ToSave.save(makeOutputFilePath(*it).c_str());
 
 			  tsave = std::thread(save_in_thread, *it); //start saving "To Save" file.
 		  }
 		  else {
-			  U16ToSave = file_image;
+			  U16ToSave = stitch_image;
 			  U16ToSave.SetDescription(commandline_string);
 			  tsave = std::thread(U16save_in_thread, *it); //start saving "To Save" file.
 		  }
