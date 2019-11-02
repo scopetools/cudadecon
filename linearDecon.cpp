@@ -1039,7 +1039,7 @@ int main(int argc, char *argv[])
 	  if (number_of_tiles > 1) { // are we tiling?
 
 		  if (tile_index == 0) {
-			  stitch_image.assign(raw_image.width(), raw_image.height()*number_of_tiles - tile_overlap * number_of_overlaps, raw_image.depth()); // initialize destination stitch_image.
+			  stitch_image.assign(raw_image.width(), file_image.height(), raw_image.depth()); // initialize destination stitch_image.
 			  std::cout << "         stitch_image : " << stitch_image.width() << " x " << stitch_image.height() << " x " << stitch_image.depth() << ". " << std::endl;
 			  stitch_image.fill(0);
 		  }
@@ -1064,7 +1064,7 @@ int main(int argc, char *argv[])
 			  else blend = 1; // front overlap region of 1st tile, or back overlap region of last tile
 			  
 			  if (y + tile_y_offset < stitch_image.height()) {
-				  if (y > tile_overlap / 2 || y < raw_image.height() - tile_overlap / 2) {
+				  if ( (y > ((float)tile_overlap / 2.0) || tile_index == 0) && (y < (raw_image.height() - (float)tile_overlap / 2.0) || tile_index + 1 >= number_of_tiles)) {
 					  stitch_image(x, y + tile_y_offset, z) = raw_image(x, y, z);
 				  } // insert into image directly without blend in overlap region
 				  //stitch_image(x, y + tile_y_offset, z) += raw_image(x, y, z) * blend; // insert into image with blend in overlap region
