@@ -455,20 +455,19 @@ int main(int argc, char *argv[])
 
 		if (number_of_tiles > 1) {
 
-			int y_end = std::min(file_image.height(), tile_size + tile_y_offset);
+			//int y_end = std::min(file_image.height(), tile_size + tile_y_offset);
+			int y_end = tile_size + tile_y_offset; // I think we can crop to outside the image, and the boundry conditions will fill it. This way each subimage is exactly the same size, which makes the rest of the code mighty happy.
+
 			
+			raw_image = file_image.get_crop(0,	/* X start */
+				tile_y_offset,					/* Y start */
+				0,								/* Z start */
+				file_image.width() - 1,			/*  X end */
+				y_end - 1,						/*  Y end */
+				file_image.depth() - 1,			/*  Z end */
+				true); // get sub_image. raw_image = sub_image 
 			
-			raw_image = file_image.get_crop(0,
-				tile_y_offset,
-				0,
-				0,
-				file_image.width() - 1,
-				y_end - 1,
-				file_image.depth() - 1,
-				0); // get sub_image. raw_image = sub_image 
-			
-			
-			
+						
 			//for (int y = tile_y_offset; y < y_end; ++y) {
 
 				//cimg_forXZ(file_image, x, z) {
@@ -1065,8 +1064,10 @@ int main(int argc, char *argv[])
 			  else blend = 1; // front overlap region of 1st tile, or back overlap region of last tile
 			  
 			  if (y + tile_y_offset < stitch_image.height()) {
-				  //stitch_image(x, y + tile_y_offset, z) = raw_image(x, y, z); // insert into image directly without blend in overlap region
-				  stitch_image(x, y + tile_y_offset, z) += raw_image(x, y, z) * blend; // insert into image with blend in overlap region
+				  if (y > tile_overlap / 2 || y < raw_image.height() - tile_overlap / 2) {
+					  stitch_image(x, y + tile_y_offset, z) = raw_image(x, y, z);
+				  } // insert into image directly without blend in overlap region
+				  //stitch_image(x, y + tile_y_offset, z) += raw_image(x, y, z) * blend; // insert into image with blend in overlap region
 			  }
 			  
 		  }
