@@ -1051,7 +1051,7 @@ int main(int argc, char *argv[])
 			  blend_weight_image.fill(0);
 		  }
 		  // int no_zone    = floor((float)tile_overlap / 3) ;  // 1/3 no_zone, 1/3 blend zone, 1/3 no_zone
-		  int no_zone    = floor((tile_overlap - 4) / 2.0) ;  //  no_zone, 4 pixel blend zone, yes_zone
+		  int no_zone    = ceil((tile_overlap - 4) / 2.0) ;  //  no_zone, 4 pixel blend zone, yes_zone
 		  int blend_zone = tile_overlap - no_zone - no_zone; 
 		  
 		  std::cout << "           tile_image : " << raw_image.width() << " x " << raw_image.height() << " x " << raw_image.depth() << ". tile_overlap: " << tile_overlap << ". blend_zone: " << blend_zone << ". tile_y_offset:" << tile_y_offset << ". " << std::endl;
