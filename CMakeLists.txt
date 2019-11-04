@@ -93,6 +93,12 @@ message(STATUS "CXX_FLAGS_RELWITHDEBINFO is '${CMAKE_CXX_FLAGS_RELWITHDEBINFO}'"
 
 find_package(CUDA REQUIRED)
 
+find_package(CUB REQUIRED)
+if (CUB_FOUND)
+	message(STATUS "NVIDIA CUB found") 
+else()
+	message(STATUS "NVIDIA CUB not found") 
+endif()
 
 if (WIN32)
   set (FFTW3_ROOT_DIR C:/fftw3)
@@ -194,6 +200,7 @@ include_directories(
   ${CUDA_INCLUDE_DIRS}
   ${FFTW3_INCLUDE_DIR}
   ${X11_INCLUDE_DIR}
+  ${CUB_INCLUDE_DIR}
    )
 
 

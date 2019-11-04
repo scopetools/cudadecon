@@ -4,6 +4,22 @@
 #include <GPUBuffer.h>
 #include <cufft.h>
 
+
+// Ensure printing of CUDA runtime errors to console
+#define CUB_STDERR
+#include <stdio.h>
+#include <cub/util_allocator.cuh>
+#include <cub/device/device_reduce.cuh>
+
+using namespace cub;
+//---------------------------------------------------------------------
+// Globals, constants and typedefs
+//---------------------------------------------------------------------
+bool                    g_verbose = false;  // Whether to display input/output to console
+CachingDeviceAllocator  g_allocator(true);  // Caching allocator for device memory
+
+
+
 #ifdef _WIN32
 #define  _USE_MATH_DEFINES
 #include <math.h>
@@ -429,7 +445,7 @@ __host__ double calcAccelFactor(GPUBuffer &G_km1, GPUBuffer &G_km2,
                                                        (float *) G_km2.getPtr(),
                                                        (double *) devBuf1.getPtr());
 
-  CPUBuffer h_numer_denom(devBuf1);
+  CPUBuffer h_numer_denom(devBuf1);   //This copy is going to be sloooow.
 
   double numerator=0, denom=0;
   double *ptr = (double *) h_numer_denom.getPtr();
@@ -438,6 +454,25 @@ __host__ double calcAccelFactor(GPUBuffer &G_km1, GPUBuffer &G_km2,
     denom += *(ptr + nBlocks);
     ptr++;
   }
+
+  /*
+  // based upon : http://nvlabs.github.io/cub/example_device_reduce_8cu-example.html#a2
+  // Allocate device output array 
+  int *d_out = NULL;
+  CubDebugExit(g_allocator.DeviceAllocate((void**)&d_out, sizeof(double) * 1));
+  // Request and allocate temporary storage
+  void            *d_temp_storage = NULL;
+  size_t          temp_storage_bytes = 0;
+  CubDebugExit(DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, devBuf1.getPtr(), d_out, num_items));
+  CubDebugExit(g_allocator.DeviceAllocate(&d_temp_storage, temp_storage_bytes));
+  // Run
+  CubDebugExit(DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, d_in, d_out, num_items));
+
+  numerator = d_out;
+  */
+
+
+
 
   return numerator / (denom + eps);
 }

@@ -176,6 +176,7 @@ int main(int argc, char *argv[])
   bool bSaveDeskewedRaw = false;
   bool bDontAdjustResolution = false;
   bool bDevQuery = false;
+  bool BlendTileOverlap = false;
   float deskewAngle=0.0;
   float rotationAngle=0.0;
   unsigned outputWidth; 
@@ -192,6 +193,7 @@ int main(int argc, char *argv[])
   int skip = 0;
   int tile_size=0;
   int tile_requested = 0;
+  int tile_overlap_requested = 20;
 
   TIFFSetWarningHandler(NULL);
 
@@ -230,7 +232,9 @@ int main(int argc, char *argv[])
 	("skip", po::value<int>(&skip)->default_value(0), "Skip the first 'skip' number of files.")
 	("no_overwrite", po::bool_switch(&no_overwrite)->default_value(false), "Don't reprocess files that are already deconvolved (i.e. exist in the GPUdecon folder).")
     // ("UseOnlyHostMem", po::bool_switch(&UseOnlyHostMem)->default_value(false), "Just use Host Mapped Memory, and not GPU. For debugging only.")
-	("tile", po::value<int>(&tile_requested)->default_value(0), "Tile the decon (in Y only) to attempt to fit image into GPU. 0=no tiling. -1=auto tile. >0=use this tile size.")
+	("tile", po::value<int>(&tile_requested)->default_value(0), "Tile size for tiled decon (in Y only) to attempt to fit into GPU. 0=no tiling. Best to use a power of 2 (i.e. 64, 128, etc).")
+	("TileOverlap", po::value<int>(&tile_overlap_requested)->default_value(30), "Overlap between Tiles.  You want this to be at least ~2x the PSF Y extent.")
+	("BlendTileOverlap", po::bool_switch(&BlendTileOverlap)->default_value(false), "Blend ~5 pixel in Overlap region between Tiles.")
     ("help,h", "This help message.")
     ;
   po::positional_options_description p;
@@ -329,7 +333,7 @@ int main(int argc, char *argv[])
   SetConsoleTextAttribute(hConsole, 13); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
   std::cout << std::endl << "Built : " << __DATE__ << " " << __TIME__ << ".  GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total on " << mydeviceProp.name << std::endl;
 
-  CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed, LSImage, sub_image, file_image, stitch_image;
+  CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed, LSImage, sub_image, file_image, stitch_image, blend_weight_image;
   CImg<float> AverageLS;
   float dkr_otf, dkz_otf;
   float dkx, dky, dkz, rdistcutoff;
@@ -440,7 +444,7 @@ int main(int argc, char *argv[])
 	if (tile_requested < 0) { tile_size = std::min(           128, file_image.height()); }
 	if (tile_requested > 0) { tile_size = std::min(tile_requested, file_image.height()); }
 	
-	number_of_tiles = ceil((double)file_image.height() / ((double)tile_size - 20)); // try for 20 pixel overlap
+	number_of_tiles = ceil((double)file_image.height() / ((double)tile_size - tile_overlap_requested)); // try for 20 pixel overlap
 	number_of_overlaps = number_of_tiles - 1;
 	tile_overlap = (((double)tile_size * number_of_tiles) - file_image.height()) / number_of_overlaps;
 	tile_overlap = floor(tile_overlap); //
@@ -1041,39 +1045,75 @@ int main(int argc, char *argv[])
 		  if (tile_index == 0) {
 			  stitch_image.assign(raw_image.width(), file_image.height(), raw_image.depth()); // initialize destination stitch_image.
 			  std::cout << "         stitch_image : " << stitch_image.width() << " x " << stitch_image.height() << " x " << stitch_image.depth() << ". " << std::endl;
-			  stitch_image.fill(0);
+			  stitch_image.fill((float)0.0);
+			  
+			  blend_weight_image.assign(raw_image.width(), file_image.height(), raw_image.depth()); // initialize destination blend_weight_image.
+			  blend_weight_image.fill(0);
 		  }
-		  std::cout <<     "           tile_image : " << raw_image.width() << " x " << raw_image.height() << " x " << raw_image.depth() << ". " << std::endl;
+		  // int no_zone    = floor((float)tile_overlap / 3) ;  // 1/3 no_zone, 1/3 blend zone, 1/3 no_zone
+		  int no_zone    = floor((tile_overlap - 4) / 2.0) ;  //  no_zone, 4 pixel blend zone, yes_zone
+		  int blend_zone = tile_overlap - no_zone - no_zone; 
+		  
+		  std::cout << "           tile_image : " << raw_image.width() << " x " << raw_image.height() << " x " << raw_image.depth() << ". tile_overlap: " << tile_overlap << ". blend_zone: " << blend_zone << ". tile_y_offset:" << tile_y_offset << ". " << std::endl;
+		  bool is_first_tile = tile_index == 0;
+		  bool is_last_tile = tile_index + 1 >= number_of_tiles;
 
-		  int no_zone = floor((float)tile_overlap / 3) ;
-		  int blend_zone = tile_overlap - no_zone - no_zone;
-		  std::cout << " no_zone: " << no_zone << ". blend_zone: " << blend_zone << ". tile_y_offset:" << tile_y_offset << ". " << std::endl;
 		  cimg_forXYZ(raw_image, x, y, z) {
-			  double blend = 1;
+			  float blend = 1;
 
-			  if ( (y > no_zone && tile_index > 1)  && (y < raw_image.height() - no_zone && tile_index + 1 < number_of_tiles)) {
-
-				  if (y > no_zone && y < tile_overlap - no_zone) // front blend region?
-					  blend = (double)(y - no_zone) / blend_zone;
-				  else if (y > (raw_image.height() - tile_overlap + no_zone) && y < raw_image.height() - no_zone) // back blend region?
-					  blend = (double)(raw_image.height() - no_zone - y) / blend_zone;
-				  else if (y <= no_zone || y >= raw_image.height() - no_zone) // no_zone?
+			  if (is_first_tile && y <= tile_overlap)
+				  blend = 1;// front overlap region of 1st tile
+			  else if (is_last_tile && y >= raw_image.height() - tile_overlap )
+				  blend = 1;// back overlap region of last tile
+			  else 
+			  {
+				  if (y <= no_zone) // front no_zone?
 					  blend = 0;
-				  else blend = 1; // middle zone
+
+				  else if(y > no_zone && y <= no_zone + blend_zone) // front blend region?
+					  blend = (double)(y - no_zone) / blend_zone;
+				  				  
+				  else if (y >= raw_image.height() - no_zone) // back no zone?
+					  blend = 0;
+
+				  else blend = 1; // middle zone or back blend zone
 			  }
-			  else blend = 1; // front overlap region of 1st tile, or back overlap region of last tile
 			  
-			  if (y + tile_y_offset < stitch_image.height()) {
-				  if ( (y > ((float)tile_overlap / 2.0) || tile_index == 0) && (y < (raw_image.height() - (float)tile_overlap / 2.0) || tile_index + 1 >= number_of_tiles)) {
-					  stitch_image(x, y + tile_y_offset, z) = raw_image(x, y, z);
-				  } // insert into image directly without blend in overlap region
-				  //stitch_image(x, y + tile_y_offset, z) += raw_image(x, y, z) * blend; // insert into image with blend in overlap region
+		  
+			  
+
+
+			  if (y + tile_y_offset < stitch_image.height()) { /* are we inside of the destination image?*/
+
+				  if (BlendTileOverlap){ // blend the overlap?				  
+					  if (blend > 0 && blend < 1 && blend_weight_image(x, y + tile_y_offset, z) > 0) { // need to blend?
+						  stitch_image(x, y + tile_y_offset, z) = (raw_image(x, y, z) * blend) + (stitch_image(x, y + tile_y_offset, z) * (1.0 - blend)); // insert into image with blend in overlap region
+						  //stitch_image(x, y + tile_y_offset, z) = blend * 1000;
+					  }
+				  
+					  else if (blend > 0 && blend_weight_image(x, y + tile_y_offset, z) == 0) // just put this pixel into the image
+						  stitch_image(x, y + tile_y_offset, z) = raw_image(x, y, z);
+
+					  else if (blend == 1)
+						  stitch_image(x, y + tile_y_offset, z) = raw_image(x, y, z); // just put this pixel into the image
+				  				
+					  if (blend > 0)
+						  blend_weight_image(x, y + tile_y_offset, z) = 1;
+				  }
+				  else // overlap is either 1 tile or the other.
+				  {
+					  bool is_past_front_overlap = (y >= floor((float)tile_overlap / 2.0) || is_first_tile);
+					  bool is_before_end_overlap = (y < floor(raw_image.height() - (float)tile_overlap / 2.0) || is_last_tile);
+
+					  if (is_past_front_overlap && is_before_end_overlap)
+						  stitch_image(x, y + tile_y_offset, z) = raw_image(x, y, z); // insert into image directly without blend in overlap region
+				  }
 			  }
 			  
-		  }
-	  }
+		  } // end loop on pixels
+	  } // end "if tiling"
 	  else
-		  stitch_image.assign(raw_image, false);
+		  stitch_image.assign(raw_image, false); // no tiling, so just do image copy.
 
 } // end tiling loop
 

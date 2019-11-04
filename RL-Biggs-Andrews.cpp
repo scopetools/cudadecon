@@ -181,166 +181,168 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
 
   GPUBuffer rawGPUbuf(X_k, myGPUdevice, UseOnlyHostMem);  // make a copy of raw image
-  
-  GPUBuffer CC(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // RL factor to apply to Y_k to get X_k
-  std::cout << "CC allocated.           ";
-  cudaMemGetInfo(&free, &total);
-  std::cout << std::setw(8) << CC.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
-  std::cout << "rawGPUbuf allocated.    " ;
-  cudaMemGetInfo(&free, &total);
-  std::cout << std::setw(8) << rawGPUbuf.getSize() / (1024*1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
-  
+  { // these guys are needed only during RL iterations, we can deallocate them once we are done with iterations.  output we need is only rawGPUbuf and X_k.
 
-  GPUBuffer X_kminus1(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // guess at the end of previous RL iteration
-  std::cout << "X_kminus1 allocated.    " ;
-  cudaMemGetInfo(&free, &total);
-  std::cout << std::setw(8) << X_kminus1.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+	  GPUBuffer CC(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // RL factor to apply to Y_k to get X_k
+	  std::cout << "CC allocated.           ";
+	  cudaMemGetInfo(&free, &total);
+	  std::cout << std::setw(8) << CC.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+
+	  std::cout << "rawGPUbuf allocated.    ";
+	  cudaMemGetInfo(&free, &total);
+	  std::cout << std::setw(8) << rawGPUbuf.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
 
-  GPUBuffer Y_k(nz * nxy * sizeof(float), myGPUdevice, false); // guess at beginning of RL iteration
-  std::cout << "Y_k allocated.          " ;
-  cudaMemGetInfo(&free, &total);
-  std::cout << std::setw(8) << Y_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
-
-  
-  GPUBuffer G_kminus1(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // X_k - Y_k (RL change)
-  std::cout << "G_kminus1 allocated.    ";
-  cudaMemGetInfo(&free, &total);
-  std::cout << std::setw(8) << G_kminus1.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
-
-  GPUBuffer G_kminus2(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // previous X_k - Y_k (change between prediction and acceleration)
-  std::cout << "G_kminus2 allocated.    ";
-  cudaMemGetInfo(&free, &total);
-  std::cout << std::setw(8) << G_kminus2.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+	  GPUBuffer X_kminus1(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // guess at the end of previous RL iteration
+	  std::cout << "X_kminus1 allocated.    ";
+	  cudaMemGetInfo(&free, &total);
+	  std::cout << std::setw(8) << X_kminus1.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
 
-/*  testing using 2D texture for OTF interpolation
-  CImg<> realpart(otf.width()/2, otf.height()), imagpart(realpart);
-#pragma omp parallel for  
-  cimg_forXY(realpart, x, y) {
-    realpart(x, y) = otf(2*x  , y);
-    imagpart(x, y) = otf(2*x+1, y);
-  }
-
-  prepareOTFtexture(realpart.data(), imagpart.data(), realpart.width(), realpart.height());
-  
-  CPUBuffer interpOTF(d_interpOTF); //.getSize());
-  // d_interpOTF.set(&interpOTF, 0, interpOTF.getSize(), 0);
-
-  CImg<float> otfarr((float *) interpOTF.getPtr(), nz*2, nx/2+1);
-  otfarr.save("interpOTF.tif");
-
-  return;
-  debugging code ends
-*/
-  // Allocate GPU buffer for temp FFT result
-  GPUBuffer fftGPUbuf(nz * nxy2 * sizeof(cuFloatComplex), myGPUdevice, UseOnlyHostMem); // This is the complex FFT output.
-  std::cout << "fftGPUbuf allocated.    ";
-  cudaMemGetInfo(&free, &total);
-  std::cout << std::setw(8) << fftGPUbuf.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+	  GPUBuffer Y_k(nz * nxy * sizeof(float), myGPUdevice, false); // guess at beginning of RL iteration
+	  std::cout << "Y_k allocated.          ";
+	  cudaMemGetInfo(&free, &total);
+	  std::cout << std::setw(8) << Y_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
 
-  double lambda=0; // acceleration factor
-  float eps = std::numeric_limits<float>::epsilon();
-  
-  
-  
-  //****************************************************************************
-  //****************************RL Iterations ***********************************
-  //****************************************************************************
-  
-  // R-L iteration
-  for (int k = 0; k < nIter; k++) {
-	
-	
-	  std::cout << "Iteration ";
-	  int OldstdoutWidth = std::cout.width(2); 
-	  std::cout << k;
-	  std::cout.width(OldstdoutWidth);
-	  std::cout << ". ";
-	
-	char GPUmessage[50];
-	sprintf(GPUmessage, "Iter %d", k);
-	PUSH_RANGE(GPUmessage, k)
-	
-    // a. Make an image predictions for the next iteration    
-	if (k > 1) {
-		lambda = calcAccelFactor(G_kminus1, G_kminus2, nx, ny, nz, eps, myGPUdevice); // (G_km1 dot G_km2) / (G_km2 dot G_km2)
-		lambda = std::max(std::min(lambda, 1.), 0.); // stability enforcement
+	  GPUBuffer G_kminus1(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // X_k - Y_k (RL change)
+	  std::cout << "G_kminus1 allocated.    ";
+	  cudaMemGetInfo(&free, &total);
+	  std::cout << std::setw(8) << G_kminus1.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
-		printf("Lambda = %.2f. ", lambda);
-
-		updatePrediction(Y_k, X_k, X_kminus1, lambda, nx, ny, nz, devProp->maxGridSize[2]); // Y_k = X_k + lambda * (X_k - X_kminus1)
-	}
-	
-	else if (bFlatStartGuess && k == 0)
-	{
-		std::cout << "Median. ";
-		CImg<float> FlatStartGuess(raw, "xyzc", my_median); //create a buffer and fill with median value of image.
-		std::cout << "Copy Median to Y_k. ";
-		cutilSafeCall(cudaHostRegister(FlatStartGuess.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable)); //pin the host RAM
-		// transfer host data to GPU
-		cutilSafeCall(cudaMemcpy(Y_k.getPtr(), FlatStartGuess.data(), nz*nxy*sizeof(float),
-			cudaMemcpyDefault));
-		cutilSafeCall(cudaHostUnregister(FlatStartGuess.data()));
-		~FlatStartGuess;
-	}
-	
-	else
-	{
-		std::cout << "Copy X_k to Y_k. ";
-		Y_k = X_k; // copy data (not pointer) from X_k to Y_k (= operator has been redefined)
-	}
+	  GPUBuffer G_kminus2(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // previous X_k - Y_k (change between prediction and acceleration)
+	  std::cout << "G_kminus2 allocated.    ";
+	  cudaMemGetInfo(&free, &total);
+	  std::cout << std::setw(8) << G_kminus2.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
 
-	std::cout << "Copy X_k to X_k-1. ";
-    cutilSafeCall(cudaMemcpyAsync(X_kminus1.getPtr(), X_k.getPtr(),				//copy previous guess to X_kminus1
-		X_k.getSize(), cudaMemcpyDefault));
-	
-	if (k > 0){
-		std::cout << "Copy G_k-1 to G_k-2. ";
-		cutilSafeCall(cudaMemcpyAsync(G_kminus2.getPtr(), G_kminus1.getPtr(),
-			G_kminus1.getSize(), cudaMemcpyDefault));
-	}
+	  /*  testing using 2D texture for OTF interpolation
+		CImg<> realpart(otf.width()/2, otf.height()), imagpart(realpart);
+	  #pragma omp parallel for
+		cimg_forXY(realpart, x, y) {
+		  realpart(x, y) = otf(2*x  , y);
+		  imagpart(x, y) = otf(2*x+1, y);
+		}
 
-	
-	std::cout << "Filter1. ";
-	// b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
-    CC = Y_k;
-    filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
-              false, devProp->maxGridSize[2]);
-	
-	
-    // if (k==0) {
-    //   CPUBuffer CC_cpu(CC);
-    //   CImg<> CCimg((float *) CC_cpu.getPtr(), nx, ny, nz, 1, true);
-    //   CCimg.save_tiff("afterFilter0.tif");
-    // }
-		
-	std::cout << "LRcore. ";
+		prepareOTFtexture(realpart.data(), imagpart.data(), realpart.width(), realpart.height());
 
-    calcLRcore(CC, rawGPUbuf, nx, ny, nz, devProp->maxGridSize[2]);
-	
-	
-    // c. Determine next iteration image & apply positivity constraint
-    // X_kminus1 = X_k;
-		
-	std::cout << "Filter2. ";
-    filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
-              true, devProp->maxGridSize[2]);
-	
+		CPUBuffer interpOTF(d_interpOTF); //.getSize());
+		// d_interpOTF.set(&interpOTF, 0, interpOTF.getSize(), 0);
 
-    updateCurrEstimate(X_k, CC, Y_k, nx, ny, nz, devProp->maxGridSize[2]); //updated current estimate: Y_k * CC plus positivity constraint. "X_k" is updated upon return.
+		CImg<float> otfarr((float *) interpOTF.getPtr(), nz*2, nx/2+1);
+		otfarr.save("interpOTF.tif");
 
-    // G_kminus2 = G_kminus1;
-    calcCurrPrevDiff(X_k, Y_k, G_kminus1, nx, ny, nz, devProp->maxGridSize[2]); //G_kminus1 = X_k - Y_k change from RL
-	std::cout << "Done. " << std::endl;
-	POP_RANGE
-  }
+		return;
+		debugging code ends
+	  */
+	  // Allocate GPU buffer for temp FFT result
+	  GPUBuffer fftGPUbuf(nz * nxy2 * sizeof(cuFloatComplex), myGPUdevice, UseOnlyHostMem); // This is the complex FFT output.
+	  std::cout << "fftGPUbuf allocated.    ";
+	  cudaMemGetInfo(&free, &total);
+	  std::cout << std::setw(8) << fftGPUbuf.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
+
+	  double lambda = 0; // acceleration factor
+	  float eps = std::numeric_limits<float>::epsilon();
+
+
+
+	  //****************************************************************************
+	  //****************************RL Iterations ***********************************
+	  //****************************************************************************
+
+	  // R-L iteration
+	  for (int k = 0; k < nIter; k++) {
+
+
+		  std::cout << "Iteration ";
+		  int OldstdoutWidth = std::cout.width(2);
+		  std::cout << k;
+		  std::cout.width(OldstdoutWidth);
+		  std::cout << ". ";
+
+		  char GPUmessage[50];
+		  sprintf(GPUmessage, "Iter %d", k);
+		  PUSH_RANGE(GPUmessage, k)
+
+			  // a. Make an image predictions for the next iteration    
+			  if (k > 1) {
+				  lambda = calcAccelFactor(G_kminus1, G_kminus2, nx, ny, nz, eps, myGPUdevice); // (G_km1 dot G_km2) / (G_km2 dot G_km2)
+				  lambda = std::max(std::min(lambda, 1.), 0.); // stability enforcement
+
+				  printf("Lambda = %.2f. ", lambda);
+
+				  updatePrediction(Y_k, X_k, X_kminus1, lambda, nx, ny, nz, devProp->maxGridSize[2]); // Y_k = X_k + lambda * (X_k - X_kminus1)
+			  }
+
+			  else if (bFlatStartGuess && k == 0)
+			  {
+				  std::cout << "Median. ";
+				  CImg<float> FlatStartGuess(raw, "xyzc", my_median); //create a buffer and fill with median value of image.
+				  std::cout << "Copy Median to Y_k. ";
+				  cutilSafeCall(cudaHostRegister(FlatStartGuess.data(), nz*nxy * sizeof(float), cudaHostRegisterPortable)); //pin the host RAM
+				  // transfer host data to GPU
+				  cutilSafeCall(cudaMemcpy(Y_k.getPtr(), FlatStartGuess.data(), nz*nxy * sizeof(float),
+					  cudaMemcpyDefault));
+				  cutilSafeCall(cudaHostUnregister(FlatStartGuess.data()));
+				  ~FlatStartGuess;
+			  }
+
+			  else
+			  {
+				  std::cout << "Cpy X_k to Y_k.";
+				  Y_k = X_k; // copy data (not pointer) from X_k to Y_k (= operator has been redefined)
+			  }
+
+
+		  std::cout << "Copy X_k to X_k-1. ";
+		  cutilSafeCall(cudaMemcpyAsync(X_kminus1.getPtr(), X_k.getPtr(),				//copy previous guess to X_kminus1
+			  X_k.getSize(), cudaMemcpyDefault));
+
+		  if (k > 0) {
+			  std::cout << "Copy G_k-1 to G_k-2. ";
+			  cutilSafeCall(cudaMemcpyAsync(G_kminus2.getPtr(), G_kminus1.getPtr(),
+				  G_kminus1.getSize(), cudaMemcpyDefault));
+		  }
+
+
+		  std::cout << "Filter1. ";
+		  // b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
+		  CC = Y_k;
+		  filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
+			  false, devProp->maxGridSize[2]);
+
+
+		  // if (k==0) {
+		  //   CPUBuffer CC_cpu(CC);
+		  //   CImg<> CCimg((float *) CC_cpu.getPtr(), nx, ny, nz, 1, true);
+		  //   CCimg.save_tiff("afterFilter0.tif");
+		  // }
+
+		  std::cout << "LRcore. ";
+
+		  calcLRcore(CC, rawGPUbuf, nx, ny, nz, devProp->maxGridSize[2]);
+
+
+		  // c. Determine next iteration image & apply positivity constraint
+		  // X_kminus1 = X_k;
+
+		  std::cout << "Filter2. ";
+		  filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
+			  true, devProp->maxGridSize[2]);
+
+
+		  updateCurrEstimate(X_k, CC, Y_k, nx, ny, nz, devProp->maxGridSize[2]); //updated current estimate: Y_k * CC plus positivity constraint. "X_k" is updated upon return.
+
+		  // G_kminus2 = G_kminus1;
+		  calcCurrPrevDiff(X_k, Y_k, G_kminus1, nx, ny, nz, devProp->maxGridSize[2]); //G_kminus1 = X_k - Y_k change from RL
+		  std::cout << "Done. " << std::endl;
+		  POP_RANGE
+	  }
+  } // iterations complete. Deallocate GPUbuffers that we don't need.  Just keep X_k
   //************************************************************************************
-  //****************************RL Iterations complete***********************************
+  //****************************RL Iterations complete**********************************
   //************************************************************************************
 
 
