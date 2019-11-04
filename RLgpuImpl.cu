@@ -5,18 +5,8 @@
 #include <cufft.h>
 
 
-// Ensure printing of CUDA runtime errors to console
-#define CUB_STDERR
-#include <stdio.h>
-#include <cub/util_allocator.cuh>
-#include <cub/device/device_reduce.cuh>
-
-using namespace cub;
-//---------------------------------------------------------------------
-// Globals, constants and typedefs
-//---------------------------------------------------------------------
-bool                    g_verbose = false;  // Whether to display input/output to console
-CachingDeviceAllocator  g_allocator(true);  // Caching allocator for device memory
+#include <thrust/device_ptr.h>
+#include <thrust/reduce.h>
 
 
 
@@ -324,7 +314,6 @@ __global__ void scale_kernel(float * img, double factor)
     img[ind] *= factor;
 }
 
-
 __host__ void calcLRcore(GPUBuffer &reblurred, GPUBuffer &raw, int nx, int ny, int nz, unsigned maxGridXdim)
 // calculate raw image divided by reblurred, a key step in R-L;
 // Both input, "reblurred" and "raw", are of dimension (nx, ny, nz) and of floating type;
@@ -444,37 +433,48 @@ __host__ double calcAccelFactor(GPUBuffer &G_km1, GPUBuffer &G_km2,
   innerProduct_kernel<<<nBlocks, nThreads, smemSize>>>((float *) G_km1.getPtr(),
                                                        (float *) G_km2.getPtr(),
                                                        (double *) devBuf1.getPtr());
-
+  double numerator = 0, denom = 0;
+  
   CPUBuffer h_numer_denom(devBuf1);   //This copy is going to be sloooow.
 
-  double numerator=0, denom=0;
+  
   double *ptr = (double *) h_numer_denom.getPtr();
   for (unsigned i=0; i<nBlocks; i++) {
     numerator += *ptr;
     denom += *(ptr + nBlocks);
     ptr++;
   }
+  
 
   /*
-  // based upon : http://nvlabs.github.io/cub/example_device_reduce_8cu-example.html#a2
-  // Allocate device output array 
-  int *d_out = NULL;
-  CubDebugExit(g_allocator.DeviceAllocate((void**)&d_out, sizeof(double) * 1));
-  // Request and allocate temporary storage
-  void            *d_temp_storage = NULL;
-  size_t          temp_storage_bytes = 0;
-  CubDebugExit(DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, devBuf1.getPtr(), d_out, num_items));
-  CubDebugExit(g_allocator.DeviceAllocate(&d_temp_storage, temp_storage_bytes));
-  // Run
-  CubDebugExit(DeviceReduce::Sum(d_temp_storage, temp_storage_bytes, d_in, d_out, num_items));
 
-  numerator = d_out;
+// Use Thrust to do summation on GPU...but it's the same speed.  sigh.
+
+// first we need to convert devBuf1 to thrust: https://stackoverflow.com/a/10972841
+
+  // obtain raw pointer to device memory
+  //int * raw_ptr;
+  //cudaMalloc((void **)&raw_ptr, N * sizeof(int));
+
+  // wrap raw pointer with a device_ptr 
+  thrust::device_ptr<double> dev_ptr = thrust::device_pointer_cast((double *) devBuf1.getPtr());
+
+  // use device_ptr in Thrust algorithms
+  double sum = 0;
+  sum = thrust::reduce(dev_ptr, dev_ptr + nBlocks); // https://thrust.github.io/doc/group__reductions_ga69434d74f2e6117040fb38d1a28016c2.html#ga69434d74f2e6117040fb38d1a28016c2
+  numerator = sum;
+  // std::cout << "numerator: " << numerator;
+
+  sum = thrust::reduce(dev_ptr + nBlocks, dev_ptr + nBlocks + nBlocks);
+  denom = sum;
+  // std::cout << "  denom: " << denom;
   */
 
 
+  double accelfactor = numerator / (denom + eps);
+  // std::cout << "  accelfactor: " << accelfactor << std::endl;
 
-
-  return numerator / (denom + eps);
+  return accelfactor;
 }
 
 __global__ void innerProduct_kernel(float * img1, float * img2,

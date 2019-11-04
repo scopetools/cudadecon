@@ -93,12 +93,7 @@ message(STATUS "CXX_FLAGS_RELWITHDEBINFO is '${CMAKE_CXX_FLAGS_RELWITHDEBINFO}'"
 
 find_package(CUDA REQUIRED)
 
-find_package(CUB REQUIRED)
-if (CUB_FOUND)
-	message(STATUS "NVIDIA CUB found") 
-else()
-	message(STATUS "NVIDIA CUB not found") 
-endif()
+# find_package(CUB REQUIRED)
 
 if (WIN32)
   set (FFTW3_ROOT_DIR C:/fftw3)
@@ -134,14 +129,10 @@ else()
   find_package( Boost REQUIRED COMPONENTS program_options filesystem system)
 endif(WIN32)
 
-message(STATUS "CUDA version : ${CUDA_VERSION}")
-if(NOT(CUDA_VERSION LESS 10.0))  # if CUDA version is > or = 10.0
-    set(CUDA_NVCC_FLAGS "-O2;\
-    -gencode=arch=compute_30,code=sm_30;\
-    -gencode=arch=compute_35,code=sm_35;\
-    -gencode=arch=compute_37,code=sm_37;\
-    -gencode=arch=compute_50,code=sm_50;\
-    -gencode=arch=compute_52,code=sm_52;\
+message(STATUS "CUDA version : ${CUDA_VERSION}") 
+if(NOT(CUDA_VERSION LESS 10.0))  # if CUDA version is > or = 10.0  
+    set(CUDA_NVCC_FLAGS "-O3;\
+	-lcudart;\ 
     -gencode=arch=compute_61,code=sm_61;\
     -gencode=arch=compute_62,code=sm_62;\
     -gencode=arch=compute_70,code=sm_70;\
