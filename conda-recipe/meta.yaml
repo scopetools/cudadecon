@@ -1,0 +1,58 @@
+package:
+  name: cudadeconv
+  version: 1.0.3
+
+source:
+  path: ..
+
+build:
+  number: 2
+  # NOTE: for mac, you should export CUDA_VERSION before running conda build
+  # it will look for cudatoolkit installed at /Developer/NVIDIA/CUDA-${CUDA_VERSION}
+  string: 'cu{{ environ.get('CUDA_VERSION') }}'
+  script_env:
+    - CUDA_VERSION
+  
+requirements:
+  build:
+    - {{ compiler("cxx") }} # [win]
+    - ninja # [win]
+    # {% if environ.get('CUDA_VERSION') == '10.0' %}
+    # - conda # [linux]
+    # - cudatoolkit-dev=10.0 # [linux]
+    # {% elif environ.get('CUDA_VERSION') == '9.2' %}
+    # - conda # [linux]
+    # - cudatoolkit-dev=9.2 # [linux]
+    # {% endif %}
+    - gcc_linux-64=5.4.0 # [linux]
+    - gxx_linux-64=5.4.0 # [linux]
+    - cmake
+    - boost-cpp
+    - libtiff
+    - fftw
+    # - xorg-libx11 # [not win]
+
+  run:
+    {% if environ.get('CUDA_VERSION') == '10.1' %}
+    - cudatoolkit=10.1 # [not osx]
+    {% elif environ.get('CUDA_VERSION') == '10.0' %}
+    - cudatoolkit=10.0 # [not osx]
+    {% elif environ.get('CUDA_VERSION') == '9.2' %}
+    - cudatoolkit=9.2 # [linux]
+    {% elif environ.get('CUDA_VERSION') == '9.0' %}
+    - cudatoolkit=9.0 # [not osx]
+    {% endif %}
+    - libtiff
+    - boost-cpp
+    - fftw
+    # - xorg-libx11 # [not win]
+
+test:
+  commands:
+    - cudaDeconv --help
+
+about:
+  home: https://github.com/linshaova/cudaDeconvOriginal
+  license: GPL-3.0  
+  summary: 'CUDA-Accelerated Richardson-Lucy Deconvolution'
+  description: 'CUDA-Accelerated Richardson-Lucy Deconvolution'

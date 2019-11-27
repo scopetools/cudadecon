@@ -11,7 +11,7 @@
 
 
 cmake_minimum_required (VERSION 2.6)
-cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
+# cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
 
 project (cudaDeconv)
 
@@ -24,6 +24,8 @@ set(PROJECT_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 
 # set -fPIC for all targets (for shared libraries)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+add_compile_definitions(cimg_display=0)
 
 ######################################################################
 #
@@ -64,6 +66,20 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 	  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /MD")
   endif()
 endif()
+
+
+set(platform_dir ${CMAKE_SYSTEM_NAME}-${CMAKE_CXX_COMPILER_ID})
+
+foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
+
+    foreach(var CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${config} CMAKE_LIBRARY_OUTPUT_DIRECTORY_${config} CMAKE_RUNTIME_OUTPUT_DIRECTORY_${config})
+        set(${var} "${CMAKE_BINARY_DIR}/${platform_dir}-${config}")
+        string(TOLOWER "${${var}}" ${var})
+    endforeach()
+
+endforeach()
+
+
 
 # message(STATUS "2 Build type is '${CMAKE_BUILD_TYPE}'")
 
@@ -112,19 +128,23 @@ if (WIN32)
 	set (TIFF_INCLUDE_DIR C:/libtiff)
   endif()
 
+  find_package(TIFF REQUIRED)
+  set (TIFF_LIBRARIES libtiff)
+
 else()
   find_package(FFTW3 COMPONENTS single threads)
+  find_library(TIFF_LIBRARIES tiff 
+             HINTS
+             $ENV{PREFIX}/lib
+             $ENV{CONDA_PREFIX}/lib
+             REQUIRED)
+  message(STATUS "Tiff Library: " ${TIFF_LIBRARIES})
 endif()
   
-find_package(TIFF REQUIRED)
 
-if (WIN32)
-  set (TIFF_LIBRARIES libtiff)
-endif()
-
-if (NOT WIN32)
-  find_package(X11)
-endif()
+# if (NOT WIN32)
+#   find_package(X11)
+# endif()
 
 if(WIN32)
   find_package( Boost )
@@ -179,7 +199,7 @@ include_directories(
   "${CMAKE_CURRENT_SOURCE_DIR}/Buffers"
   ${CUDA_INCLUDE_DIRS}
   ${FFTW3_INCLUDE_DIR}
-  ${X11_INCLUDE_DIR}
+  # ${X11_INCLUDE_DIR}
    )
 
 
@@ -319,7 +339,7 @@ add_dependencies(
 add_executable(radialft radialft-nonSIM.cpp)
 
 #####  otfviewer.exe ###########################################
-add_executable(otfviewer OTF_TIFF_viewer.cpp)
+# add_executable(otfviewer OTF_TIFF_viewer.cpp)
 
 
 ######################################################################
@@ -333,7 +353,7 @@ target_link_libraries(
   Buffer
   ${FFTW3F_LIBRARY}
   ${FFTW3F_THREADS_LIBRARY}
-  ${X11_X11_LIB}
+  # ${X11_X11_LIB}
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
   ${Boost_FILESYSTEM_LIBRARY}
   ${Boost_PREDICATE_LIBRARY}
@@ -346,16 +366,16 @@ target_link_libraries(
   radialft
   ${FFTW3F_LIBRARY}
   ${FFTW3F_THREADS_LIBRARY}
-  ${X11_X11_LIB}
+  # ${X11_X11_LIB}
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
   ${TIFF_LIBRARIES}
   )
 
-target_link_libraries(
-  otfviewer
-  ${TIFF_LIBRARIES}
-  ${X11_X11_LIB}
-  )
+# target_link_libraries(
+#   otfviewer
+#   ${TIFF_LIBRARIES}
+#   ${X11_X11_LIB}
+#   )
 
 # target_link_libraries(
 #   libLLSpy
@@ -369,7 +389,7 @@ target_link_libraries(
   Buffer
   ${FFTW3F_LIBRARY}
   ${FFTW3F_THREADS_LIBRARY}
-  ${X11_X11_LIB}
+  # ${X11_X11_LIB}
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
   ${Boost_FILESYSTEM_LIBRARY}
  ${Boost_PREDICATE_LIBRARY}
@@ -385,7 +405,7 @@ target_link_libraries(
 #  Buffer
   ${FFTW3F_LIBRARY}
 #  ${FFTW3F_THREADS_LIBRARY}
-  ${X11_X11_LIB}
+  # ${X11_X11_LIB}
 #  ${Boost_PROGRAM_OPTIONS_LIBRARY}
 #  ${Boost_FILESYSTEM_LIBRARY}
 #  ${Boost_PREDICATE_LIBRARY}
@@ -398,3 +418,20 @@ target_link_libraries(
 CUDA_ADD_CUFFT_TO_TARGET(cudaDeconv)
 
 
+
+# added for make install to work in conda
+set(HEADERS
+  CImg.h
+  linearDecon.h
+)
+
+install(
+  TARGETS cudaDeconv libcudaDeconv radialft libradialft
+  RUNTIME DESTINATION bin
+  LIBRARY DESTINATION lib
+  ARCHIVE DESTINATION lib
+)
+
+install(
+  FILES ${HEADERS} DESTINATION include
+)
