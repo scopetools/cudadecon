@@ -17,7 +17,7 @@
 #include <cufft.h>
 
 #include <cuda_runtime.h>
-#include <helper_cuda.h> //for error cufft error message
+// #include <helper_cuda.h> //for error cufft error message
 
 #include <CPUBuffer.h>
 #include <GPUBuffer.h>

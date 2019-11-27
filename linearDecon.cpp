@@ -660,7 +660,7 @@ int main(int argc, char *argv[])
           cuFFTErr = cufftPlan3d(&rfftplanGPU, nz_final, new_ny, deskewedXdim, CUFFT_R2C);
 
           if (cuFFTErr != CUFFT_SUCCESS) {
-                std::cerr << "cufftPlan3d() r2c failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
+                // std::cerr << "cufftPlan3d() r2c failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
                 cudaMemGetInfo(&GPUfree, &GPUtotal);
                 std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
 
@@ -672,7 +672,7 @@ int main(int argc, char *argv[])
 
           cuFFTErr = cufftPlan3d(&rfftplanInvGPU, nz_final, new_ny, deskewedXdim, CUFFT_C2R);
           if (cuFFTErr != CUFFT_SUCCESS) {
-              std::cerr << "cufftPlan3d() c2r failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
+              // std::cerr << "cufftPlan3d() c2r failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
             cudaMemGetInfo(&GPUfree, &GPUtotal);
             std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
 
