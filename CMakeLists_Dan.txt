@@ -11,21 +11,17 @@
 
 
 cmake_minimum_required (VERSION 2.6)
-# cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
+cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
+cmake_policy(SET CMP0012 NEW) #Set IF statements to use values of numbers and booleans rather than pretend that they could be variables
 
 project (cudaDeconv)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 set(VERSION_MAJOR "0")
-set(VERSION_MINOR "4")
+set(VERSION_MINOR "0")
 set(VERSION_PATCH "1")
 set(PROJECT_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
-
-# set -fPIC for all targets (for shared libraries)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-add_compile_definitions(cimg_display=0)
 
 ######################################################################
 #
@@ -67,25 +63,9 @@ if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
   endif()
 endif()
 
-
-set(platform_dir ${CMAKE_SYSTEM_NAME}-${CMAKE_CXX_COMPILER_ID})
-
-foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
-
-    foreach(var CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${config} CMAKE_LIBRARY_OUTPUT_DIRECTORY_${config} CMAKE_RUNTIME_OUTPUT_DIRECTORY_${config})
-        set(${var} "${CMAKE_BINARY_DIR}/${platform_dir}-${config}")
-        string(TOLOWER "${${var}}" ${var})
-    endforeach()
-
-endforeach()
-
-
-
 # message(STATUS "2 Build type is '${CMAKE_BUILD_TYPE}'")
 
-if (APPLE)
-  set(CMAKE_CXX_FLAGS "-std=c++11 -stdlib=libc++")
-else()
+if (NOT APPLE)
   find_package(OpenMP)
   set( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${OpenMP_CXX_FLAGS}" )
 endif()
@@ -113,67 +93,64 @@ message(STATUS "CXX_FLAGS_RELWITHDEBINFO is '${CMAKE_CXX_FLAGS_RELWITHDEBINFO}'"
 
 find_package(CUDA REQUIRED)
 
+# find_package(CUB REQUIRED)
 
 if (WIN32)
   set (FFTW3_ROOT_DIR C:/fftw3)
-  set (FFTW3_INCLUDE_DIR C:/fftw3)
   set (FFTW3F_LIBRARY libfftw3f-3)
   find_package(FFTW3 COMPONENTS single)
 
-  if (EXISTS C:/tiff-4.0.10/libtiff)
-	set (TIFF_LIBRARY C:/tiff-4.0.10/libtiff)
-	set (TIFF_INCLUDE_DIR C:/tiff-4.0.10/libtiff)
+  if (EXISTS C:/libtiff/libtiff)
+	set (TIFF_LIBRARY C:/libtiff/libtiff)
+	set (TIFF_INCLUDE_DIR C:/libtiff/libtiff)
   else()
 	set (TIFF_LIBRARY C:/libtiff)
 	set (TIFF_INCLUDE_DIR C:/libtiff)
   endif()
 
-  find_package(TIFF REQUIRED)
-  set (TIFF_LIBRARIES libtiff)
-
 else()
   find_package(FFTW3 COMPONENTS single threads)
-  find_library(TIFF_LIBRARIES tiff 
-             HINTS
-             $ENV{PREFIX}/lib
-             $ENV{CONDA_PREFIX}/lib
-             REQUIRED)
-  message(STATUS "Tiff Library: " ${TIFF_LIBRARIES})
 endif()
   
+find_package(TIFF REQUIRED)
 
-# if (NOT WIN32)
-#   find_package(X11)
-# endif()
+if (WIN32)
+  set (TIFF_LIBRARIES libtiff)
+endif()
+
+if (NOT WIN32)
+  find_package(X11)
+endif()
 
 if(WIN32)
+  set (BOOST_ROOT C:/boost/boost_1_69_0) # give hint where to find Boost
   find_package( Boost )
 else()
   find_package( Boost REQUIRED COMPONENTS program_options filesystem system)
 endif(WIN32)
 
-message(STATUS "CUDA version : ${CUDA_VERSION}")
-
-if(NOT(CUDA_VERSION LESS 10.0))  # if CUDA version is > or = 10.0
-  set(CUDA_NVCC_FLAGS "-O2;\
-    -gencode=arch=compute_30,code=sm_30;\
-    -gencode=arch=compute_35,code=sm_35;\
-    -gencode=arch=compute_37,code=sm_37;\
-    -gencode=arch=compute_50,code=sm_50;\
-    -gencode=arch=compute_52,code=sm_52;\
+message(STATUS "CUDA version : ${CUDA_VERSION}") 
+if(NOT(CUDA_VERSION LESS 10.0))  # if CUDA version is > or = 10.0  
+    set(CUDA_NVCC_FLAGS "-O3;\
+	-lcudart;\ 
     -gencode=arch=compute_61,code=sm_61;\
+    -gencode=arch=compute_62,code=sm_62;\
     -gencode=arch=compute_70,code=sm_70;\
-    -gencode=arch=compute_75,code=sm_75;") # compute capability 7.5 only avaiable in CUDA 10.0 or greater 
-elseif(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
-	set(CUDA_NVCC_FLAGS "-O2;\
+    -gencode=arch=compute_72,code=sm_72;\
+    -gencode=arch=compute_75,code=sm_75,\
+    -gencode=arch=compute_75,code=compute_75") # make available to future hardware see JIT compilation : https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#just-in-time-compilation
+  elseif(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
+	  set(CUDA_NVCC_FLAGS "-O2;\
+		-gencode=arch=compute_20,code=sm_20;\
 		-gencode=arch=compute_30,code=sm_30;\
 		-gencode=arch=compute_35,code=sm_35;\
 		-gencode=arch=compute_37,code=sm_37;\
 		-gencode=arch=compute_50,code=sm_50;\
 		-gencode=arch=compute_52,code=sm_52;\
 		-gencode=arch=compute_61,code=sm_61") # compute capability 6.1 only avaiable in CUDA 8.0 or greater
-else()
+	else()
 		set(CUDA_NVCC_FLAGS "-O2;\
+		-gencode=arch=compute_20,code=sm_20;\
 		-gencode=arch=compute_30,code=sm_30;\
 		-gencode=arch=compute_35,code=sm_35;\
 		-gencode=arch=compute_37,code=sm_37;\
@@ -182,9 +159,23 @@ else()
 											  # compute capability 6.1 only avaiable in CUDA 8.0 or greater
 endif()
 
-# Specifies which compute capabilities are supported by the built .exe http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#gpu-feature-list 
+# Specifies which compute capabilities are supported by the built .exe 
+# http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list 
+# http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#gpu-feature-list 
 # Need to add to these if different GPUs are targeted.
 #--ptxas-options=-v;
+
+## Add CUDA's NVTX library
+if (WIN32)
+  set (NVTX_LIB_DIR C:/PROGRA~1/NVIDIA~1/NVTOOL~1/lib/x64)  # I don't know how to use CMAKE, but this will get the nvToolsExt64_1.lib added.
+  set (NVTX_LIBRARY nvToolsExt64_1)
+  set (NVTX_INCLUDE_DIR C:/PROGRA~1/NVIDIA~1/NVTOOL~1/include)
+endif()
+
+
+message(STATUS "NVidia tools extension library found in " ${NVTX_LIB_DIR})
+message(STATUS "NVidia tools extension include found in " ${NVTX_INCLUDE_DIR})
+
 
 ######################################################################
 #
@@ -199,15 +190,16 @@ include_directories(
   "${CMAKE_CURRENT_SOURCE_DIR}/Buffers"
   ${CUDA_INCLUDE_DIRS}
   ${FFTW3_INCLUDE_DIR}
-  # ${X11_INCLUDE_DIR}
+  ${X11_INCLUDE_DIR}
+  ${CUB_INCLUDE_DIR}
    )
 
 
 if(WIN32)
   set(CUDA_NVCC_FLAGS
-    ${CUDA_NVCC_FLAGS};--use-local-env;--cl-version=2013)
-  link_directories ( ${Boost_LIBRARY_DIRS} ${FFTW3_INCLUDE_DIR} ${TIFF_LIBRARY} )
-  include_directories( ${Boost_INCLUDE_DIRS} ${FFTW3_INCLUDE_DIR}  ${TIFF_INCLUDE_DIR}
+    ${CUDA_NVCC_FLAGS};--use-local-env)
+  link_directories ( ${Boost_LIBRARY_DIRS} ${FFTW3_INCLUDE_DIR} ${TIFF_LIBRARY} ${NVTX_LIB_DIR})
+  include_directories( ${Boost_INCLUDE_DIRS} ${FFTW3_INCLUDE_DIR}  ${TIFF_INCLUDE_DIR} ${NVTX_INCLUDE_DIR}
     "$ENV{NVCUDASAMPLES_ROOT}/common/inc" )
 else()
   include_directories( ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc )
@@ -237,70 +229,12 @@ endif()
    RL-Biggs-Andrews.cpp
    RLgpuImpl.cu
    geometryTransform.cu
-#   camcor.cpp
-   camcor.cu
    )
 
 add_dependencies(
    libcudaDeconv
    Buffer
    )
-
-if (APPLE)
-  set_target_properties(libcudaDeconv
-                        PROPERTIES
-                        OUTPUT_NAME cudaDeconv
-                        MACOSX_RPATH 1
-                        POSITION_INDEPENDENT_CODE ON)
-endif()
-
-
-#####  libLLSpy.dll ###########################################
-
-#  CUDA_ADD_LIBRARY(
-#    libLLSpy
-#    SHARED
-#    geometryTransform.cu
-#    camcor.cu
-#    llspy.cpp
-#    )
-# 
-# add_dependencies(
-#    libLLSpy
-#    Buffer
-#    )
-# 
-# if (APPLE)
-#   set_target_properties(libLLSpy
-#                         PROPERTIES
-#                         OUTPUT_NAME LLSpy
-#                         MACOSX_RPATH 1)
-# endif()
-
-
-#####  libradialft.dll ###########################################
-
- add_library(
-   libradialft
-   SHARED
-   radialft_interface.cpp
-   )
-
-add_dependencies(
-   libradialft
-   Buffer
-   )
-
-if (WIN32)
-  set_property(TARGET libradialft PROPERTY POSITION_INDEPENDENT_CODE ON)
-else()
-  set_target_properties(libradialft
-                        PROPERTIES
-                        OUTPUT_NAME radialft
-                        MACOSX_RPATH 1
-                        POSITION_INDEPENDENT_CODE ON)
-endif()
-
 
 
 
@@ -313,7 +247,6 @@ CUDA_ADD_EXECUTABLE(
   boostfs.cpp
   RLgpuImpl.cu
   geometryTransform.cu
-  camcor.cu
   )
 
 add_dependencies(
@@ -324,22 +257,22 @@ add_dependencies(
   
 #####  RL_interface_driver.exe ###########################################
 
-# CUDA_ADD_EXECUTABLE(
-#   RL_interface_driver
-#   RL_interface_driver.cpp
-#   )
-# 
-# target_link_libraries(
-#   RL_interface_driver
-#   libcudaDeconv
-#   ${TIFF_LIBRARIES}
-#   )
+CUDA_ADD_EXECUTABLE(
+  RL_interface_driver
+  RL_interface_driver.cpp
+  )
+
+target_link_libraries(
+  RL_interface_driver
+  libcudaDeconv
+  ${TIFF_LIBRARIES}
+  )
 
 #####  radialft.exe ###########################################
 add_executable(radialft radialft-nonSIM.cpp)
 
 #####  otfviewer.exe ###########################################
-# add_executable(otfviewer OTF_TIFF_viewer.cpp)
+add_executable(otfviewer OTF_TIFF_viewer.cpp)
 
 
 ######################################################################
@@ -353,35 +286,30 @@ target_link_libraries(
   Buffer
   ${FFTW3F_LIBRARY}
   ${FFTW3F_THREADS_LIBRARY}
-  # ${X11_X11_LIB}
+  ${X11_X11_LIB}
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
   ${Boost_FILESYSTEM_LIBRARY}
   ${Boost_PREDICATE_LIBRARY}
 #  ${Boost_REGEX_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
+  ${NVTX_LIBRARY}
   )
 
 target_link_libraries(
   radialft
   ${FFTW3F_LIBRARY}
   ${FFTW3F_THREADS_LIBRARY}
-  # ${X11_X11_LIB}
+  ${X11_X11_LIB}
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
   ${TIFF_LIBRARIES}
   )
 
-# target_link_libraries(
-#   otfviewer
-#   ${TIFF_LIBRARIES}
-#   ${X11_X11_LIB}
-#   )
-
-# target_link_libraries(
-#   libLLSpy
-#   Buffer
-#   ${X11_X11_LIB}
-#   )
+target_link_libraries(
+  otfviewer
+  ${TIFF_LIBRARIES}
+  ${X11_X11_LIB}
+  )
 
 
 target_link_libraries(
@@ -389,49 +317,19 @@ target_link_libraries(
   Buffer
   ${FFTW3F_LIBRARY}
   ${FFTW3F_THREADS_LIBRARY}
-  # ${X11_X11_LIB}
+  ${X11_X11_LIB}
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
   ${Boost_FILESYSTEM_LIBRARY}
  ${Boost_PREDICATE_LIBRARY}
 #  ${Boost_REGEX_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
+  ${NVTX_LIBRARY}
   )
 CUDA_ADD_CUFFT_TO_TARGET(libcudaDeconv)
 
-
-target_link_libraries(
-  libradialft
-#  Buffer
-  ${FFTW3F_LIBRARY}
-#  ${FFTW3F_THREADS_LIBRARY}
-  # ${X11_X11_LIB}
-#  ${Boost_PROGRAM_OPTIONS_LIBRARY}
-#  ${Boost_FILESYSTEM_LIBRARY}
-#  ${Boost_PREDICATE_LIBRARY}
-#  ${Boost_REGEX_LIBRARY}
-#  ${Boost_SYSTEM_LIBRARY}
-  ${TIFF_LIBRARIES}
-  )
 
 
 CUDA_ADD_CUFFT_TO_TARGET(cudaDeconv)
 
 
-
-# added for make install to work in conda
-set(HEADERS
-  CImg.h
-  linearDecon.h
-)
-
-install(
-  TARGETS cudaDeconv libcudaDeconv radialft libradialft
-  RUNTIME DESTINATION bin
-  LIBRARY DESTINATION lib
-  ARCHIVE DESTINATION lib
-)
-
-install(
-  FILES ${HEADERS} DESTINATION include
-)

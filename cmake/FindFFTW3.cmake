@@ -52,42 +52,63 @@ foreach(_comp ${_components})
     list(APPEND _libraries fftw3l)
   elseif(_comp STREQUAL "threads")
     set(_use_threads ON)
-  else(_comp STREQUAL "single")
+  else()
     message(FATAL_ERROR "FindFFTW3: unknown component `${_comp}' specified. "
       "Valid components are `single', `double', `long-double', and `threads'.")
-  endif(_comp STREQUAL "single")
-endforeach(_comp ${_components})
+  endif()
+endforeach()
 
 # If using threads, we need to link against threaded libraries as well.
 if(_use_threads)
   set(_thread_libs)
   foreach(_lib ${_libraries})
     list(APPEND _thread_libs ${_lib}_threads)
-  endforeach(_lib ${_libraries})
+  endforeach()
   set(_libraries ${_thread_libs} ${_libraries})
-endif(_use_threads)
+endif()
 
 # Keep a list of variable names that we need to pass on to
 # find_package_handle_standard_args().
 set(_check_list)
 
 # Search for all requested libraries.
-foreach(_lib ${_libraries})
-  string(TOUPPER ${_lib} _LIB)
-  find_library(${_LIB}_LIBRARY ${_lib}
-    HINTS ${FFTW3_ROOT_DIR} PATH_SUFFIXES lib)
-  mark_as_advanced(${_LIB}_LIBRARY)
-  list(APPEND FFTW3_LIBRARIES ${${_LIB}_LIBRARY})
-  list(APPEND _check_list ${_LIB}_LIBRARY)
-endforeach(_lib ${_libraries})
+if (WIN32)
+
+    foreach(_lib ${_libraries})
+
+      string(TOUPPER ${_lib} _LIB)
+
+      find_library(${_LIB}_LIBRARY lib${_lib}-3
+        HINTS $ENV{FFTW3_ROOT_DIR} PATH_SUFFIXES lib)
+      mark_as_advanced(${_LIB}_LIBRARY)
+      list(APPEND FFTW3_LIBRARIES ${${_LIB}_LIBRARY})
+      list(APPEND _check_list ${_LIB}_LIBRARY)
+    endforeach()
+
+    message(STATUS "FFTW3 WINDOWS libraries: " ${FFTW3_LIBRARIES})
+
+else ()
+    foreach(_lib ${_libraries})
+
+      string(TOUPPER ${_lib} _LIB)
+
+      find_library(${_LIB}_LIBRARY ${_lib}
+        HINTS $ENV{FFTW3_ROOT_DIR} PATH_SUFFIXES lib)
+      mark_as_advanced(${_LIB}_LIBRARY)
+      list(APPEND FFTW3_LIBRARIES ${${_LIB}_LIBRARY})
+      list(APPEND _check_list ${_LIB}_LIBRARY)
+    endforeach()
+
+    message(STATUS "FFTW3 UNIX libraries: " ${FFTW3_LIBRARIES})
+endif ()
 
 # Search for the header file.
 find_path(FFTW3_INCLUDE_DIR fftw3.h 
-  HINTS ${FFTW3_ROOT_DIR} PATH_SUFFIXES include)
+  HINTS $ENV{FFTW3_ROOT_DIR} PATH_SUFFIXES include)
 mark_as_advanced(FFTW3_INCLUDE_DIR)
 list(APPEND _check_list FFTW3_INCLUDE_DIR)
 
-# Handle the QUIETLY and REQUIRED arguments and set FFTW_FOUND to TRUE if
+# Handle the QUIETLY and REQUIRED arguments and set FFTW3_FOUND to TRUE if
 # all listed variables are TRUE
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(FFTW3 DEFAULT_MSG ${_check_list})

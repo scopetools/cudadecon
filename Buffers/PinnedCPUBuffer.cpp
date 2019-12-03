@@ -1,6 +1,7 @@
 #include "PinnedCPUBuffer.h"
 #include "CPUBuffer.h"
 #include "GPUBuffer.h"
+#include "../cutilSafeCall.h"
 
 PinnedCPUBuffer::PinnedCPUBuffer() :
   size_(0), ptr_(0)
@@ -125,8 +126,11 @@ bool PinnedCPUBuffer::hasNaNs(bool verbose) const
   bool haveNaNs = false;
   if (verbose) {
     for (i = 0; i < numEntries; ++i) {
-
+#ifndef _WIN32
       bool in = std::isnan(arr[i]);
+#else
+      bool in = _isnan(arr[i]);
+#endif
       if (in) {
         std::cout << "NaN entry in array at: " << i << std::endl;
       }
@@ -134,8 +138,11 @@ bool PinnedCPUBuffer::hasNaNs(bool verbose) const
     }
   } else {
     while ((!haveNaNs) && i < numEntries) {
-
+#ifndef _WIN32
       haveNaNs |= std::isnan(arr[i]);
+#else
+      haveNaNs |= _isnan(arr[i]);
+#endif
       ++i;
     }
   }

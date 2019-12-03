@@ -21,7 +21,7 @@ int main(int argc, char *argv[])
 
   // Step 3: call the gut of RL deconvolution; see linearDecon.h for detailed parameter descriptions
   // raw.data() and result.data() are just the plain pointers to the memory underneath "raw" and "results" CImg objects
-  RL_interface(raw.data(), raw.width(), raw.height(), raw.depth(), result.data(), 90., 10, 0, 0);
+  RL_interface(raw.data(), raw.width(), raw.height(), raw.depth(), result.data(), 90., 10, 0, 0, 0);
 
   // Saving result into a file for debug; not essential.
   result.save("debug.tif");

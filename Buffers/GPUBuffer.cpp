@@ -1,8 +1,10 @@
 #include "GPUBuffer.h"
 #include "CPUBuffer.h"
 #include "PinnedCPUBuffer.h"
+#include "../cutilSafeCall.h"
+#ifdef _WIN32
 #include <Windows.h>
-
+#endif
 
 bool firstcall = true;
 
@@ -27,7 +29,7 @@ device_(device), size_(size), ptr_(0), Hostptr_(0), UseCudaHostOnly_(UseCudaHost
   if (!UseCudaHostOnly_){
 	  err = cudaMalloc((void**)&ptr_, size_); //try cudaMalloc
 	  if (err != cudaSuccess) {
-		  err = cudaMallocManaged((void**)&ptr_, size_); // try cudaMallocManaged.  Oversubscription (i.e. allocating arrays bigger than GPU ram) doesn’t sound possible on Windows. Stinky pants. http://disq.us/p/1ji735f
+		  err = cudaMallocManaged((void**)&ptr_, size_); // try cudaMallocManaged.  Oversubscription (i.e. allocating arrays bigger than GPU ram) doesnï¿½t sound possible on Windows. Stinky pants. http://disq.us/p/1ji735f
 
 		  if (err != cudaSuccess) {
 			  //int value;
@@ -35,7 +37,9 @@ device_(device), size_(size), ptr_(0), Hostptr_(0), UseCudaHostOnly_(UseCudaHost
 			  //std::cout << std::endl << "Error code : " << err << "  cudaMallocManaged to allocate size: " << size_ / (1024 * 1024) << " MB. And ConcurrentManagedAccess = " << value << std::endl;	 
 		  }
 	  }
-	  cudaDeviceSynchronize();
+	  #ifndef __APPLE__
+    cudaDeviceSynchronize();
+    #endif
   }
 
   if (err != cudaSuccess || UseCudaHostOnly_) {
@@ -45,17 +49,23 @@ device_(device), size_(size), ptr_(0), Hostptr_(0), UseCudaHostOnly_(UseCudaHost
 		  throw std::runtime_error("cudaHostAlloc failed during GPUBuffer creation. ");
 	  }
       else {
-		  cudaDeviceSynchronize();
+		  	  #ifndef __APPLE__
+          cudaDeviceSynchronize();
+          #endif
           cudaHostGetDevicePointer((void**)&ptr_, Hostptr_, 0);
           size_t free;
           size_t total;
           cudaMemGetInfo(&free, &total);
 		  if (firstcall){
+#ifdef _WIN32
 			  HANDLE  hConsole;
 			  hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 			  SetConsoleTextAttribute(hConsole, 6); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+#endif
 			  std::cout << "Want new " << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
+#ifdef _WIN32
 			  SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+#endif
 		  }
           firstcall = false;
       }
@@ -101,7 +111,9 @@ GPUBuffer& GPUBuffer::operator=(const CPUBuffer& rhs) {
 }
 
 GPUBuffer::~GPUBuffer() {
-	cudaDeviceSynchronize();
+	#ifndef __APPLE__
+  cudaDeviceSynchronize();
+  #endif
 	if (Hostptr_){
         cudaError_t err = cudaFreeHost(Hostptr_);
         if (err != cudaSuccess) {
@@ -157,8 +169,10 @@ void GPUBuffer::resize(size_t newsize) {
 
 		if (newsize > 0) {
 			if (!UseCudaHostOnly_){
-				err = cudaMalloc((void**)&ptr_, size_); // err checked below
-				cudaDeviceSynchronize();
+				err = cudaMalloc((void**)&ptr_, size_);
+				#ifndef __APPLE__
+        cudaDeviceSynchronize();
+        #endif
 			}
 
 			if (err != cudaSuccess || UseCudaHostOnly_) { // if device allocation fails, try to allocate on Host
@@ -174,14 +188,20 @@ void GPUBuffer::resize(size_t newsize) {
 					cudaMemGetInfo(&free, &total);
 					if (firstcall)
 					{
+#ifdef _WIN32
 						HANDLE  hConsole;
 						hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 						SetConsoleTextAttribute(hConsole, 6); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+#endif
 						std::cout << "Resizing buffer. " << size_ / (1024 * 1024) << " MB of GPU RAM. " << free / (1024 * 1024) << " MB free / " << total / (1024 * 1024) << " MB total. Use Host RAM..." << std::endl;
+#ifdef _WIN32
 						SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+#endif
 					}
 					firstcall = false;
-					cudaDeviceSynchronize();
+					#ifndef __APPLE__
+          cudaDeviceSynchronize();
+          #endif
 				}
 			}
 

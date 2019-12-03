@@ -146,9 +146,11 @@ bool CPUBuffer::hasNaNs(bool verbose) const
   bool haveNaNs = false;
   if (verbose) {
     for (i = 0; i < numEntries; ++i) {
-
+#ifndef _WIN32
       bool in = std::isnan(arr[i]);
-
+#else
+      bool in = _isnan(arr[i]);
+#endif
       if (in) {
         std::cout << "NaN entry in array at: " << i << std::endl;
       }
@@ -156,10 +158,12 @@ bool CPUBuffer::hasNaNs(bool verbose) const
     }
   } else {
     while ((!haveNaNs) && i < numEntries) {
-
+#ifndef _WIN32
       haveNaNs |= std::isnan(arr[i]);
-
-	  ++i;
+#else
+      haveNaNs |= _isnan(arr[i]);
+#endif
+      ++i;
     }
   }
   return haveNaNs;

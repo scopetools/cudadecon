@@ -5,15 +5,19 @@
 #include <string>
 #include <algorithm> // sort
 
-#include <windows.h> 
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 static boost::filesystem::path dataDir;
 
 
-std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern, bool no_overwrite, bool MIPsOnly)
+std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::string &pattern, bool no_overwrite)
 {
-	HANDLE  hConsole;
-	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+#ifdef _WIN32
+  HANDLE  hConsole;
+  hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+#endif
 	//std::cout << std::endl;
 	
 	//***************** make GPUdecon output folder ***************
@@ -21,14 +25,7 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
   // Create output subfolder "GPUdecon/" just under the data folder:
   dataDir = target_path;
   boost::filesystem::path outputDir;
-
-  if (MIPsOnly)
-	 outputDir = dataDir / "GPUdecon" / "MIPs"; //if we are just creating MIPs
-  else
-	 outputDir = dataDir / "GPUdecon";
-  
-  if (! boost::filesystem::exists(outputDir) )
-    boost::filesystem::create_directory(outputDir);
+	outputDir = dataDir / "GPUdecon";
 
   //***************** make regex filter ***************
   pattern.insert(0, ".*");  // '.' is the wildcard in Perl regexp; '*' just means "repeat".
@@ -41,25 +38,25 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
   //***************** make vector of files we have already created ***************
   std::vector< std::string > all_decon_files;
 
-  boost::filesystem::directory_iterator end_decon_itr; // Constructs the end iterator.
-  for (boost::filesystem::directory_iterator i(outputDir); i != end_decon_itr; ++i){
+  if ( boost::filesystem::exists(outputDir) ){
 
-	  // Skip if not a file. This won't be a match.
-	  if (!boost::filesystem::is_regular_file(i->status())) continue;
+    boost::filesystem::directory_iterator end_decon_itr; // Constructs the end iterator.
+    for (boost::filesystem::directory_iterator i(outputDir); i != end_decon_itr; ++i){
 
-	  // Skip if no match.  This won't be a match.
-	  std::smatch what;
-    std::string tmps=i->path().string(); // regex_match no longer permits temporary strings 
-	  if (!std::regex_match(tmps, what, my_filter)) continue;
+  	  // Skip if not a file. This won't be a match.
+  	  if (!boost::filesystem::is_regular_file(i->status())) continue;
 
-	  all_decon_files.push_back(i->path().stem().string());
+      // Skip if no match.  This won't be a match.
+      std::smatch what;
+      std::string tmps=i->path().string(); // regex_match no longer permits temporary strings 
+      if (!std::regex_match(tmps, what, my_filter)) continue;
+
+  	  all_decon_files.push_back(i->path().stem().string());
+    }
+
   }
 
   //*********************************************
-
-
-
-
 
   std::vector< std::string > all_matching_files;
 
@@ -125,7 +122,7 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
   return all_matching_files;
 }
 
-void makeDeskewedDir(std::string subdirname)
+void makeNewDir(std::string subdirname)
 {
   boost::filesystem::path outputDir = dataDir/subdirname;
   if (! boost::filesystem::exists(outputDir) )

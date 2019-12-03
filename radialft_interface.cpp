@@ -1,21 +1,19 @@
-#include <boost/program_options.hpp>
-namespace po = boost::program_options;
+//#include <boost/program_options.hpp>
+//namespace po = boost::program_options;
 
-#include <vector>
+//#include <vector>
 #include <iostream>
 #include <complex>
 
-#include <stdio.h>
+//#include <stdio.h>
 
 #include <fftw3.h>
 
-#include <tiffio.h>
+//#include <tiffio.h>
 
 #define cimg_use_tiff
 #include <CImg.h>
 using namespace cimg_library;
-
-
 
 #ifdef _WIN32
 #define _USE_MATH_DEFINES
@@ -39,91 +37,68 @@ bool fixorigin(std::complex<float> *otfkxkz, int nx, int nz, int kx2);
 void rescale(std::complex<float> *otfkxkz, int nx, int nz);
 
 
-int main(int argc, char **argv)
+#ifdef _WIN32
+#ifdef RADIALFT_IMPORT
+  #define RADIALFT_API __declspec( dllimport )
+#else
+  #define RADIALFT_API __declspec( dllexport )
+#endif
+#else
+  #define RADIALFT_API
+#endif
+
+extern "C" {
+RADIALFT_API int makeOTF(const char *const ifiles, const char *const ofiles,
+      int lambdanm = 520, float dz = 0.102, int interpkr = 10,
+      bool bUserBackground = false, float background = 90,
+      float NA = 1.25, float NIMM = 1.3, float dr = 0.102,
+      int krmax = 0, bool bDoCleanup = false);
+}
+
+
+
+//   ("na", po::value<float>(&NA)->default_value(1.25), "NA of detection objective")
+//   ("nimm", po::value<float>(&NIMM)->default_value(1.3), "refractive index of immersion medium")
+//   ("xyres", po::value<float>(&dr)->default_value(.102), "x-y pixel size")
+//   ("zres", po::value<float>(&dz)->default_value(.102), "z pixel size")
+//   ("wavelength", po::value<int>(&lambdanm)->default_value(520), "emission wavelength in nm")
+//   ("fixorigin", po::value<int>(&interpkr)->default_value(10),
+//    "for all kz, extrapolate using pixels kr=1 to this pixel to get value for kr=0")
+//   ("krmax", po::value<int>(&krmax)->default_value(0),
+//    "pixels outside this limit will be zeroed (overwriting estimated value from NA and NIMM)")
+//   ("nocleanup", po::bool_switch(&bDoCleanup)->implicit_value(false), "elect not to do clean-up outside OTF support")
+//   ("background", po::value<float>(&background), "use user-supplied background instead of the estimated")
+//   ("input-file", po::value<std::string>(&ifiles)->required(), "input file")
+//   ("output-file", po::value<std::string>(&ofiles)->required(), "output file")
+
+
+std::string ifiles, ofiles;
+int nx, ny, nz, nxy;
+int i, j, z;
+float dkr, dkz, background, estBackground, xcofm, ycofm, zcofm;
+float *floatimage;
+std::complex<float> *bands, *avg_output;
+fftwf_plan rfftplan3d;
+
+// float dr = 0.102;
+// float dz = 0.102;
+// int interpkr = 10;
+// float NA = 1.25;
+// float NIMM = 1.3;
+// int lambdanm = 520;
+// int krmax = 0;
+// bool bDoCleanup = true;
+// bool bUserBackground = false;
+
+int makeOTF(const char *const ifiles, const char *const ofiles, int lambdanm,
+    float dz, int interpkr, bool bUserBackground, float background,
+    float NA, float NIMM, float dr, int krmax, bool bDoCleanup)
 {
-#ifdef _WIN32
-	HANDLE  hConsole;
-	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+  printf("called");
 
-	SetConsoleTextAttribute(hConsole, 11); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
-#endif
-	printf("Created at Howard Hughes Medical Institute Janelia Research Campus. Copyright 2017. All rights reserved.\n");
-#ifdef _WIN32
-	SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
-#endif
-  std::string ifiles, ofiles;
-  int nx, ny, nz, nxy;
-  int i, j, z;
-  float dr, dz, dkr, dkz, background, estBackground, xcofm, ycofm, zcofm;
-  float *floatimage;
-  std::complex<float> *bands, *avg_output;
-  fftwf_plan rfftplan3d;
-
-  // std::vector<int> interpkr(2);
-  int interpkr;
-  float NA, NIMM;
-  int lambdanm;
-  int krmax=0;
-  bool bDoCleanup = true;
-  bool bUserBackground = false;
-
-  po::options_description progopts;
-  progopts.add_options()
-    ("na", po::value<float>(&NA)->default_value(1.25), "NA of detection objective")
-    ("nimm", po::value<float>(&NIMM)->default_value(1.3), "refractive index of immersion medium")
-    ("xyres", po::value<float>(&dr)->default_value(.104), "x-y pixel size")
-    ("zres", po::value<float>(&dz)->default_value(.104), "z pixel size")
-    ("wavelength", po::value<int>(&lambdanm)->default_value(530), "emission wavelength in nm")
-    ("fixorigin", po::value<int>(&interpkr)->default_value(5),
-     "for all kz, extrapolate using pixels kr=1 to this pixel to get value for kr=0")
-    ("krmax", po::value<int>(&krmax)->default_value(0),
-     "pixels outside this limit will be zeroed (overwriting estimated value from NA and NIMM)")
-    ("nocleanup", po::bool_switch(&bDoCleanup)->implicit_value(false), "elect not to do clean-up outside OTF support")
-    ("background", po::value<float>(&background), "use user-supplied background instead of the estimated")
-    ("input-file", po::value<std::string>(&ifiles)->required(), "input PSF file")
-    ("output-file", po::value<std::string>(&ofiles)->required(), "output OTF file to write")
-    ("help,h", "produce help message")
-    ;
-
-  po::positional_options_description p;
-  p.add("input-file", 1);
-  p.add("output-file", 1);
-
-/* Parse commandline option */
-  po::variables_map varsmap;
-
-  store(po::command_line_parser(argc, argv).
-        options(progopts).positional(p).run(), varsmap);
-  
-  if (argc == 1)  { //if no arguments, show help.
-	  std::cout << progopts << "\n";
-	  return 0;
-  }
-
-  if (varsmap.count("help")) {
-    std::cout << progopts << "\n";
-    return 0;
-  }
-
-  notify(varsmap);
-
-  if (varsmap.count("background")) {
-    bUserBackground = true;
-  }
-
-  if (!ifiles.length()) {
-    printf(" PSF dataset file name: ");
-    std::cin >> ifiles;
-  }
-  if (!ofiles.length()) {
-    printf(" Output OTF file name: ");
-    std::cin >> ofiles;
-  }
-
-  printf ("bDoCleanup=%i\n", bDoCleanup);
   TIFFSetWarningHandler(NULL);
 
-  CImg<> rawtiff(ifiles.c_str());
+  CImg<> rawtiff(ifiles);
 
   nz = rawtiff.depth();
   ny = rawtiff.height();
@@ -139,7 +114,7 @@ int main(int argc, char **argv)
   floatimage = (float *) malloc(nxy*nz*sizeof(float));
   bands = (std::complex<float> *) floatimage;
 
-  printf("Reading data...\n\n");
+ // printf("Reading data...\n\n");
 
   for(z=0; z<nz; z++)
     for (i=0; i<ny; i++) {
@@ -150,10 +125,11 @@ int main(int argc, char **argv)
   /* Before FFT, estimate bead center position */
   determine_center_and_background(floatimage, nx, ny, nz, &xcofm, &ycofm, &zcofm, &estBackground);
 
-  printf("Center of mass is (%.3f, %.3f, %.3f)\n\n", xcofm, ycofm, zcofm);
+  printf("Center of mass is (%.3f, %.3f, %.3f)\n", xcofm, ycofm, zcofm);
 
   if (!bUserBackground)
     background = estBackground;
+
   printf("Background is %.3f\n", background);
 
   for(z=0; z<nz; z++) {
@@ -162,17 +138,20 @@ int main(int argc, char **argv)
         floatimage[z*nxy + i*(nx+2) + j] -= background;
   }
 
-  rfftplan3d = fftwf_plan_dft_r2c_3d(nz, ny, nx, floatimage, 
+  rfftplan3d = fftwf_plan_dft_r2c_3d(nz, ny, nx, floatimage,
                                      (fftwf_complex *) floatimage, FFTW_ESTIMATE);
-  printf("Before fft\n");
+
+  //printf("Before fft\n");
+
   fftwf_execute_dft_r2c(rfftplan3d, floatimage, (fftwf_complex *) floatimage);
 
   fftwf_destroy_plan(rfftplan3d);
 
-  printf("After fft\n\n");
+  //printf("After fft\n\n");
 
   /* modify the phase of bands, so that it corresponds to FFT of a bead at origin */
-  printf("Shifting center...\n");
+  //printf("Shifting center...\n");
+
   shift_center(bands, nx, ny, nz, xcofm, ycofm, zcofm);
 
   CImg<> output_tiff(nz*2, nx/2+1, 1, 1, 0.f);
@@ -192,7 +171,7 @@ int main(int argc, char **argv)
     }}
   catch (std::exception &e) {
     std::cout << "\n!!Error occurred: " << e.what() << std::endl;
-    return false;
+    return 1;
   }
 
 //  printf("%d\n", interpkr);
@@ -201,7 +180,9 @@ int main(int argc, char **argv)
   /* For side bands, combine bandre's and bandim's into bandplus */
   /* Shouldn't this be done later on the averaged bands? */
 
-  output_tiff.save_tiff(ofiles.c_str());
+  output_tiff.save_tiff(ofiles);
+
+  return 0;
 }
 
 /*  locate peak pixel to subpixel accuracy by fitting parabolas  */
@@ -212,7 +193,7 @@ void determine_center_and_background(float *stack3d, int nx, int ny, int nz, flo
   float maxval, reval, valminus, valplus;
   double sum;
 
-  printf("In determine_center_and_background()\n");
+  //printf("In determine_center_and_background()\n");
   nxy2 = (nx+2)*ny;
 
   /* Search for the peak pixel */
@@ -425,7 +406,7 @@ bool fixorigin(std::complex<float> *otfkxkz, int nx, int nz, int kx2)
   // linear fit the value at kx=0 using kx in [1, kx2]
   double mean_kx = (kx2+1)/2.; // the mean of [1, 2, ..., n] is (n+1)/2
 
-  printf("In fixorigin(), kx2=%d\n", kx2);
+  // printf("In fixorigin(), kx2=%d\n", nx, nz, kx2);
 
   for (int z=0; z<nz; z++) {
     std::complex<double> mean_val=0;
@@ -467,4 +448,6 @@ void rescale(std::complex<float> *otfkxkz, int nx, int nz)
     otfkxkz[ind] *= scalefactor;
   }
 }
+
+
 
