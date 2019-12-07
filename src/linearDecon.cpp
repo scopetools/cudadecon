@@ -389,8 +389,8 @@ int main(int argc, char *argv[])
     int border_y = 0;
     int border_z = 0;
 
-	float voxel_size [];
-	float voxel_size_decon [];
+	float voxel_size [3];
+	float voxel_size_decon [3];
 	float imdz;
 	const char *description;
 
