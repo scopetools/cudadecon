@@ -753,8 +753,7 @@ int main(int argc, char *argv[])
             std::cerr << "C2R FFT Plan desires " << workSize / (1024 * 1024) << " MB. " << std::endl;
             throw std::runtime_error("cufftPlan3d() c2r failed.");
           }
-				}
-			} // old way,  just autoallocate FFTplans.  This will always be on the GPU, and the two plans (even though are serially exectuted) cannot share workspace.
+				} // old way,  just autoallocate FFTplans.  This will always be on the GPU, and the two plans (even though are serially exectuted) cannot share workspace.
 			else { // new way, share FFTplan workarea.  Possibly put this area on the Host RAM if it doesn't fit in GPU RAM.
 				int autoAllocate   = 0;	// don't allocate, we want to specify the workspace ourselves.
 				size_t workSizeR2C = 0; // size of R2C plan to be filled in by cuFFT
