@@ -538,10 +538,14 @@ int main(int argc, char *argv[])
                     //	std::min(file_image.height(), tile_size + tile_y_offset) - 1,
                     //	file_image.depth() - 1,
                     //	0); // get sub_image. raw_image = sub_image
+					#ifdef _WIN32
                     SetConsoleTextAttribute(hConsole, 10); // colors are 9=blue 10=green and so on to 15=white
+					#endif
                     std::cout << std::endl << "Tile: " << tile_index + 1 << " out of " << number_of_tiles << ".   " << std::endl;
+					#ifdef _WIN32
                     SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
-                    // raw_image.save(makeOutputFilePath(it->c_str(), "tile", "_tile").c_str()); //for debugging
+                    #endif
+					// raw_image.save(makeOutputFilePath(it->c_str(), "tile", "_tile").c_str()); //for debugging
                 }
                 else
                     raw_image.assign(file_image);
