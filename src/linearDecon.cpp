@@ -392,6 +392,7 @@ int main(int argc, char *argv[])
 	float voxel_size [];
 	float voxel_size_decon [];
 	float imdz;
+	const char *description;
 
     if (lzw) {
         compression = 1;
@@ -988,7 +989,7 @@ int main(int argc, char *argv[])
                 std::string s = "ImageJ=1.50i\n"
                                 "spacing=" + std::to_string(imgParams.dz) + "\n"
                                 "unit=micron";
-                const char *description = s.c_str();
+                description = s.c_str();
 
                 //****************************Pad image.  Use Mirror image in padded border region***********************************
 
