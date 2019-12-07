@@ -980,12 +980,16 @@ int main(int argc, char *argv[])
                     raw_image(x, y, z) = Temp(x, y, z) + background; //replace background and copy back to U16 raw_image.
                 } // end if applying LS correction
 
-                voxel_size = { imgParams.dr, imgParams.dr, imgParams.dz };
+				voxel_size[0] = imgParams.dr;
+				voxel_size[1] = imgParams.dr;
+				voxel_size[2] = imgParams.dz;
                 imdz = imgParams.dz;
                 if (rotMatrix.getSize()) {
                     imdz = imgParams.dr;
                 }
-                voxel_size_decon = { imgParams.dr, imgParams.dr, imdz };
+				voxel_size_decon[0] = imgParams.dr;
+				voxel_size_decon[1] = imgParams.dr;
+				voxel_size_decon[2] = imdz;
                 std::string s = "ImageJ=1.50i\n"
                                 "spacing=" + std::to_string(imgParams.dz) + "\n"
                                 "unit=micron";
