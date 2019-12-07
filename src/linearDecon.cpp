@@ -389,6 +389,10 @@ int main(int argc, char *argv[])
     int border_y = 0;
     int border_z = 0;
 
+	float voxel_size [];
+	float voxel_size_decon [];
+	float imdz;
+
     if (lzw) {
         compression = 1;
     }
@@ -975,12 +979,12 @@ int main(int argc, char *argv[])
                     raw_image(x, y, z) = Temp(x, y, z) + background; //replace background and copy back to U16 raw_image.
                 } // end if applying LS correction
 
-                float voxel_size [] = { imgParams.dr, imgParams.dr, imgParams.dz };
-                float imdz = imgParams.dz;
+                voxel_size = { imgParams.dr, imgParams.dr, imgParams.dz };
+                imdz = imgParams.dz;
                 if (rotMatrix.getSize()) {
                     imdz = imgParams.dr;
                 }
-                float voxel_size_decon [] = { imgParams.dr, imgParams.dr, imdz };
+                voxel_size_decon = { imgParams.dr, imgParams.dr, imdz };
                 std::string s = "ImageJ=1.50i\n"
                                 "spacing=" + std::to_string(imgParams.dz) + "\n"
                                 "unit=micron";
