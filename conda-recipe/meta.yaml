@@ -17,15 +17,8 @@ requirements:
   build:
     - {{ compiler("cxx") }} # [win]
     - ninja # [win]
-    # {% if environ.get('CUDA_VERSION') == '10.0' %}
-    # - conda # [linux]
-    # - cudatoolkit-dev=10.0 # [linux]
-    # {% elif environ.get('CUDA_VERSION') == '9.2' %}
-    # - conda # [linux]
-    # - cudatoolkit-dev=9.2 # [linux]
-    # {% endif %}
-    - gcc_linux-64=5.4.0 # [linux]
-    - gxx_linux-64=5.4.0 # [linux]
+    - gcc_linux-64=7.3.0 # [linux]
+    - gxx_linux-64=7.3.0 # [linux]
     - cmake
     - boost-cpp
     - libtiff
@@ -52,7 +45,7 @@ test:
     - cudaDeconv --help
 
 about:
-  home: https://github.com/linshaova/cudaDeconvOriginal
+  home: https://github.com/scopetools/cudaDecon
   license: GPL-3.0  
   summary: 'CUDA-Accelerated Richardson-Lucy Deconvolution'
   description: 'CUDA-Accelerated Richardson-Lucy Deconvolution'
