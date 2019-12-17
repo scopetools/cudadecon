@@ -59,7 +59,7 @@ build: off
 
 test_script:
   - cmd: CALL "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
-  - cmd: dir "%CUDA_PATH%"
+  # - cmd: dir "%CUDA_PATH%"
   # - cmd: conda build conda-recipe --output >outname.txt
   # - cmd: set /p OUTNAME=<outname.txt
   - cmd: set "CUDA_VERSION=10.1"
