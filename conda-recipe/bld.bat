@@ -12,7 +12,6 @@ set CUDA_TOOLKIT_ROOT_DIR=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v%C
 
 cmake ../src -G "Ninja" ^
     -Wno-dev ^
-    -DCMAKE_CXX_COMPILER="%%"
     -DCMAKE_BUILD_TYPE:STRING=Release ^
     -DCMAKE_INSTALL_PREFIX:PATH="%LIBRARY_PREFIX%" ^
     -DCMAKE_PREFIX_PATH:PATH="%LIBRARY_PREFIX%" ^
