@@ -10,13 +10,13 @@ environment:
     CMD_IN_ENV: "cmd /E:ON /V:ON /C .\\tools\\appveyor\\run_with_env.cmd"
 
   matrix:
-     - PYTHON: "C:\\Python37_64"
-       CONDA_ROOT: "C:\\Miniconda37-x64"
-       CONDA_INSTRUMENTATION_ENABLED: "true"
+    - PYTHON: "C:\\Python37_64"
+      CONDA_ROOT: "C:\\Miniconda37-x64"
+      CONDA_INSTRUMENTATION_ENABLED: "true"
 
 artifacts:
-    # Store built conda packages as artifacts
-    - path: 'conda_packages\*.bz2'
+  # Store built conda packages as artifacts
+  - path: 'conda_packages\*.bz2'
 
 # for:
 # -
@@ -35,43 +35,44 @@ artifacts:
 #     BRANCH: 'develop'
 
 install:
-    # If there is a newer build queued for the same PR, cancel this one.
-    # - cmd: |
-    #     powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/conda-forge/conda-forge-build-setup-feedstock/master/recipe/ff_ci_pr_build.py', 'ff_ci_pr_build.py')"
-    #     ff_ci_pr_build -v --ci "appveyor" "%APPVEYOR_ACCOUNT_NAME%/%APPVEYOR_PROJECT_SLUG%" "%APPVEYOR_BUILD_NUMBER%" "%APPVEYOR_PULL_REQUEST_NUMBER%"
-    #     del ff_ci_pr_build.py
+  # If there is a newer build queued for the same PR, cancel this one.
+  # - cmd: |
+  #     powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/conda-forge/conda-forge-build-setup-feedstock/master/recipe/ff_ci_pr_build.py', 'ff_ci_pr_build.py')"
+  #     ff_ci_pr_build -v --ci "appveyor" "%APPVEYOR_ACCOUNT_NAME%/%APPVEYOR_PROJECT_SLUG%" "%APPVEYOR_BUILD_NUMBER%" "%APPVEYOR_PULL_REQUEST_NUMBER%"
+  #     del ff_ci_pr_build.py
 
-    # Remove cygwin (and therefore the git that comes with it).
-    # - cmd: rmdir C:\cygwin /s /q
+  # Remove cygwin (and therefore the git that comes with it).
+  # - cmd: rmdir C:\cygwin /s /q
 
-    - cmd: CALL %CONDA_ROOT%\Scripts\activate.bat
-    - cmd: conda config --set always_yes yes --set changeps1 no
-    - cmd: appveyor-retry conda install conda-build anaconda-client
-    - cmd: conda update -q conda
-    - cmd: conda config --add channels conda-forge
-    # - cmd: conda config --add channels talley
-    - cmd: conda config --set show_channel_urls true
-    - cmd: conda info
+  - cmd: CALL %CONDA_ROOT%\Scripts\activate.bat
+  - cmd: conda config --set always_yes yes --set changeps1 no
+  - cmd: appveyor-retry conda install conda-build anaconda-client
+  - cmd: conda update -q conda
+  - cmd: conda config --add channels conda-forge
+  # - cmd: conda config --add channels talley
+  - cmd: conda config --set show_channel_urls true
+  - cmd: conda info
 
-    - cmd: set "CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1"
-    - cmd: IF NOT EXIST "%CUDA_PATH%" set CUDA_INSTALL=1
-    - cmd: IF DEFINED CUDA_INSTALL appveyor DownloadFile http://developer.download.nvidia.com/compute/cuda/10.1/Prod/network_installers/cuda_10.1.243_win10_network.exe
-    - cmd: IF DEFINED CUDA_INSTALL cuda_10.1.243_win10_network.exe -s
-    - cmd: set PATH=%CUDA_PATH%\bin;%PATH%
+  - cmd: set "CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1"
+  - cmd: IF NOT EXIST "%CUDA_PATH%" set CUDA_INSTALL=1
+  - cmd: IF DEFINED CUDA_INSTALL appveyor DownloadFile http://developer.download.nvidia.com/compute/cuda/10.1/Prod/network_installers/cuda_10.1.243_win10_network.exe
+  - cmd: IF DEFINED CUDA_INSTALL cuda_10.1.243_win10_network.exe -s
+  - cmd: set PATH=%CUDA_PATH%\bin;%PATH%
 cache:
-  - C:\cache
-  - 'C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1'
+  - '%CUDA_PATH%'
   
 # Skip .NET project specific build phase.
 build: off
 
 test_script:
-    # - cmd: conda build conda-recipe --output >outname.txt
-    # - cmd: set /p OUTNAME=<outname.txt
-    - cmd: conda build conda-recipe
-    # copy any newly created conda packages into the conda_packages dir
-    - cmd: mkdir conda_packages
-    # make any conda packages created available as build artifacts in AppVeyor
-#   - cmd: 'copy /Y %CONDA_ROOT%\conda-bld\win-32\*.bz2 conda_packages || cmd /c "exit /b 0"'
-    - cmd: 'copy /Y %CONDA_ROOT%\conda-bld\win-64\*.bz2 conda_packages || cmd /c "exit /b 0"'
-    # - cmd: anaconda -v -t %CONDA_UPLOAD_TOKEN% upload "%CONDA_ROOT%\conda-bld\win-64\*.tar.bz2" -u talley --force --label %LABEL%
+  - cmd: dir "%CUDA_PATH%"
+  # - cmd: conda build conda-recipe --output >outname.txt
+  # - cmd: set /p OUTNAME=<outname.txt
+  - cmd: set "CUDA_VERSION=10.1"
+  - cmd: conda build conda-recipe
+  # copy any newly created conda packages into the conda_packages dir
+  - cmd: mkdir conda_packages
+  # make any conda packages created available as build artifacts in AppVeyor
+  #   - cmd: 'copy /Y %CONDA_ROOT%\conda-bld\win-32\*.bz2 conda_packages || cmd /c "exit /b 0"'
+  - cmd: 'copy /Y %CONDA_ROOT%\conda-bld\win-64\*.bz2 conda_packages || cmd /c "exit /b 0"'
+  # - cmd: anaconda -v -t %CONDA_UPLOAD_TOKEN% upload "%CONDA_ROOT%\conda-bld\win-64\*.tar.bz2" -u talley --force --label %LABEL%
