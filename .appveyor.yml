@@ -44,7 +44,7 @@ install:
     # Remove cygwin (and therefore the git that comes with it).
     # - cmd: rmdir C:\cygwin /s /q
 
-    - cmd: CALL "%CONDA_ROOT%\\Script\\activate.bat"
+    - cmd: CALL %CONDA_ROOT%\Scripts\activate.bat
     - cmd: conda config --set always_yes yes --set changeps1 no
     - cmd: appveyor-retry conda install conda-build anaconda-client
     - cmd: conda update -q conda
