@@ -1,5 +1,5 @@
 package:
-  name: cudadeconv
+  name: cudadecon
   version: 1.0.3
 
 source:
@@ -42,7 +42,7 @@ requirements:
 
 test:
   commands:
-    - cudaDeconv --help
+    - cudaDecon --help
 
 about:
   home: https://github.com/scopetools/cudaDecon

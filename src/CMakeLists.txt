@@ -2,10 +2,10 @@
 #
 # This will make the following outputs : 
 #
-# cudaDeconv.exe
+# cudaDecon.exe
 # otfviewer.exe
 # radialft.exe
-# libcudaDeconv.dll
+# libcudaDecon.dll
 #
 ######################################################################
 
@@ -14,7 +14,7 @@ cmake_minimum_required (VERSION 3.12)
 # cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
 # cmake_policy(SET CMP0012 NEW) #Set IF statements to use values of numbers and booleans rather than pretend that they could be variables
 
-project (cudaDeconv)
+project (cudaDecon)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
@@ -205,10 +205,10 @@ endif()
 
 
 
-#####  libcudaDeconv.dll ###########################################
+#####  libcudaDecon.dll ###########################################
 
  CUDA_ADD_LIBRARY(
-   libcudaDeconv
+   libcudaDecon
    SHARED
    RL-Biggs-Andrews.cpp
    RLgpuImpl.cu
@@ -218,14 +218,14 @@ endif()
    )
 
 add_dependencies(
-   libcudaDeconv
+   libcudaDecon
    Buffer
    )
 
 if (APPLE)
-  set_target_properties(libcudaDeconv
+  set_target_properties(libcudaDecon
                         PROPERTIES
-                        OUTPUT_NAME cudaDeconv
+                        OUTPUT_NAME cudaDecon
                         MACOSX_RPATH 1
                         POSITION_INDEPENDENT_CODE ON)
 endif()
@@ -280,10 +280,10 @@ endif()
 
 
 
-#####  cudaDeconv.exe ###########################################
+#####  cudaDecon.exe ###########################################
 
 CUDA_ADD_EXECUTABLE(
-  cudaDeconv
+  cudaDecon
   linearDecon.cpp
   RL-Biggs-Andrews.cpp
   boostfs.cpp
@@ -293,7 +293,7 @@ CUDA_ADD_EXECUTABLE(
   )
 
 add_dependencies(
-  cudaDeconv
+  cudaDecon
   Buffer
   )
 
@@ -312,7 +312,7 @@ add_executable(radialft radialft-nonSIM.cpp)
 ######################################################################
 
 target_link_libraries(
-  cudaDeconv
+  cudaDecon
   Buffer
   ${FFTW3F_LIBRARY}
   ${FFTW3F_THREADS_LIBRARY}
@@ -325,7 +325,7 @@ target_link_libraries(
   )
 
 if (UNIX)
-  target_link_libraries(cudaDeconv rt)
+  target_link_libraries(cudaDecon rt)
 endif (UNIX)
 
 target_link_libraries(
@@ -351,7 +351,7 @@ target_link_libraries(
 
 
 target_link_libraries(
-  libcudaDeconv
+  libcudaDecon
   Buffer
   ${FFTW3F_LIBRARY}
   ${FFTW3F_THREADS_LIBRARY}
@@ -362,7 +362,7 @@ target_link_libraries(
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
 )
-CUDA_ADD_CUFFT_TO_TARGET(libcudaDeconv)
+CUDA_ADD_CUFFT_TO_TARGET(libcudaDecon)
 
 
 target_link_libraries(
@@ -371,7 +371,7 @@ target_link_libraries(
   ${TIFF_LIBRARIES}
 )
 
-CUDA_ADD_CUFFT_TO_TARGET(cudaDeconv)
+CUDA_ADD_CUFFT_TO_TARGET(cudaDecon)
 
 # added for make install to work in conda
 set(HEADERS
@@ -381,7 +381,7 @@ set(HEADERS
 
 
 install(
-  TARGETS cudaDeconv libcudaDeconv radialft libradialft
+  TARGETS cudaDecon libcudaDecon radialft libradialft
   RUNTIME DESTINATION bin
   LIBRARY DESTINATION lib
   ARCHIVE DESTINATION lib
