@@ -35,15 +35,6 @@ artifacts:
 #     BRANCH: 'develop'
 
 install:
-  # If there is a newer build queued for the same PR, cancel this one.
-  # - cmd: |
-  #     powershell -Command "(New-Object Net.WebClient).DownloadFile('https://raw.githubusercontent.com/conda-forge/conda-forge-build-setup-feedstock/master/recipe/ff_ci_pr_build.py', 'ff_ci_pr_build.py')"
-  #     ff_ci_pr_build -v --ci "appveyor" "%APPVEYOR_ACCOUNT_NAME%/%APPVEYOR_PROJECT_SLUG%" "%APPVEYOR_BUILD_NUMBER%" "%APPVEYOR_PULL_REQUEST_NUMBER%"
-  #     del ff_ci_pr_build.py
-
-  # Remove cygwin (and therefore the git that comes with it).
-  # - cmd: rmdir C:\cygwin /s /q
-
   - cmd: CALL %CONDA_ROOT%\Scripts\activate.bat
   - cmd: conda config --set always_yes yes --set changeps1 no
   - cmd: appveyor-retry conda install conda-build anaconda-client
@@ -52,12 +43,14 @@ install:
   # - cmd: conda config --add channels talley
   - cmd: conda config --set show_channel_urls true
   - cmd: conda info
+  - cmd: conda init cmd.exe
+  - cmd: echo %PATH%
 
   - cmd: set "CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1"
-  - cmd: IF NOT EXIST "%CUDA_PATH%" set CUDA_INSTALL=1
-  - cmd: IF DEFINED CUDA_INSTALL appveyor DownloadFile http://developer.download.nvidia.com/compute/cuda/10.1/Prod/network_installers/cuda_10.1.243_win10_network.exe
-  - cmd: IF DEFINED CUDA_INSTALL cuda_10.1.243_win10_network.exe -s
-  - cmd: set PATH=%CUDA_PATH%\bin;%PATH%
+  # - cmd: IF NOT EXIST "%CUDA_PATH%" set CUDA_INSTALL=1
+  # - cmd: IF DEFINED CUDA_INSTALL appveyor DownloadFile http://developer.download.nvidia.com/compute/cuda/10.1/Prod/network_installers/cuda_10.1.243_win10_network.exe
+  # - cmd: IF DEFINED CUDA_INSTALL cuda_10.1.243_win10_network.exe -s
+  # - cmd: set PATH=%CUDA_PATH%\bin;%PATH%
 cache:
   - '%CUDA_PATH%'
   
@@ -65,6 +58,7 @@ cache:
 build: off
 
 test_script:
+  - cmd: CALL "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
   - cmd: dir "%CUDA_PATH%"
   # - cmd: conda build conda-recipe --output >outname.txt
   # - cmd: set /p OUTNAME=<outname.txt
