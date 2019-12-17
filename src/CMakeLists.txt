@@ -10,7 +10,7 @@
 ######################################################################
 
 
-cmake_minimum_required (VERSION 2.6)
+cmake_minimum_required (VERSION 3.12)
 # cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
 # cmake_policy(SET CMP0012 NEW) #Set IF statements to use values of numbers and booleans rather than pretend that they could be variables
 
