@@ -64,7 +64,7 @@ To build the source, you have two options:
 It will take a little while, and then at the end, if all goes well, it will tell you where the build artifact is (for instance, on windows, mine is at `%HOMEPATH%\miniconda3\conda-bld\win-64\cudadeconv-1.0.3-cu10.1.tar.bz2`).  That bz2 package is intended to be uploaded to anaconda cloud.  It doesn't include all of the dependencies (those are defined in the conda recipe and will be installed automatically).  If you want to test it locally, you can install the new bundle into a test environment:
 
 ```sh
-conda create -n test -y --use-local cudadeconv
+conda create -n test -y --use-local cudadecon
 conda activate test
 cudaDeconv.exe --help
 ```
