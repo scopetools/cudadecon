@@ -52,8 +52,11 @@ To build the source, you have two options:
 6. (*important*) set the CUDA version you want to build for (this environmental variable allows you to have multiple cuda toolkits installed, and easily change which one you build against).
 
     ```sh
-    set CUDA_VERSION=10.1  # windows
-    export CUDA_VERSION=10.1  # linux/mac
+    # windows
+    set CUDA_VERSION=10.1
+    
+    # linux/mac
+    export CUDA_VERSION=10.1
     ```
 
 7. build the program with: `conda build conda-recipe`
