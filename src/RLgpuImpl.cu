@@ -85,7 +85,7 @@ __host__ void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
   cutilSafeCall(cudaMemcpyToSymbol(const_kzscale, &kzscale, sizeof(float)));
   cutilSafeCall(cudaMemcpyToSymbol(const_eps, &eps, sizeof(float)));
   cutilSafeCall(
-      cudaMemcpyToSymbol(const_otf, h_otf, nrotf * nzotf * 2 * sizeof(float)));
+      cudaMemcpyToSymbol(const_otf, h_otf, nrotf * nzotf * 2 * sizeof(float))); // load complex 2D OTF to GPU array. 
 }
 
 // __host__ void prepareOTFtexture(float * realpart, float * imagpart, int nx,
@@ -212,8 +212,9 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
   }
 }
 
+// returns otfval at the given kx, ky, kz coordinates, based on the GPU 2D array "const_otf" which was loaded with "transferConstants"
 __device__ cuFloatComplex dev_otfinterpolate( // cuFloatComplex * d_otf,
-    float kx, float ky, float kz)
+    float kx, float ky, float kz) 
 /* (kx, ky, kz) is Fourier space coords with origin at kx=ky=kz=0 and going
    betwen -nx(or ny,nz)/2 and +nx(or ny,nz)/2 */
 {

@@ -646,8 +646,8 @@ int main(int argc, char *argv[])
                     //****************************Load OTF to CPU RAM(assuming 3D rotationally averaged OTF)***********************************
                     std::cout <<  "Loading OTF... ";
                     complexOTF.assign(otffiles.c_str());
-                    unsigned nr_otf = complexOTF.height();
-                    unsigned nz_otf = complexOTF.width() / 2;
+                    unsigned nr_otf = complexOTF.height();		// because it is rotationally averaged, kx = ky = kr
+                    unsigned nz_otf = complexOTF.width() / 2;	// because we are storing complex data in the .tiff file as two pixels: the real "width" is half the number of pixels in a row.
                     dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
                     dkz_otf = 1/(nz_otf * dz_psf);
                     std::cout << "nr x nz     : " << nr_otf << " x " << nz_otf << ". " << std::endl << std::endl ;
@@ -887,7 +887,7 @@ int main(int argc, char *argv[])
                                       eps, complexOTF.data());
 
                     d_interpOTF.resize(nz_const * new_ny * (deskewedXdim+2) * sizeof(float)); // allocate memory
-                    makeOTFarray(d_interpOTF, deskewedXdim, new_ny, nz_const); // interpolate
+                    makeOTFarray(d_interpOTF, deskewedXdim, new_ny, nz_const); // interpolate.  This reads from the complexOTF.data sent to the GPU from transferConstants().
                     std::cout << "d_interpOTF allocated.  ";
                     cudaMemGetInfo(&GPUfree, &GPUtotal);
                     std::cout << std::setw(8) << d_interpOTF.getSize() / (1024 * 1024) << "MB" << std::setw(8) << GPUfree / (1024 * 1024) << "MB free" << std::endl;
