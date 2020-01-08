@@ -25,9 +25,100 @@ Running this command from an adminstrator command prompt should set the timeout 
 
 * Better yet, use a second GPU.  The GPU you wish to use for computation only should use the TCC driver (must be a Titan or Tesla or other GPU that supports TCC).  This card should be initialized after the display GPU, so put the compute card in a slot that is > display card.  The TCC driver is selected with NVIDIAsmi.exe -L from an administrator cmd window to show the GPUs, then NVIDIAsmi.exe -dm 1 -i 0 to set TCC on GPU 0.  Then use `set CUDA_VISIBLE_DEVICES` to pick the GPU the deconv code should execute on.
 
-## Windows build instructions
+---------------------
 
-*Note: the build pipeline for cudaDecon is under active development.  These are the legacy notes for building cudaDecon locally on a windows machine. and works with `src/CMakeLists_Dan.txt`*
+## Build instructions
+
+If you simply wish to use this package, it is best to just install the precompiled binaries from conda.
+
+To build the source, you have two options:
+
+1. use `conda-build` to create a temporary conda environment that will build the source and link all necessary libraries in a way suitable for later installation using `conda install`
+2. don't use `conda-build`, but rather create a dedicated conda environment with all of the build dependencies installed, and then use cmake directly.  This method is faster and creates an immediately useable binary (i.e. it is better for iteration if you're changing the source code), but the compiled binaries are harder to redistribute if you aren't careful about also shipping the required libraries (which are automatically installed if you use method 1).
+
+### using `conda-build`
+
+1. install [miniconda](https://docs.conda.io/en/latest/miniconda.html)
+2. install [cudatoolkit](https://developer.nvidia.com/cuda-10.1-download-archive-update2) (I haven't yet tried 10.2)
+3. (*windows only*) install [build tools for VisualStudio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2017) 2017.  For linux, all necessary build tools will be installed by conda.
+4. open an `Anaconda Prompt`, and in the `base` environment, run:
+
+    ```sh
+    conda config --add channels conda-forge
+    conda install conda-build
+    ```
+
+5. `cd` into the `cudaDecon` folder
+6. (*important*) set the CUDA version you want to build for (this environmental variable allows you to have multiple cuda toolkits installed, and easily change which one you build against).
+
+    ```sh
+    # windows
+    set CUDA_VERSION=10.1
+    
+    # linux/mac
+    export CUDA_VERSION=10.1
+    ```
+
+7. build the program with: `conda build conda-recipe`
+
+It will take a little while, and then at the end, if all goes well, it will tell you where the build artifact is (for instance, on windows, mine is at `%HOMEPATH%\miniconda3\conda-bld\win-64\cudadecon-1.0.3-cu10.1.tar.bz2`).  That bz2 package is intended to be uploaded to anaconda cloud.  It doesn't include all of the dependencies (those are defined in the conda recipe and will be installed automatically).  If you want to test it locally, you can install the new bundle into a test environment:
+
+```sh
+conda create -n test -y --use-local cudadecon
+conda activate test
+cudaDecon.exe --help
+```
+
+### using cmake directly in a conda environment
+
+1. install [miniconda](https://docs.conda.io/en/latest/miniconda.html)
+2. install [cudatoolkit](https://developer.nvidia.com/cuda-10.1-download-archive-update2) (I haven't yet tried 10.2)
+3. (*windows only*) install [build tools for VisualStudio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2017) 2017.  For linux, all necessary build tools will be installed by conda.
+
+4. create a new conda environment with all of the dependencies installed
+
+    ```sh
+    conda config --add channels conda-forge
+    conda create -n build -y cmake boost-cpp libtiff fftw ninja
+    conda activate build  
+    # you will need to reactivate the "build" environment each time you close the terminal
+    ```
+
+5. create a new `build` directory inside of the top level `cudaDecon` folder
+
+    ```sh
+    mkdir build  # inside the cudaDecon folder
+    cd build
+    ```
+
+6. (*windows only*) Activate your build tools:
+
+    ```cmd
+    "C:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+    ```
+
+7. Run `cmake` and compile with `ninja` on windows or `make` on linux.
+
+    ```sh
+    # windows
+    cmake ../src -DCMAKE_BUILD_TYPE=Release -G "Ninja"
+    ninja
+
+    # linux
+    cmake ../src -DCMAKE_BUILD_TYPE=Release
+    make -j4
+    ```
+
+    *note that you can specify the CUDA version to use by using the `-DCUDA_TOOLKIT_ROOT_DIR` flag* 
+
+The binary will be written to `cudaDecon\build\<platform>-<compiler>-release`.  If you change the source code, you can just rerun `ninja` or `make` and the binary will be updated.
+
+---------------------
+
+
+## Legacy build instructions
+
+*Note: the build pipeline for cudaDecon is under active development.  These are the legacy notes for building cudaDecon locally on a windows machine. and works with `src/CMakeLists_Dan.txt` ... though it may not find FFTW*
 
 1. Prerequisites:
 1.a. Visual Studio Community (make sure it's supported by CUDA SDK.  I'm using VS Community 2017). Run Windows Updates.

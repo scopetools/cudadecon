@@ -21,17 +21,15 @@ if [ `uname` == Darwin ]; then
     CUDA_LIB_DIR="${CUDA_TOOLKIT_ROOT_DIR}"/lib
 fi
 
-cmake .. \
+cmake ../src \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     -DCMAKE_INSTALL_RPATH:STRING="${PREFIX}/lib" \
     -DCUDA_TOOLKIT_ROOT_DIR="${CUDA_TOOLKIT_ROOT_DIR}"
 
 
-make -j4
+make -j2
 make install
-# ln -s ${PREFIX}/bin/cudaSireconDriver ${PREFIX}/bin/cudasirecon
-# ln -s ${PREFIX}/bin/cudaSireconDriver ${PREFIX}/bin/sirecon
 
 if [ `uname` == Darwin ]; then
     cp "${CUDA_LIB_DIR}"/libcufft.*.dylib "${PREFIX}"/lib/
