@@ -30,7 +30,7 @@ __constant__ float const_kyscale;
 __constant__ float const_kzscale;
 __constant__ float const_eps;
 __constant__ cuFloatComplex
-    const_otf[7680]; // 60 kB should be enough for an OTF array??
+    const_otf[7680]; // 60 kB should be enough for an OTF array?? (float2 = 8 bytes, so 7680 = 61,440 bytes) GPU Max is 65,536 bytes
 
 __global__ void filter_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF,
                               int size);
@@ -73,7 +73,7 @@ template <class T> struct SharedMemory {
 __host__ void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
                                 float kxscale, float kyscale, float kzscale,
                                 float eps, float *h_otf) {
-  cutilSafeCall(cudaMemcpyToSymbol(const_nx, &nx, sizeof(int)));
+  cutilSafeCall(cudaMemcpyToSymbol(const_nx, &nx, sizeof(int))); // this could fail with "invalid device symbol" if the code is not compiled for this device compute capability. https://devtalk.nvidia.com/default/topic/474415/cuda-programming-and-performance/copy-to-constant-memory-fails/post/3376488/#3376488
   cutilSafeCall(cudaMemcpyToSymbol(const_ny, &ny, sizeof(int)));
   cutilSafeCall(cudaMemcpyToSymbol(const_nz, &nz, sizeof(int)));
   unsigned int nxyz = nx * ny * nz;
