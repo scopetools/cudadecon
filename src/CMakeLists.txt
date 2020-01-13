@@ -131,7 +131,8 @@ find_package(Boost REQUIRED COMPONENTS program_options filesystem system)
 message(STATUS "CUDA version : ${CUDA_VERSION}") 
 if(NOT(CUDA_VERSION LESS 10.0))  # if CUDA version is > or = 10.0  
     set(CUDA_NVCC_FLAGS "-O3;\
-	-lcudart;\ 
+	-lcudart;\
+	-gencode=arch=compute_52,code=sm_52;\ 
     -gencode=arch=compute_61,code=sm_61;\
     -gencode=arch=compute_62,code=sm_62;\
     -gencode=arch=compute_70,code=sm_70;\

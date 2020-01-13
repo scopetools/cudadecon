@@ -30,7 +30,7 @@ __constant__ float const_kyscale;
 __constant__ float const_kzscale;
 __constant__ float const_eps;
 __constant__ cuFloatComplex
-    const_otf[7680]; // 60 kB should be enough for an OTF array??
+    const_otf[7680]; // 60 kB should be enough for an OTF array?? (float2 = 8 bytes, so 7680 = 61,440 bytes) GPU Max is 65,536 bytes
 
 __global__ void filter_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF,
                               int size);
@@ -73,7 +73,7 @@ template <class T> struct SharedMemory {
 __host__ void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
                                 float kxscale, float kyscale, float kzscale,
                                 float eps, float *h_otf) {
-  cutilSafeCall(cudaMemcpyToSymbol(const_nx, &nx, sizeof(int)));
+  cutilSafeCall(cudaMemcpyToSymbol(const_nx, &nx, sizeof(int))); // this could fail with "invalid device symbol" if the code is not compiled for this device compute capability. https://devtalk.nvidia.com/default/topic/474415/cuda-programming-and-performance/copy-to-constant-memory-fails/post/3376488/#3376488
   cutilSafeCall(cudaMemcpyToSymbol(const_ny, &ny, sizeof(int)));
   cutilSafeCall(cudaMemcpyToSymbol(const_nz, &nz, sizeof(int)));
   unsigned int nxyz = nx * ny * nz;
@@ -85,7 +85,7 @@ __host__ void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
   cutilSafeCall(cudaMemcpyToSymbol(const_kzscale, &kzscale, sizeof(float)));
   cutilSafeCall(cudaMemcpyToSymbol(const_eps, &eps, sizeof(float)));
   cutilSafeCall(
-      cudaMemcpyToSymbol(const_otf, h_otf, nrotf * nzotf * 2 * sizeof(float)));
+      cudaMemcpyToSymbol(const_otf, h_otf, nrotf * nzotf * 2 * sizeof(float))); // load complex 2D OTF to GPU array. 
 }
 
 // __host__ void prepareOTFtexture(float * realpart, float * imagpart, int nx,
@@ -212,8 +212,9 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
   }
 }
 
+// returns otfval at the given kx, ky, kz coordinates, based on the GPU 2D array "const_otf" which was loaded with "transferConstants"
 __device__ cuFloatComplex dev_otfinterpolate( // cuFloatComplex * d_otf,
-    float kx, float ky, float kz)
+    float kx, float ky, float kz) 
 /* (kx, ky, kz) is Fourier space coords with origin at kx=ky=kz=0 and going
    betwen -nx(or ny,nz)/2 and +nx(or ny,nz)/2 */
 {
