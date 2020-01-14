@@ -83,7 +83,7 @@
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>C:\CudaDecon;C:\CudaDecon\Buffers;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\include;C:\fftw3;C:\boost\boost_1_69_0;C:\libtiff\libtiff;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v10.0\common\inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\src;..\src\Buffers;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\include;C:\fftw3;C:\boost\boost_1_69_0;C:\libtiff\libtiff;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v10.0\common\inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AssemblerListingLocation>Debug/</AssemblerListingLocation>
       <BasicRuntimeChecks>EnableFastChecks</BasicRuntimeChecks>
       <CompileAs>CompileAsCpp</CompileAs>
@@ -168,7 +168,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='MinSizeRel|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>C:\CudaDecon;C:\CudaDecon\Buffers;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\include;C:\fftw3;C:\boost\boost_1_69_0;C:\libtiff\libtiff;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v10.0\common\inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\src;..\src\Buffers;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\include;C:\fftw3;C:\boost\boost_1_69_0;C:\libtiff\libtiff;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v10.0\common\inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AssemblerListingLocation>MinSizeRel/</AssemblerListingLocation>
       <CompileAs>CompileAsCpp</CompileAs>
       <ExceptionHandling>Sync</ExceptionHandling>
@@ -211,7 +211,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='RelWithDebInfo|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>C:\CudaDecon;C:\CudaDecon\Buffers;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\include;C:\fftw3;C:\boost\boost_1_69_0;C:\libtiff\libtiff;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v10.0\common\inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>..\src;..\src\Buffers;C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.0\include;C:\fftw3;C:\boost\boost_1_69_0;C:\libtiff\libtiff;C:\ProgramData\NVIDIA Corporation\CUDA Samples\v10.0\common\inc;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <AssemblerListingLocation>RelWithDebInfo/</AssemblerListingLocation>
       <CompileAs>CompileAsCpp</CompileAs>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
