@@ -39,7 +39,7 @@ int load_next_thread(const char* my_path)
 unsigned compression = 0;
 
 
-const char* make_Image_Description(float nz, float dz)
+std::string make_Image_Description(float nz, float dz)
 {
 	// Need to impersonate ImageJ's Image Description Tiff tag for many programs to work (Arivis, ImageJ, etc)
 	std::string temp = "ImageJ=1.52o\n"
@@ -48,22 +48,22 @@ const char* make_Image_Description(float nz, float dz)
 		"images=" + std::to_string(nz) + "\n"
 		"slices=" + std::to_string(nz) + "\n"; // "slices" will designate this as a volume and not a time series, "frames"
 	// std::cout << "my image description=" << temp;  // debug it:
-	return temp.c_str();
+	return temp;
 }
 
 
 int save_in_thread(std::string inputFileName, const float *const voxel_size, float dz)
 {
-	const char* tiff_descript = make_Image_Description(ToSave.depth(), dz);
-    ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), compression, voxel_size, tiff_descript);
+	std::string tiff_descript = make_Image_Description(ToSave.depth(), dz);
+    ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), compression, voxel_size, tiff_descript.c_str());
 
     return 0;
 }
 
 int U16save_in_thread(std::string inputFileName, const float *const voxel_size, float dz)
 {   
-	const char* tiff_descript = make_Image_Description(U16ToSave.depth(), dz);
-    U16ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), compression, voxel_size, tiff_descript);
+	std::string tiff_descript = make_Image_Description(U16ToSave.depth(), dz);
+    U16ToSave.save_tiff(makeOutputFilePath(inputFileName).c_str(), compression, voxel_size, tiff_descript.c_str());
 
     return 0;
 }
@@ -1240,15 +1240,15 @@ int main(int argc, char *argv[])
 
             //****************************Save Deskewed Raw***********************************
             if (bSaveDeskewedRaw && (fabs(deskewAngle) > 0.0)) {
-				char const * description = make_Image_Description(raw_deskewed.depth(), voxel_size[2]);
+				std::string tiff_description = make_Image_Description(raw_deskewed.depth(), voxel_size[2]);
 
                 if (!bSaveUshort) {
                     DeskewedToSave.assign(raw_deskewed);
-                    tDeskewsave = std::thread(DeSkewsave_in_thread, *it, voxel_size, description); //start saving "Deskewed To Save" file.                    
+                    tDeskewsave = std::thread(DeSkewsave_in_thread, *it, voxel_size, tiff_description.c_str()); //start saving "Deskewed To Save" file.                    
                 }
                 else {
                     CImg<unsigned short> uint16Img(raw_deskewed); // convert to U16 then save.
-                    uint16Img.save_tiff(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str(), compression, voxel_size, description);
+                    uint16Img.save_tiff(makeOutputFilePath(*it, "Deskewed", "_deskewed").c_str(), compression, voxel_size, tiff_description.c_str());
                 }
             }
 
@@ -1264,21 +1264,21 @@ int main(int argc, char *argv[])
 				
                 if (bDoRawMaxIntProj[0]) {
                     CImg<> proj = MaxIntProj(raw_deskewed, 0); // YZ projection
-					char const * description = make_Image_Description(1, MIPvoxel_size_YZ[2]); // YZ projection
+					std::string tiff_description = make_Image_Description(1, MIPvoxel_size_YZ[2]); // YZ projection
 
-					proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_x").c_str(), compression, MIPvoxel_size_YZ, description);
+					proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_x").c_str(), compression, MIPvoxel_size_YZ, tiff_description.c_str());
                 }
                 if (bDoRawMaxIntProj[1]) {
                     CImg<> proj = MaxIntProj(raw_deskewed, 1); // XZ projection
-					char const * description = make_Image_Description(1, MIPvoxel_size_XZ[2]); // XZ projection
+					std::string tiff_description = make_Image_Description(1, MIPvoxel_size_XZ[2]); // XZ projection
 
-					proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_y").c_str(), compression, MIPvoxel_size_XZ, description);
+					proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_y").c_str(), compression, MIPvoxel_size_XZ, tiff_description.c_str());
                 }
                 if (bDoRawMaxIntProj[2]) {
                     CImg<> proj = MaxIntProj(raw_deskewed, 2); // XY projection
-					char const * description = make_Image_Description(1, MIPvoxel_size_XY[2]); // XY projection
+					std::string tiff_description = make_Image_Description(1, MIPvoxel_size_XY[2]); // XY projection
 
-                    proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_z").c_str(), compression, MIPvoxel_size_XY, description);
+                    proj.save_tiff(makeOutputFilePath(*it, "Deskewed/MIPs", "_MIP_z").c_str(), compression, MIPvoxel_size_XY, tiff_description.c_str());
                 }
 
             }
@@ -1300,35 +1300,35 @@ int main(int argc, char *argv[])
 				
                 if (bDoMaxIntProj[0]) {
                     CImg<> proj = MaxIntProj(stitch_image, 0); // YZ projection
-					char const * description = make_Image_Description(1, MIPvoxel_size_YZ[2]); // YZ projection
+					std::string tiff_description = make_Image_Description(1, MIPvoxel_size_YZ[2]); // YZ projection
                     if (bSaveUshort) {
                         CImg<unsigned short> uint16Img(proj);
-                        uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str(), compression, MIPvoxel_size_YZ, description);
+                        uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str(), compression, MIPvoxel_size_YZ, tiff_description.c_str());
                     }
                     else
-						proj.save_tiff(     makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str(), compression, MIPvoxel_size_YZ, description);
+						proj.save_tiff(     makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_x").c_str(), compression, MIPvoxel_size_YZ, tiff_description.c_str());
                     
                 }
                 if (bDoMaxIntProj[1]) {
                     CImg<> proj = MaxIntProj(stitch_image, 1); // XZ projection
-					char const * description = make_Image_Description(1, MIPvoxel_size_XZ[2]); // XZ projection
+					std::string tiff_description = make_Image_Description(1, MIPvoxel_size_XZ[2]); // XZ projection
                     if (bSaveUshort) {
                         CImg<unsigned short> uint16Img(proj);
-                        uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str(), compression, MIPvoxel_size_XZ, description);
+                        uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str(), compression, MIPvoxel_size_XZ, tiff_description.c_str());
                     }
                     else
-						proj.save_tiff(     makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str(), compression, MIPvoxel_size_XZ, description);
+						proj.save_tiff(     makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_y").c_str(), compression, MIPvoxel_size_XZ, tiff_description.c_str());
                     
                 }
                 if (bDoMaxIntProj[2]) {
                     CImg<> proj = MaxIntProj(stitch_image, 2); // XY projection
-					char const * description = make_Image_Description(1, MIPvoxel_size_XY[2]); // XY projection
+					std::string tiff_description = make_Image_Description(1, MIPvoxel_size_XY[2]); // XY projection
                     if (bSaveUshort) {
                         CImg<unsigned short> uint16Img(proj);
-                        uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str(), compression, MIPvoxel_size_XY, description);
+                        uint16Img.save_tiff(makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str(), compression, MIPvoxel_size_XY, tiff_description.c_str());
                     }
                     else
-                        proj.save_tiff(     makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str(), compression, MIPvoxel_size_XY, description);
+                        proj.save_tiff(     makeOutputFilePath(*it, "GPUdecon/MIPs", "_MIP_z").c_str(), compression, MIPvoxel_size_XY, tiff_description.c_str());
                     
                 }
             }
