@@ -22,6 +22,7 @@ if [ `uname` == Darwin ]; then
 fi
 
 cmake ../src \
+    -Wno-unused-function \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="${PREFIX}" \
     -DCMAKE_INSTALL_RPATH:STRING="${PREFIX}/lib" \
