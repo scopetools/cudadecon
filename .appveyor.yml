@@ -4,6 +4,10 @@ image: Visual Studio 2017
 environment:
   CONDA_ROOT: "C:\\Miniconda37-x64"
   CONDA_INSTRUMENTATION_ENABLED: "true"
+  PYTHONPATH: "%APPVEYOR_BUILD_FOLDER%\gitversion\src"
+  CUDA_VERSION: "10.1"
+  CUDA_URL: "http://developer.download.nvidia.com/compute/cuda/10.1/Prod/network_installers/cuda_10.1.243_win10_network.exe"
+  CUDA_PATH: "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1"
 
 artifacts:
   # Store built conda packages as artifacts
@@ -21,15 +25,13 @@ install:
   - conda info
   - conda init cmd.exe
 
-  - set "CUDA_PATH=C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1"
   - IF NOT EXIST "%CUDA_PATH%" set CUDA_INSTALL=1
-  - IF DEFINED CUDA_INSTALL appveyor DownloadFile http://developer.download.nvidia.com/compute/cuda/10.1/Prod/network_installers/cuda_10.1.243_win10_network.exe
+  - IF DEFINED CUDA_INSTALL appveyor DownloadFile "%CUDA_URL%"
   - IF DEFINED CUDA_INSTALL cuda_10.1.243_win10_network.exe -s
   - set PATH=%CUDA_PATH%\bin;%PATH%
   
 build_script:
   - CALL "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
-  - set "CUDA_VERSION=10.1"
   - conda build conda-recipe
   # copy any newly created conda packages into the conda_packages dir
   - mkdir conda_packages
