@@ -18,11 +18,6 @@ project (cudaDecon)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-set(VERSION_MAJOR "0")
-set(VERSION_MINOR "4")
-set(VERSION_PATCH "1")
-set(PROJECT_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
-
 # set -fPIC for all targets (for shared libraries)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
@@ -297,6 +292,8 @@ add_dependencies(
   Buffer
   )
 
+INCLUDE(../gitversion/cmake.cmake)
+TARGET_GIT_VERSION_INIT(cudaDecon)
 
 #####  radialft.exe ###########################################
 add_executable(radialft radialft-nonSIM.cpp)

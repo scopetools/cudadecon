@@ -9,7 +9,7 @@ package:
   version: {{ version }}
 
 source:
-  git_url: ..
+  path: ..
 
 build:
   # you should export CUDA_VERSION before running conda build
