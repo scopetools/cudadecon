@@ -3,12 +3,13 @@ name: build
 on: push
 
 jobs:
-  ubuntu_cuda10-1:
-
+  build:
     runs-on: ubuntu-18.04
-
     steps:
     - uses: actions/checkout@v1
+    - name: Get the version
+      id: get_version
+      run: echo ::set-output name=VERSION::${GITHUB_REF/refs\/tags\//}
     - name: setup
       run: |
         git submodule update --init --recursive
@@ -24,6 +25,16 @@ jobs:
       run: |
         export CUDA_VERSION=10.1
         conda build conda-recipe
+  deploy:
+    runs-on: ubuntu-18.04
+    needs: test
+    # if: github.ref == 'refs/heads/master'
+    steps:
+      - name: Deploy app
+        run: |
+          echo ${GITHUB_REF##*/}
+          echo ${{ steps.get_version.outputs.VERSION }}
+          anaconda --verbose --token %CONDA_UPLOAD_TOKEN% upload "/usr/share/miniconda/conda-bld/linux-64/*.tar.bz2" -u talley --force --label %LABEL%
   
   # windows_cuda10-1:
 
