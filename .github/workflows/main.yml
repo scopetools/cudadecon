@@ -12,7 +12,6 @@ jobs:
     - name: setup
       run: |
         git submodule update --init --recursive
-        export PYTHONPATH=./gitversion/src/
         conda config --add channels conda-forge
         conda install -y conda-build
         conda info

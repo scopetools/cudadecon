@@ -1,4 +1,3 @@
-@echo off
 setlocal EnableDelayedExpansion
 
 :: remove -GL from CXXFLAGS
@@ -9,10 +8,9 @@ cd build
 
 set BUILD_CONFIG=Release
 set CUDA_TOOLKIT_ROOT_DIR=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v%CUDA_VERSION%
-echo %PYTHONPATH%
 
 cmake ../src -G "Ninja" ^
-    -Wno-dev ^
+    -Wno-dev -Wno-unused-function ^
     -DCMAKE_BUILD_TYPE:STRING=Release ^
     -DCMAKE_INSTALL_PREFIX:PATH="%LIBRARY_PREFIX%" ^
     -DCMAKE_PREFIX_PATH:PATH="%LIBRARY_PREFIX%" ^
