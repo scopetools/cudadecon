@@ -26,14 +26,14 @@ jobs:
         conda build conda-recipe
   deploy:
     runs-on: ubuntu-18.04
-    needs: test
+    needs: build
     # if: github.ref == 'refs/heads/master'
     steps:
       - name: Deploy app
         run: |
           echo ${GITHUB_REF##*/}
           echo ${{ steps.get_version.outputs.VERSION }}
-          anaconda --verbose --token %CONDA_UPLOAD_TOKEN% upload "/usr/share/miniconda/conda-bld/linux-64/*.tar.bz2" -u talley --force --label %LABEL%
+          anaconda --verbose --token $CONDA_UPLOAD_TOKEN upload "/usr/share/miniconda/conda-bld/linux-64/*.tar.bz2" -u talley --force --label $LABEL
   
   # windows_cuda10-1:
 
