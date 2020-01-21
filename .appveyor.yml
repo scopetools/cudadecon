@@ -4,7 +4,7 @@ image: Visual Studio 2017
 environment:
   CONDA_ROOT: "C:\\Miniconda37-x64"
   CONDA_INSTRUMENTATION_ENABLED: "true"
-  PYTHONPATH: "%APPVEYOR_BUILD_FOLDER%\gitversion\src"
+  PYTHONPATH: "%APPVEYOR_BUILD_FOLDER%/gitversion/src"
   CUDA_VERSION: "10.1"
   CUDA_URL: "http://developer.download.nvidia.com/compute/cuda/10.1/Prod/network_installers/cuda_10.1.243_win10_network.exe"
   CUDA_PATH: "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1"
