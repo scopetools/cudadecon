@@ -31,6 +31,7 @@ install:
   - set PATH=%CUDA_PATH%\bin;%PATH%
   
 build_script:
+  - echo %PYTHONPATH%
   - CALL "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
   - conda build conda-recipe
   # copy any newly created conda packages into the conda_packages dir

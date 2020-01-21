@@ -9,6 +9,7 @@ cd build
 
 set BUILD_CONFIG=Release
 set CUDA_TOOLKIT_ROOT_DIR=C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v%CUDA_VERSION%
+echo %PYTHONPATH%
 
 cmake ../src -G "Ninja" ^
     -Wno-dev ^
