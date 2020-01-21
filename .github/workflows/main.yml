@@ -24,13 +24,18 @@ jobs:
         conda build conda-recipe
     - name: deploy app
       # if: '${GITHUB_REF##*/}' == 'master'
+      env: # Or as an environment variable
+        CONDA_UPLOAD_TOKEN: ${{ secrets.CONDA_UPLOAD_TOKEN }}
       run: |
-        if [[ $(git describe --exact-match fb55a50d) == v* ]]; then 
+        if [[ $(git describe --exact-match) == v* ]]; then 
           LABEL='main'
         else
           LABEL='dev'
         fi
         echo $LABEL
+        if [[ $CONDA_UPLOAD_TOKEN == v* ]]; then 
+          echo "THERE IS NO TOKEN"
+        fi
         /usr/share/miniconda/bin/anaconda -t $CONDA_UPLOAD_TOKEN upload "/usr/share/miniconda/conda-bld/linux-64/*.tar.bz2" -u talley --force --label $LABEL
 
   # windows_cuda10-1:
