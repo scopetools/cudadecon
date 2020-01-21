@@ -11,6 +11,7 @@ artifacts:
 
 
 install:
+  - git submodule update --init --recursive
   - CALL %CONDA_ROOT%\Scripts\activate.bat
   - conda config --set always_yes yes --set changeps1 no
   - appveyor-retry conda install conda-build anaconda-client

@@ -11,6 +11,7 @@ jobs:
     - uses: actions/checkout@v1
     - name: setup
       run: |
+        git submodule update --init --recursive
         conda config --add channels conda-forge
         conda install -y conda-build
         conda info
