@@ -14,7 +14,6 @@ jobs:
         conda update -n base conda
         conda install -y conda-build anaconda-client
         conda info
-        which anaconda
         URL=http://developer.download.nvidia.com/compute/cuda/10.1/Prod/local_installers/cuda_10.1.243_418.87.00_linux.run
         wget -q --show-progress --progress=bar:force:noscroll $URL -O cuda.run
         sudo sh cuda.run --toolkit --silent
@@ -26,15 +25,13 @@ jobs:
     - name: deploy app
       # if: '${GITHUB_REF##*/}' == 'master'
       run: |
-        which anaconda
-        which conda
         if [[ $(git describe --exact-match fb55a50d) == v* ]]; then 
           LABEL='main'
         else
           LABEL='dev'
         fi
         echo $LABEL
-        anaconda --verbose --token $CONDA_UPLOAD_TOKEN upload "/usr/share/miniconda/conda-bld/linux-64/*.tar.bz2" -u talley --force --label $LABEL
+        /usr/share/miniconda/bin/anaconda -t $CONDA_UPLOAD_TOKEN upload "/usr/share/miniconda/conda-bld/linux-64/*.tar.bz2" -u talley --force --label $LABEL
 
   # windows_cuda10-1:
 
