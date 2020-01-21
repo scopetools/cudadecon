@@ -1,14 +1,18 @@
+{% if GIT_DESCRIBE_NUMBER > '0' %}
+{% set version = GIT_DESCRIBE_TAG[1:] + '_' + GIT_DESCRIBE_HASH %}
+{% else %}
+{% set version = GIT_DESCRIBE_TAG[1:] %}
+{% endif %}
+
 package:
   name: cudadecon
-  version: 1.0.3
+  version: {{ version }}
 
 source:
-  path: ..
+  git_url: ..
 
 build:
-  number: 2
-  # NOTE: for mac, you should export CUDA_VERSION before running conda build
-  # it will look for cudatoolkit installed at /Developer/NVIDIA/CUDA-${CUDA_VERSION}
+  # you should export CUDA_VERSION before running conda build
   string: 'cu{{ environ.get('CUDA_VERSION') }}'
   script_env:
     - CUDA_VERSION
