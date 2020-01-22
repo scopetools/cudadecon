@@ -49,7 +49,7 @@ class VersionInfo(EqualityMixin):
         if self.git_commits_since_tag > 0:
             if result != "":
                 result += "."
-            result += "dev%d+rev%s" % (self.git_commits_since_tag, self.git_commit_id)
+            result += "dev%d.%s" % (self.git_commits_since_tag, self.git_commit_id)
         if self.modified_since_commit:
             result += "-modified"
         return result

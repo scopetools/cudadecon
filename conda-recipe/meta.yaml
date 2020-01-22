@@ -1,5 +1,5 @@
 {% if GIT_DESCRIBE_NUMBER > '0' %}
-{% set version = GIT_DESCRIBE_TAG[1:] + '.dev' + GIT_DESCRIBE_NUMBER + '+rev' + GIT_DESCRIBE_HASH[1:] %}
+{% set version = GIT_DESCRIBE_TAG[1:] + '.dev' + GIT_DESCRIBE_NUMBER + '.' + GIT_DESCRIBE_HASH[1:] %}
 {% else %}
 {% set version = GIT_DESCRIBE_TAG[1:] %}
 {% endif %}
@@ -12,8 +12,8 @@ source:
   path: ..
 
 build:
-  # you should export CUDA_VERSION before running conda build
-  string: 'cu{{ environ.get('CUDA_VERSION') }}'
+  # you must set CUDA_VERSION env variable before running conda build
+  string: 'cu{{ CUDA_VERSION }}'
   script_env:
     - CUDA_VERSION
   
@@ -30,13 +30,13 @@ requirements:
     # - xorg-libx11 # [not win]
 
   run:
-    {% if environ.get('CUDA_VERSION') == '10.1' %}
+    {% if CUDA_VERSION == '10.1' %}
     - cudatoolkit=10.1 # [not osx]
-    {% elif environ.get('CUDA_VERSION') == '10.0' %}
+    {% elif CUDA_VERSION == '10.0' %}
     - cudatoolkit=10.0 # [not osx]
-    {% elif environ.get('CUDA_VERSION') == '9.2' %}
+    {% elif CUDA_VERSION == '9.2' %}
     - cudatoolkit=9.2 # [linux]
-    {% elif environ.get('CUDA_VERSION') == '9.0' %}
+    {% elif CUDA_VERSION == '9.0' %}
     - cudatoolkit=9.0 # [not osx]
     {% endif %}
     - libtiff
