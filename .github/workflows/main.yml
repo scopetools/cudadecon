@@ -26,6 +26,7 @@ jobs:
       # if: '${GITHUB_REF##*/}' == 'master'
       env: # Or as an environment variable
         CONDA_UPLOAD_TOKEN: ${{ secrets.CONDA_UPLOAD_TOKEN }}
+        CONDA_DIR: /usr/share/miniconda
       run: |
         if [[ $(git describe --exact-match) == v* ]]; then 
           LABEL='main'
@@ -36,7 +37,7 @@ jobs:
         if [[ $CONDA_UPLOAD_TOKEN == v* ]]; then 
           echo "THERE IS NO TOKEN"
         fi
-        /usr/share/miniconda/bin/anaconda -t $CONDA_UPLOAD_TOKEN upload "/usr/share/miniconda/conda-bld/linux-64/*.tar.bz2" -u talley --force --label $LABEL
+        $CONDA_DIR/bin/anaconda -t $CONDA_UPLOAD_TOKEN upload $CONDA_DIR/conda-bld/linux-64/*.tar.bz2 -u talley --force --label $LABEL
 
   # windows_cuda10-1:
 

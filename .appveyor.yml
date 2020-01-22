@@ -26,6 +26,7 @@ install:
   
 build_script:
   - CALL "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
+  - conda build conda-recipe --output >outname.txt
   - conda build conda-recipe
   # copy any newly created conda packages into the conda_packages dir
   - mkdir conda_packages
@@ -44,4 +45,5 @@ on_success:
       set LABEL='dev'
     )
   - echo %LABEL%
-  - anaconda -t %CONDA_UPLOAD_TOKEN% upload "%CONDA_ROOT%\conda-bld\win-64\*.tar.bz2" -u talley --force --label %LABEL%
+  - set /p OUTNAME=<outname.txt
+  - anaconda -t %CONDA_UPLOAD_TOKEN% upload %CONDA_ROOT%\conda-bld\win-64\*.tar.bz2 -u talley --force --label %LABEL%
