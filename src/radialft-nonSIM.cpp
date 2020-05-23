@@ -5,13 +5,12 @@ namespace po = boost::program_options;
 #include <iostream>
 #include <complex>
 
-#include <stdio.h>
-
 #include <fftw3.h>
 
 #include <tiffio.h>
 
 #define cimg_use_tiff
+#define cimg_display 0
 #include <CImg.h>
 using namespace cimg_library;
 
@@ -36,20 +35,22 @@ void cleanup(std::complex<float> *otfkxkz, int nx, int nz, float dkr, float dkz,
 void radialft(std::complex<float> *bands, int nx, int ny, int nz, std::complex<float> *avg);
 
 bool fixorigin(std::complex<float> *otfkxkz, int nx, int nz, int kx2);
+void fixorigin(CImg<> &otf3d, int kx2);
 void rescale(std::complex<float> *otfkxkz, int nx, int nz);
+void rescale(CImg<> &otf3d);
 
 
 int main(int argc, char **argv)
 {
 #ifdef _WIN32
-	HANDLE  hConsole;
-	hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
+  HANDLE  hConsole;
+  hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
 
-	SetConsoleTextAttribute(hConsole, 11); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+  SetConsoleTextAttribute(hConsole, 11); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
 #endif
-	printf("Created at Howard Hughes Medical Institute Janelia Research Campus. Copyright 2017. All rights reserved.\n");
+  printf("Created at Howard Hughes Medical Institute Janelia Research Campus. Copyright 2017. All rights reserved.\n");
 #ifdef _WIN32
-	SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
+  SetConsoleTextAttribute(hConsole, 7); // colors are 9=blue 10=green and so on to 15=bright white 7=normal http://stackoverflow.com/questions/4053837/colorizing-text-in-the-console-with-c
 #endif
   std::string ifiles, ofiles;
   int nx, ny, nz, nxy;
@@ -66,13 +67,14 @@ int main(int argc, char **argv)
   int krmax=0;
   bool bDoCleanup = true;
   bool bUserBackground = false;
+  bool b3Dout = false;
 
   po::options_description progopts;
   progopts.add_options()
     ("na", po::value<float>(&NA)->default_value(1.25), "NA of detection objective")
     ("nimm", po::value<float>(&NIMM)->default_value(1.3), "refractive index of immersion medium")
     ("xyres", po::value<float>(&dr)->default_value(.104), "x-y pixel size")
-    ("zres", po::value<float>(&dz)->default_value(.104), "z pixel size")
+    ("zres", po::value<float>(&dz)->default_value(.1), "z pixel size")
     ("wavelength", po::value<int>(&lambdanm)->default_value(530), "emission wavelength in nm")
     ("fixorigin", po::value<int>(&interpkr)->default_value(5),
      "for all kz, extrapolate using pixels kr=1 to this pixel to get value for kr=0")
@@ -80,6 +82,8 @@ int main(int argc, char **argv)
      "pixels outside this limit will be zeroed (overwriting estimated value from NA and NIMM)")
     ("nocleanup", po::bool_switch(&bDoCleanup)->implicit_value(false), "elect not to do clean-up outside OTF support")
     ("background", po::value<float>(&background), "use user-supplied background instead of the estimated")
+    ("3Dout,3", po::bool_switch(&b3Dout)->implicit_value(true),
+     "Output 3D, instead of rotationally averaged, OTF")
     ("input-file", po::value<std::string>(&ifiles)->required(), "input PSF file")
     ("output-file", po::value<std::string>(&ofiles)->required(), "output OTF file to write")
     ("help,h", "produce help message")
@@ -89,15 +93,15 @@ int main(int argc, char **argv)
   p.add("input-file", 1);
   p.add("output-file", 1);
 
-/* Parse commandline option */
+  /* Parse commandline option */
   po::variables_map varsmap;
 
   store(po::command_line_parser(argc, argv).
         options(progopts).positional(p).run(), varsmap);
-  
+
   if (argc == 1)  { //if no arguments, show help.
-	  std::cout << progopts << "\n";
-	  return 0;
+    std::cout << progopts << "\n";
+    return 0;
   }
 
   if (varsmap.count("help")) {
@@ -134,7 +138,8 @@ int main(int argc, char **argv)
   dkr = 1/(ny*dr);
   dkz = 1/(nz*dz);
 
-  nxy=(nx+2)*ny;
+  int nx2 = (nx/2+1)*2;   // in case nx is odd numbered, nx2 is nx+1, not nx+2
+  nxy=nx2*ny;
 
   floatimage = (float *) malloc(nxy*nz*sizeof(float));
   bands = (std::complex<float> *) floatimage;
@@ -144,7 +149,7 @@ int main(int argc, char **argv)
   for(z=0; z<nz; z++)
     for (i=0; i<ny; i++) {
       for (j=0; j<nx; j++)
-        floatimage[z*nxy+i*(nx+2)+j] = rawtiff(j, i, z);
+        floatimage[z*nxy+i*nx2+j] = rawtiff(j, i, z);
     }
 
   /* Before FFT, estimate bead center position */
@@ -159,10 +164,10 @@ int main(int argc, char **argv)
   for(z=0; z<nz; z++) {
     for(i=0;i<ny;i++)
       for(j=0;j<nx;j++)
-        floatimage[z*nxy + i*(nx+2) + j] -= background;
+        floatimage[z*nxy + i*nx2 + j] -= background;
   }
 
-  rfftplan3d = fftwf_plan_dft_r2c_3d(nz, ny, nx, floatimage, 
+  rfftplan3d = fftwf_plan_dft_r2c_3d(nz, ny, nx, floatimage,
                                      (fftwf_complex *) floatimage, FFTW_ESTIMATE);
   printf("Before fft\n");
   fftwf_execute_dft_r2c(rfftplan3d, floatimage, (fftwf_complex *) floatimage);
@@ -176,28 +181,34 @@ int main(int argc, char **argv)
   shift_center(bands, nx, ny, nz, xcofm, ycofm, zcofm);
 
   CImg<> output_tiff(nz*2, nx/2+1, 1, 1, 0.f);
-  avg_output = (std::complex<float> *) output_tiff.data();
-
-  radialft(bands, nx, ny, nz, avg_output);
-
-  if (bDoCleanup)
-    cleanup(avg_output, nx, nz, dkr, dkz, 1.0, lambdanm, krmax, NA, NIMM);
-
-  if (interpkr > 0)
-    try {
-    while (!fixorigin(avg_output, nx, nz, interpkr)) {
-      interpkr --;
-      if (interpkr < 4)
-        throw std::runtime_error("#pixels < 4 used in kr=0 extrapolation");
-    }}
-  catch (std::exception &e) {
-    std::cout << "\n!!Error occurred: " << e.what() << std::endl;
-    return false;
+  if (b3Dout) {
+    output_tiff.assign(floatimage, nx2, ny, nz, 1, true);
+    if (interpkr>1)
+      fixorigin(output_tiff, interpkr);
+    rescale(output_tiff);
   }
+  else {
+    avg_output = (std::complex<float> *) output_tiff.data();
 
-//  printf("%d\n", interpkr);
-  rescale(avg_output, nx, nz);
+    radialft(bands, nx, ny, nz, avg_output);
 
+    if (bDoCleanup)
+      cleanup(avg_output, nx, nz, dkr, dkz, 1.0, lambdanm, krmax, NA, NIMM);
+
+    if (interpkr > 0)
+      try {
+        while (!fixorigin(avg_output, nx, nz, interpkr)) {
+          interpkr --;
+          if (interpkr < 4)
+            throw std::runtime_error("#pixels < 4 used in kr=0 extrapolation");
+        }}
+      catch (std::exception &e) {
+        std::cout << "\n!!Error occurred: " << e.what() << std::endl;
+        return false;
+      }
+
+    rescale(avg_output, nx, nz);
+  }
   /* For side bands, combine bandre's and bandim's into bandplus */
   /* Shouldn't this be done later on the averaged bands? */
 
@@ -207,13 +218,14 @@ int main(int argc, char **argv)
 /*  locate peak pixel to subpixel accuracy by fitting parabolas  */
 void determine_center_and_background(float *stack3d, int nx, int ny, int nz, float *xc, float *yc, float *zc, float *background)
 {
-  int i, j, k, maxi, maxj, maxk, ind, nxy2, infocus_sec;
+  int i, j, k, maxi=0, maxj=0, maxk=0, ind, nxy2, infocus_sec;
   int iminus, iplus, jminus, jplus, kminus, kplus;
   float maxval, reval, valminus, valplus;
   double sum;
 
   printf("In determine_center_and_background()\n");
-  nxy2 = (nx+2)*ny;
+  int nx2 = (nx/2+1)*2;   // in case nx is odd numbered, nx2 is nx+1, not nx+2
+  nxy2 = nx2*ny;
 
   /* Search for the peak pixel */
   /* Be aware that stack3d is of dimension (nx+2)xnyxnz */
@@ -221,13 +233,13 @@ void determine_center_and_background(float *stack3d, int nx, int ny, int nz, flo
   for(k=0;k<nz;k++)
     for(i=0;i<ny;i++)
       for(j=0;j<nx;j++) {
-    ind=k*nxy2+i*(nx+2)+j;
-    reval=stack3d[ind];
-    if( reval > maxval ) {
-      maxval = reval;
-      maxi=i; maxj=j;
-      maxk=k;
-    }
+        ind=k*nxy2+i*nx2+j;
+        reval=stack3d[ind];
+        if( reval > maxval ) {
+          maxval = reval;
+          maxi=i; maxj=j;
+          maxk=k;
+        }
       }
 
   iminus = maxi-1; iplus = maxi+1;
@@ -240,25 +252,25 @@ void determine_center_and_background(float *stack3d, int nx, int ny, int nz, flo
   if( kminus<0 ) kminus+=nz;
   if( kplus>=nz ) kplus-=nz;
 
-  valminus = stack3d[kminus*nxy2+maxi*(nx+2)+maxj];
-  valplus  = stack3d[kplus *nxy2+maxi*(nx+2)+maxj];
+  valminus = stack3d[kminus*nxy2+maxi*nx2+maxj];
+  valplus  = stack3d[kplus *nxy2+maxi*nx2+maxj];
   *zc = maxk + fitparabola(valminus, maxval, valplus);
 
   *zc += 0.6;
 
-  valminus = stack3d[maxk*nxy2+iminus*(nx+2)+maxj];
-  valplus  = stack3d[maxk*nxy2+iplus *(nx+2)+maxj];
+  valminus = stack3d[maxk*nxy2+iminus*nx2+maxj];
+  valplus  = stack3d[maxk*nxy2+iplus *nx2+maxj];
   *yc = maxi + fitparabola(valminus, maxval, valplus);
 
-  valminus = stack3d[maxk*nxy2+maxi*(nx+2)+jminus];
-  valplus  = stack3d[maxk*nxy2+maxi*(nx+2)+jplus];
+  valminus = stack3d[maxk*nxy2+maxi*nx2+jminus];
+  valplus  = stack3d[maxk*nxy2+maxi*nx2+jplus];
   *xc = maxj + fitparabola(valminus, maxval, valplus);
 
   sum = 0;
   infocus_sec = floor(*zc);
   for (i=0; i<*yc-20; i++)
     for (j=0; j<nx; j++)
-    sum += stack3d[infocus_sec*nxy2 + i*(nx+2) + j];
+      sum += stack3d[infocus_sec*nxy2 + i*nx2 + j];
   *background = sum / ((*yc-20)*nx);
 }
 
@@ -420,6 +432,49 @@ void cleanup(std::complex<float> *otfkxkz, int nx, int nz, float dkr, float dkz,
   }
 }
 
+void fixorigin(CImg<> &otf3d, int kx2)
+{
+  // Project 3D OTF onto kx-ky plane for the +/- 45-degree radial lines
+  int ny = otf3d.height();
+  int nx = otf3d.width()/2; // real and imaginary
+
+  CImg<> projected(nx*2, 1, 1, 1, 0.);
+
+  for (int z=0; z<otf3d.depth(); z++)
+    for (int x=1; x<nx; x++) {
+      int xst = x<<1;
+      // +45 degree line:
+      projected(xst)   += otf3d(xst, x, z);
+      projected(xst+1) += otf3d(xst+1, x, z);
+      // -45 degree line:
+      projected(xst)   += otf3d(xst, ny-x, z);
+      projected(xst+1) += otf3d(xst+1, ny-x, z);
+    }
+
+  //
+  std::complex<double> mean_val=0;
+  std::complex<double> slope_numerator=0;
+  std::complex<double> slope_denominat=0;
+  std::complex<float> * projectedC = (std::complex<float> *) projected.data();
+
+  for (int x=1; x<=kx2; x++)
+    mean_val += projectedC[x];
+  mean_val /= kx2;
+
+  double mean_kx = (kx2+1)/2.; // the mean of [1, 2, ..., n] is (n+1)/2
+  for (int x=1; x<=kx2; x++) {
+    std::complex<double> complexval = projectedC[x];
+    slope_numerator += (x - mean_kx) * (complexval - mean_val);
+    slope_denominat += (x - mean_kx) * (x - mean_kx);
+  }
+  std::complex<double> slope = slope_numerator / slope_denominat;
+  std::complex<double> valOrigin = mean_val - slope * mean_kx;   // intercept at kx=0
+  std::cout << "otf3d(0) = " << otf3d(0, 0, 0) << "+i" << otf3d(1,0,0) << std::endl;
+  otf3d(0, 0, 0) = valOrigin.real();
+  otf3d(1, 0, 0) = valOrigin.imag();
+  std::cout << "otf3d(0) = " << otf3d(0, 0, 0) << "+i" << otf3d(1,0,0) << std::endl;
+}
+
 bool fixorigin(std::complex<float> *otfkxkz, int nx, int nz, int kx2)
 {
   // linear fit the value at kx=0 using kx in [1, kx2]
@@ -468,3 +523,16 @@ void rescale(std::complex<float> *otfkxkz, int nx, int nz)
   }
 }
 
+void rescale(CImg<> &otf3d)
+{
+  std::complex<float> * otf3dC = (std::complex<float> *) otf3d.data();
+  size_t nxyz = otf3d.size() / 2;
+  float valmax = 0., mag;
+  for (unsigned i=0; i<nxyz; i++) {
+    mag = std::abs(otf3dC[i]);
+    if (mag > valmax)
+      valmax = mag;
+  }
+
+  otf3d /= valmax;
+}

@@ -44,21 +44,47 @@ static double intensity_overall0 = 0.;
 static bool bFirstTime = true;
 
 
+void  determine_OTF_dimensions(CImg<> &complexOTF, float dr_psf, float dz_psf,
+                              unsigned &nx_otf, unsigned &ny_otf, unsigned &nz_otf,
+                              float &dkx_otf, float &dky_otf, float &dkz_otf)
+{
+  if (complexOTF.depth() > 1) {  // indicating non-RA OTF
+    nx_otf = complexOTF.width() / 2;
+    ny_otf = complexOTF.height();
+    nz_otf = complexOTF.depth();
+  }
+  else {
+    nx_otf = complexOTF.height();
+    ny_otf = 1;   // indicator for a rotationally averaged OTF?
+    nz_otf = complexOTF.width() / 2;
+  }
+
+  dkx_otf = 1/((nx_otf-1)*2 * dr_psf);
+
+  if (ny_otf > 1)
+    dky_otf = 1/(ny_otf * dr_psf);
+  else
+    dky_otf = dkx_otf;
+
+  dkz_otf = 1/(nz_otf * dz_psf);
+}
+
 
 //***************************************************************************************************************
 //********************************************* RichardsonLucy_GPU  *********************************************
 //***************************************************************************************************************
 
 
-void RichardsonLucy_GPU(CImg<> & raw, float background, 
+void RichardsonLucy_GPU(CImg<> & raw, float background,
                         GPUBuffer & d_interpOTF, int nIter,
                         double deskewFactor, int deskewedNx, int extraShift,
                         int napodize, int nZblend,
-                        CPUBuffer &rotationMatrix, cufftHandle rfftplanGPU, 
+                        CPUBuffer &rotationMatrix, cufftHandle rfftplanGPU,
                         cufftHandle rfftplanInvGPU, CImg<> & raw_deskewed,
                         cudaDeviceProp *devProp,
                         bool bFlatStartGuess, float my_median,
                         bool bDoRescale,
+                        bool bSkewedDecon,
                         float padVal,
                         bool bDupRevStack,
                         bool UseOnlyHostMem,
@@ -107,18 +133,18 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   if (nIter > 0 || raw_deskewed.size()>0 || rotationMatrix.getSize()) {
     apodize_GPU(&X_k, nx, ny, nz, napodize);
 
-	//**************************** Background subtraction ***********************************
+    //**************************** Background subtraction ***********************************
     // background subtraction (including thresholding by 0):
     // printf("background=%f\n", background);
     backgroundSubtraction_GPU(X_k, nx, ny, nz, background, devProp->maxGridSize[2]);
 
 
-	
-	//**************************** Bleach correction ***********************************
+
+    //**************************** Bleach correction ***********************************
 
     // Calculate sum for bleach correction:
     double intensity_overall = meanAboveBackground_GPU(X_k, nx, ny, nz, devProp->maxGridSize[2], myGPUdevice);
-    
+
     if (bDoRescale) {
         if (bFirstTime) {
           intensity_overall0 = intensity_overall;
@@ -131,59 +157,60 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 #ifndef NDEBUG
     printf("intensity_overall=%lf\n", intensity_overall);
 #endif
-  
 
 
-	//**************************** Deskew ***********************************
-    if (fabs(deskewFactor) > 0.0) { //then deskew raw data along x-axis first:
 
-		GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), myGPUdevice, UseOnlyHostMem);
-		std::cout << "deskewedRaw allocated.  ";
-		cudaMemGetInfo(&free, &total);
-		std::cout << std::setw(8) << X_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" ;
-		
-		std::cout << " Deskewing. ";
+    //**************************** Deskew ***********************************
+    if (( !bSkewedDecon || raw_deskewed.size()>0 && nIter == 0)
+        && fabs(deskewFactor) > 0.0) { //then deskew raw data along x-axis first:
+
+        GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), myGPUdevice, UseOnlyHostMem);
+        std::cout << "deskewedRaw allocated.  ";
+        cudaMemGetInfo(&free, &total);
+        std::cout << std::setw(8) << deskewedRaw.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" ;
+
+        std::cout << " Deskewing... ";
     deskew_GPU(X_k, nx, ny, nz, deskewFactor, deskewedRaw, deskewedNx, extraShift, padVal);
 
       // update raw (i.e., X_k) and its dimension variables.
-		std::cout << "Copy deskewedRaw back to X_k. ";
-		X_k = deskewedRaw;
-		
-			  
-		nx = deskewedNx;
-		nxy = nx * ny;
-		nxy2 = (nx / 2 + 1)*ny; // x=N3, y=N2, z=N1 see: http://docs.nvidia.com/cuda/cufft/#multi-dimensional
+        std::cout << "Copy deskewedRaw back to X_k. ";
+        X_k = deskewedRaw;
 
-		cutilSafeCall(cudaHostUnregister(raw.data()));
-		raw.clear();
-		raw.assign(nx, ny, nz, 1);
 
-		if (nIter > 0)
-	        cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
+        nx = deskewedNx;
+        nxy = nx * ny;
+        nxy2 = (nx / 2 + 1)*ny; // x=N3, y=N2, z=N1 see: http://docs.nvidia.com/cuda/cufft/#multi-dimensional
 
-		if (raw_deskewed.size()>0) {
-			// save deskewed raw data into "raw_deskewed"; if no decon iteration is requested, then return immediately.
-			std::cout << "Copy X_k into raw_deskewed. " ;
+        cutilSafeCall(cudaHostUnregister(raw.data()));
+        raw.clear();
+        raw.assign(nx, ny, nz, 1);
 
-			cudaError_t myCudaErr = cudaErrorHostMemoryAlreadyRegistered;
-			myCudaErr = cudaHostRegister(raw_deskewed.data(), nz*nxy * sizeof(float), cudaHostRegisterPortable);      //pin the destination CImg host RAM
-			if (myCudaErr != cudaErrorHostMemoryAlreadyRegistered)
-				  cutilSafeCall(myCudaErr); // ignore error if this memory has already been registered.
+        if (nIter > 0)
+            cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
 
-			cutilSafeCall(cudaMemcpy(raw_deskewed.data(), X_k.getPtr(),
-				nz*nxy*sizeof(float), cudaMemcpyDefault));
+        if (raw_deskewed.size()>0) {
+            // save deskewed raw data into "raw_deskewed"; if no decon iteration is requested, then return immediately.
+            std::cout << "Copy X_k into raw_deskewed. " ;
+
+            cudaError_t myCudaErr = cudaErrorHostMemoryAlreadyRegistered;
+            myCudaErr = cudaHostRegister(raw_deskewed.data(), nz*nxy * sizeof(float), cudaHostRegisterPortable);      //pin the destination CImg host RAM
+            if (myCudaErr != cudaErrorHostMemoryAlreadyRegistered)
+                  cutilSafeCall(myCudaErr); // ignore error if this memory has already been registered.
+
+            cutilSafeCall(cudaMemcpy(raw_deskewed.data(), X_k.getPtr(),
+                nz*nxy*sizeof(float), cudaMemcpyDefault));
         if (nIter == 0)
           return;
       }
-		std::cout << "Done." << std::endl;
+        std::cout << "Done." << std::endl;
     } // deskewedRaw should be destructed and that memory freed.
 
 
-	//**************************** Z blend ***********************************
+    //**************************** Z blend ***********************************
 
     if (nZblend > 0)
       zBlend_GPU(X_k, nx, ny, nz, nZblend);
-    
+
     /***** Duplicate reversed stack to minimize ringing in Z ******/
     if (bDupRevStack) {
       GPUBuffer X_k2(nz*2 * nxy * sizeof(float), myGPUdevice, false);
@@ -206,160 +233,160 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
   { // these guys are needed only during RL iterations, we can deallocate them once we are done with iterations.  output we need is only rawGPUbuf and X_k.
 
-	  GPUBuffer CC(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // RL factor to apply to Y_k to get X_k
-	  std::cout << "CC allocated.           ";
-	  cudaMemGetInfo(&free, &total);
-	  std::cout << std::setw(8) << CC.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+      GPUBuffer CC(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // RL factor to apply to Y_k to get X_k
+      std::cout << "CC allocated.           ";
+      cudaMemGetInfo(&free, &total);
+      std::cout << std::setw(8) << CC.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
-	  std::cout << "rawGPUbuf allocated.    ";
-	  cudaMemGetInfo(&free, &total);
-	  std::cout << std::setw(8) << rawGPUbuf.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
-
-
-	  GPUBuffer X_kminus1(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // guess at the end of previous RL iteration
-	  std::cout << "X_kminus1 allocated.    ";
-	  cudaMemGetInfo(&free, &total);
-	  std::cout << std::setw(8) << X_kminus1.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+      std::cout << "rawGPUbuf allocated.    ";
+      cudaMemGetInfo(&free, &total);
+      std::cout << std::setw(8) << rawGPUbuf.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
 
-	  GPUBuffer Y_k(nz * nxy * sizeof(float), myGPUdevice, false); // guess at beginning of RL iteration
-	  std::cout << "Y_k allocated.          ";
-	  cudaMemGetInfo(&free, &total);
-	  std::cout << std::setw(8) << Y_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+      GPUBuffer X_kminus1(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // guess at the end of previous RL iteration
+      std::cout << "X_kminus1 allocated.    ";
+      cudaMemGetInfo(&free, &total);
+      std::cout << std::setw(8) << X_kminus1.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
 
-	  GPUBuffer G_kminus1(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // X_k - Y_k (RL change)
-	  std::cout << "G_kminus1 allocated.    ";
-	  cudaMemGetInfo(&free, &total);
-	  std::cout << std::setw(8) << G_kminus1.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
-
-	  GPUBuffer G_kminus2(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // previous X_k - Y_k (change between prediction and acceleration)
-	  std::cout << "G_kminus2 allocated.    ";
-	  cudaMemGetInfo(&free, &total);
-	  std::cout << std::setw(8) << G_kminus2.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+      GPUBuffer Y_k(nz * nxy * sizeof(float), myGPUdevice, false); // guess at beginning of RL iteration
+      std::cout << "Y_k allocated.          ";
+      cudaMemGetInfo(&free, &total);
+      std::cout << std::setw(8) << Y_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
 
-	  /*  testing using 2D texture for OTF interpolation
-		CImg<> realpart(otf.width()/2, otf.height()), imagpart(realpart);
-	  #pragma omp parallel for
-		cimg_forXY(realpart, x, y) {
-		  realpart(x, y) = otf(2*x  , y);
-		  imagpart(x, y) = otf(2*x+1, y);
-		}
+      GPUBuffer G_kminus1(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // X_k - Y_k (RL change)
+      std::cout << "G_kminus1 allocated.    ";
+      cudaMemGetInfo(&free, &total);
+      std::cout << std::setw(8) << G_kminus1.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
-		prepareOTFtexture(realpart.data(), imagpart.data(), realpart.width(), realpart.height());
-
-		CPUBuffer interpOTF(d_interpOTF); //.getSize());
-		// d_interpOTF.set(&interpOTF, 0, interpOTF.getSize(), 0);
-
-		CImg<float> otfarr((float *) interpOTF.getPtr(), nz*2, nx/2+1);
-		otfarr.save("interpOTF.tif");
-
-		return;
-		debugging code ends
-	  */
-	  // Allocate GPU buffer for temp FFT result
-	  GPUBuffer fftGPUbuf(nz * nxy2 * sizeof(cuFloatComplex), myGPUdevice, UseOnlyHostMem); // This is the complex FFT output.
-	  std::cout << "fftGPUbuf allocated.    ";
-	  cudaMemGetInfo(&free, &total);
-	  std::cout << std::setw(8) << fftGPUbuf.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
+      GPUBuffer G_kminus2(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // previous X_k - Y_k (change between prediction and acceleration)
+      std::cout << "G_kminus2 allocated.    ";
+      cudaMemGetInfo(&free, &total);
+      std::cout << std::setw(8) << G_kminus2.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
 
-	  double lambda = 0; // acceleration factor
-	  float eps = std::numeric_limits<float>::epsilon();
+      /*  testing using 2D texture for OTF interpolation
+        CImg<> realpart(otf.width()/2, otf.height()), imagpart(realpart);
+      #pragma omp parallel for
+        cimg_forXY(realpart, x, y) {
+          realpart(x, y) = otf(2*x  , y);
+          imagpart(x, y) = otf(2*x+1, y);
+        }
+
+        prepareOTFtexture(realpart.data(), imagpart.data(), realpart.width(), realpart.height());
+
+        CPUBuffer interpOTF(d_interpOTF); //.getSize());
+        // d_interpOTF.set(&interpOTF, 0, interpOTF.getSize(), 0);
+
+        CImg<float> otfarr((float *) interpOTF.getPtr(), nz*2, nx/2+1);
+        otfarr.save("interpOTF.tif");
+
+        return;
+        debugging code ends
+      */
+      // Allocate GPU buffer for temp FFT result
+      GPUBuffer fftGPUbuf(nz * nxy2 * sizeof(cuFloatComplex), myGPUdevice, UseOnlyHostMem); // This is the complex FFT output.
+      std::cout << "fftGPUbuf allocated.    ";
+      cudaMemGetInfo(&free, &total);
+      std::cout << std::setw(8) << fftGPUbuf.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
 
-	  //****************************************************************************
-	  //****************************RL Iterations ***********************************
-	  //****************************************************************************
-
-	  // R-L iteration
-	  for (int k = 0; k < nIter; k++) {
+      double lambda = 0; // acceleration factor
+      float eps = std::numeric_limits<float>::epsilon();
 
 
-		  std::cout << "Iteration ";
-		  int OldstdoutWidth = std::cout.width(2);
-		  std::cout << k;
-		  std::cout.width(OldstdoutWidth);
-		  std::cout << ". ";
+      //****************************************************************************
+      //****************************RL Iterations ***********************************
+      //****************************************************************************
 
-		  char GPUmessage[50];
-		  sprintf(GPUmessage, "Iter %d", k);
-		  PUSH_RANGE(GPUmessage, k)
-
-			  // a. Make an image predictions for the next iteration    
-			  if (k > 1) {
-				  lambda = calcAccelFactor(G_kminus1, G_kminus2, nx, ny, nz, eps, myGPUdevice); // (G_km1 dot G_km2) / (G_km2 dot G_km2)
-				  lambda = std::max(std::min(lambda, 1.), 0.); // stability enforcement
-
-				  printf("Lambda = %.2f. ", lambda);
-
-				  updatePrediction(Y_k, X_k, X_kminus1, lambda, nx, ny, nz, devProp->maxGridSize[2]); // Y_k = X_k + lambda * (X_k - X_kminus1)
-			  }
-
-			  else if (bFlatStartGuess && k == 0)
-			  {
-				  std::cout << "Median. ";
-				  CImg<float> FlatStartGuess(raw, "xyzc", my_median); //create a buffer and fill with median value of image.
-				  std::cout << "Copy Median to Y_k. ";
-				  cutilSafeCall(cudaHostRegister(FlatStartGuess.data(), nz*nxy * sizeof(float), cudaHostRegisterPortable)); //pin the host RAM
-				  // transfer host data to GPU
-				  cutilSafeCall(cudaMemcpy(Y_k.getPtr(), FlatStartGuess.data(), nz*nxy * sizeof(float),
-					  cudaMemcpyDefault));
-				  cutilSafeCall(cudaHostUnregister(FlatStartGuess.data()));
-				  ~FlatStartGuess;
-			  }
-			  else
-			  {
-				  std::cout << "Cpy X_k to Y_k.";
-				  Y_k = X_k; // copy data (not pointer) from X_k to Y_k (= operator has been redefined)
-			  }
+      // R-L iteration
+      for (int k = 0; k < nIter; k++) {
 
 
-		  std::cout << "Copy X_k to X_k-1. ";
-		  cutilSafeCall(cudaMemcpyAsync(X_kminus1.getPtr(), X_k.getPtr(),				//copy previous guess to X_kminus1
-			  X_k.getSize(), cudaMemcpyDefault));
+          std::cout << "Iteration ";
+          int OldstdoutWidth = std::cout.width(2);
+          std::cout << k;
+          std::cout.width(OldstdoutWidth);
+          std::cout << ". ";
 
-		  if (k > 0) {
-			  std::cout << "Copy G_k-1 to G_k-2. ";
-			  cutilSafeCall(cudaMemcpyAsync(G_kminus2.getPtr(), G_kminus1.getPtr(),
-				  G_kminus1.getSize(), cudaMemcpyDefault));
-		  }
+          char GPUmessage[50];
+          sprintf(GPUmessage, "Iter %d", k);
+          PUSH_RANGE(GPUmessage, k)
+
+              // a. Make an image predictions for the next iteration
+              if (k > 1) {
+                  lambda = calcAccelFactor(G_kminus1, G_kminus2, nx, ny, nz, eps, myGPUdevice); // (G_km1 dot G_km2) / (G_km2 dot G_km2)
+                  lambda = std::max(std::min(lambda, 1.), 0.); // stability enforcement
+
+                  printf("Lambda = %.2f. ", lambda);
+
+                  updatePrediction(Y_k, X_k, X_kminus1, lambda, nx, ny, nz, devProp->maxGridSize[2]); // Y_k = X_k + lambda * (X_k - X_kminus1)
+              }
+
+              else if (bFlatStartGuess && k == 0)
+              {
+                  std::cout << "Median. ";
+                  CImg<float> FlatStartGuess(raw, "xyzc", my_median); //create a buffer and fill with median value of image.
+                  std::cout << "Copy Median to Y_k. ";
+                  cutilSafeCall(cudaHostRegister(FlatStartGuess.data(), nz*nxy * sizeof(float), cudaHostRegisterPortable)); //pin the host RAM
+                  // transfer host data to GPU
+                  cutilSafeCall(cudaMemcpy(Y_k.getPtr(), FlatStartGuess.data(), nz*nxy * sizeof(float),
+                      cudaMemcpyDefault));
+                  cutilSafeCall(cudaHostUnregister(FlatStartGuess.data()));
+                  ~FlatStartGuess;
+              }
+              else
+              {
+                  std::cout << "Cpy X_k to Y_k.";
+                  Y_k = X_k; // copy data (not pointer) from X_k to Y_k (= operator has been redefined)
+              }
 
 
-		  std::cout << "Filter1. ";
-		  // b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
-		  CC = Y_k;
-		  filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
-			  false, devProp->maxGridSize[2]);
+          std::cout << "Copy X_k to X_k-1. ";
+          cutilSafeCall(cudaMemcpyAsync(X_kminus1.getPtr(), X_k.getPtr(),               //copy previous guess to X_kminus1
+              X_k.getSize(), cudaMemcpyDefault));
+
+          if (k > 0) {
+              std::cout << "Copy G_k-1 to G_k-2. ";
+              cutilSafeCall(cudaMemcpyAsync(G_kminus2.getPtr(), G_kminus1.getPtr(),
+                  G_kminus1.getSize(), cudaMemcpyDefault));
+          }
 
 
-		  // if (k==0) {
-		  //   CPUBuffer CC_cpu(CC);
-		  //   CImg<> CCimg((float *) CC_cpu.getPtr(), nx, ny, nz, 1, true);
-		  //   CCimg.save_tiff("afterFilter0.tif");
-		  // }
-
-		  std::cout << "LRcore. ";
-
-		  calcLRcore(CC, rawGPUbuf, nx, ny, nz, devProp->maxGridSize[2]);
+          std::cout << "Filter1. ";
+          // b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
+          CC = Y_k;
+          filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
+              false, devProp->maxGridSize[2]);
 
 
-		  // c. Determine next iteration image & apply positivity constraint
-		  // X_kminus1 = X_k;
+          // if (k==0) {
+          //   CPUBuffer CC_cpu(CC);
+          //   CImg<> CCimg((float *) CC_cpu.getPtr(), nx, ny, nz, 1, true);
+          //   CCimg.save_tiff("afterFilter0.tif");
+          // }
 
-		  std::cout << "Filter2. ";
-		  filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
-			  true, devProp->maxGridSize[2]);
+          std::cout << "LRcore. ";
+
+          calcLRcore(CC, rawGPUbuf, nx, ny, nz, devProp->maxGridSize[2]);
 
 
-		  updateCurrEstimate(X_k, CC, Y_k, nx, ny, nz, devProp->maxGridSize[2]); //updated current estimate: Y_k * CC plus positivity constraint. "X_k" is updated upon return.
+          // c. Determine next iteration image & apply positivity constraint
+          // X_kminus1 = X_k;
 
-		  // G_kminus2 = G_kminus1;
-		  calcCurrPrevDiff(X_k, Y_k, G_kminus1, nx, ny, nz, devProp->maxGridSize[2]); //G_kminus1 = X_k - Y_k change from RL
-		  std::cout << "Done. " << std::endl;
-		  POP_RANGE
-	  }
+          std::cout << "Filter2. ";
+          filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
+              true, devProp->maxGridSize[2]);
+
+
+          updateCurrEstimate(X_k, CC, Y_k, nx, ny, nz, devProp->maxGridSize[2]); //updated current estimate: Y_k * CC plus positivity constraint. "X_k" is updated upon return.
+
+          // G_kminus2 = G_kminus1;
+          calcCurrPrevDiff(X_k, Y_k, G_kminus1, nx, ny, nz, devProp->maxGridSize[2]); //G_kminus1 = X_k - Y_k change from RL
+          std::cout << "Done. " << std::endl;
+          POP_RANGE
+      }
   } // iterations complete. Deallocate GPUbuffers that we don't need.  Just keep X_k
   //************************************************************************************
   //****************************RL Iterations complete**********************************
@@ -370,11 +397,28 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     // even though X_k contains double-sized stack.
     nz /= 2;
 
+  if (bSkewedDecon && fabs(deskewFactor) > 0.0) { //deskew after decon
+    GPUBuffer deskewedAfter(nz * ny * deskewedNx * sizeof(float), myGPUdevice, UseOnlyHostMem);
+    std::cout << "deskewedAfter allocated.  ";
+    cudaMemGetInfo(&free, &total);
+    std::cout << std::setw(8) << deskewedAfter.getSize() / (1<<20) << "MB" << std::setw(8) << free / (1<<20) << "MB free" ;
+
+    std::cout << " Deskewing after deconv... ";
+    deskew_GPU(X_k, nx, ny, nz, deskewFactor, deskewedAfter, deskewedNx, extraShift);
+    X_k = deskewedAfter;
+    nx = deskewedNx;
+    nxy = nx * ny;
+    cutilSafeCall(cudaHostUnregister(raw.data()));
+    raw.clear();
+    raw.assign(nx, ny, nz, 1);
+    cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
+  }
+
   // Rotate decon result if requested:
-  
+
   if (rotationMatrix.getSize()) {
-	  std::cout << "Rotating...";
-    
+      std::cout << "Rotating...";
+
     float *p = (float *) rotationMatrix.getPtr();
     // Refer to rotMatrix definition in main():
     int nz_afterRot = nz * p[3] / p[0];
@@ -393,20 +437,20 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     cutilSafeCall(cudaMemcpy(raw.data(), d_rotatedResult.getPtr(),
                              nz_afterRot * nx_afterRot * ny * sizeof(float),
                              cudaMemcpyDefault));
-	std::cout << "Done." << std::endl;
+    std::cout << "Done." << std::endl;
   }
 
   else {
     // Download from device memory back to "raw":
     cutilSafeCall(cudaMemcpy(raw.data(), X_k.getPtr(), nz*nxy*sizeof(float),
-		cudaMemcpyDefault));
+        cudaMemcpyDefault));
   }
 
   if (nIter > 0)
     cutilSafeCall(cudaHostUnregister(raw.data()));
 
   if (raw_deskewed.size())
-	cudaHostUnregister(raw_deskewed.data()); // ignore error
+    cudaHostUnregister(raw_deskewed.data()); // ignore error
 
 #ifndef NDEBUG
   printf("%f msecs\n", stopwatch.getTime());
@@ -459,7 +503,7 @@ unsigned get_output_nz()
     return output_nz;
   }
 
-  
+
 }
 
 int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
@@ -468,6 +512,7 @@ int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
                       float deskewAngle, // deskew
                       float rotationAngle,
                       int outputWidth,
+                      bool bSkewedDecon,
                       char * OTF_file_name) // device might not work, since d_interpOTF is a global and device is set at compile time.
 {
 
@@ -504,10 +549,22 @@ int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
     std::cerr << e.what() << std::endl; //OTF_file_name << " cannot be opened\n";
     return 0;
   }
-  unsigned nr_otf = complexOTF.height();
-  unsigned nz_otf = complexOTF.width() / 2;
-  float dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
-  float dkz_otf = 1/(nz_otf * dz_psf);
+  // unsigned nr_otf = complexOTF.height();
+  // unsigned nz_otf = complexOTF.width() / 2;
+  // float dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
+  // float dkz_otf = 1/(nz_otf * dz_psf);
+  unsigned nx_otf, ny_otf, nz_otf;
+  float dkx_otf, dkz_otf, dky_otf;
+  if (bSkewedDecon)
+    dz_psf *= fabs(sin(deskewAngle * M_PI/180.));
+  determine_OTF_dimensions(complexOTF, dr_psf, dz_psf, nx_otf, ny_otf, nz_otf,
+                           dkx_otf, dky_otf, dkz_otf);
+
+  GPUBuffer d_rawOTF(0, false);
+  d_rawOTF.resize(nx_otf * ny_otf * nz_otf * sizeof(cuFloatComplex));
+  cutilSafeCall(cudaMemcpy(d_rawOTF.getPtr(), complexOTF.data(),
+                           d_rawOTF.getSize(), cudaMemcpyDefault));
+
 
   // Obtain deskew factor and new x dimension if deskew is run:
   deskewFactor = 0.;
@@ -523,7 +580,7 @@ int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
 
     deskewedXdim = findOptimalDimension(deskewedXdim);
     // update z step size: (this is fine even though dz is a function parameter)
-    dz *= sin(deskewAngle * M_PI/180.);
+    dz *= fabs(sin(deskewAngle * M_PI/180.));
   }
 
   // Construct rotation matrix:
@@ -555,14 +612,18 @@ int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
   float dky = 1.0/(dr * output_ny);
   float dkz = 1.0/(dz * output_nz);
   float eps = std::numeric_limits<float>::epsilon();
-  transferConstants(deskewedXdim, output_ny, output_nz, nr_otf, nz_otf,
-                    dkx/dkr_otf, dky/dkr_otf, dkz/dkz_otf,
-                    eps, complexOTF.data());
+  transferConstants(deskewedXdim, output_ny, output_nz, nx_otf, ny_otf, nz_otf,
+                    dkx/dkx_otf, dky/dky_otf, dkz/dkz_otf, eps);
 
   // make a 3D interpolated OTF array:
-  d_interpOTF.resize(output_nz * output_ny * (deskewedXdim+2) * sizeof(float));
-  // catch exception here
-  makeOTFarray(d_interpOTF, deskewedXdim, output_ny, output_nz);
+  if (bSkewedDecon) {
+    d_interpOTF.resize(output_nz * output_ny * (output_nx/2+1)* 2 * sizeof(float));
+    makeOTFarray(d_rawOTF, d_interpOTF, deskewedXdim, output_ny, output_nz);
+  }
+  else {
+    d_interpOTF.resize(output_nz * output_ny * (deskewedXdim+2) * sizeof(float));
+    makeOTFarray(d_rawOTF, d_interpOTF, deskewedXdim, output_ny, output_nz);
+  }
   return 1;
 }
 
@@ -577,7 +638,8 @@ int RL_interface(const unsigned short * const raw_data,
                  int extraShift,
                  int napodize, int nZblend,
                  float padVal,
-                 bool bDupRevStack
+                 bool bDupRevStack,
+                 bool bSkewedDecon
                  )
 {
 
@@ -588,7 +650,7 @@ int RL_interface(const unsigned short * const raw_data,
     raw_image.crop(0, 0, 0, 0, output_nx-1, output_ny-1, output_nz-1, 0);
 
   cudaDeviceProp deviceProp;
-  cudaGetDeviceProperties(&deviceProp, 0); 
+  cudaGetDeviceProperties(&deviceProp, 0);
 
   // Finally do calculation including deskewing, decon, rotation:
   CImg<> raw_deskewed;
@@ -601,7 +663,8 @@ int RL_interface(const unsigned short * const raw_data,
   RichardsonLucy_GPU(raw_image, background, d_interpOTF, nIters,
                      deskewFactor, deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
                      rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp,
-                     bFlatStartGuess, my_median, bDoRescale, padVal, bDupRevStack, false);
+                     bFlatStartGuess, my_median, bDoRescale, padVal, bDupRevStack,
+                     bSkewedDecon, false);
 
   // Copy deconvolved data, stored in raw_image, to "result" for return:
   memcpy(result, raw_image.data(), raw_image.size() * sizeof(float));

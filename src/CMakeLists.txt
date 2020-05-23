@@ -10,7 +10,7 @@
 ######################################################################
 
 
-cmake_minimum_required (VERSION 3.12)
+cmake_minimum_required (VERSION 3.10)
 # cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
 # cmake_policy(SET CMP0012 NEW) #Set IF statements to use values of numbers and booleans rather than pretend that they could be variables
 
@@ -26,7 +26,7 @@ set(PROJECT_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 # set -fPIC for all targets (for shared libraries)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-add_compile_definitions(cimg_display=0)
+#add_compile_definitions(cimg_display=0)
 
 ######################################################################
 #
@@ -72,7 +72,7 @@ foreach(config DEBUG RELEASE RELWITHDEBINFO MINSIZEREL)
 
     foreach(var CMAKE_ARCHIVE_OUTPUT_DIRECTORY_${config} CMAKE_LIBRARY_OUTPUT_DIRECTORY_${config} CMAKE_RUNTIME_OUTPUT_DIRECTORY_${config})
         set(${var} "${CMAKE_BINARY_DIR}/${platform_dir}-${config}")
-        string(TOLOWER "${${var}}" ${var})
+        string(TOLOWER "${${var}}" ${var})  ## why TOLOWER?? --lin
     endforeach()
 
 endforeach()

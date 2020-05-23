@@ -22,15 +22,14 @@ __constant__ unsigned const_nx;
 __constant__ unsigned const_ny;
 __constant__ unsigned const_nz;
 __constant__ unsigned const_nxyz;
-__constant__ unsigned const_nrotf;
+__constant__ unsigned const_nxotf;
+__constant__ unsigned const_nyotf;
 __constant__ unsigned const_nzotf;
 
 __constant__ float const_kxscale;
 __constant__ float const_kyscale;
 __constant__ float const_kzscale;
 __constant__ float const_eps;
-__constant__ cuFloatComplex
-    const_otf[7680]; // 60 kB should be enough for an OTF array?? (float2 = 8 bytes, so 7680 = 61,440 bytes) GPU Max is 65,536 bytes
 
 __global__ void filter_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF,
                               int size);
@@ -70,22 +69,25 @@ template <class T> struct SharedMemory {
 // texture<float, cudaTextureType2D, cudaReadModeElementType> texRef1, texRef2;
 // cudaArray* d_realpart, *d_imagpart;  // used for OTF texture
 
-__host__ void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
+__host__ void transferConstants(int nx, int ny, int nz, int nxotf, int nyotf, int nzotf,
                                 float kxscale, float kyscale, float kzscale,
-                                float eps, float *h_otf) {
-  cutilSafeCall(cudaMemcpyToSymbol(const_nx, &nx, sizeof(int))); // this could fail with "invalid device symbol" if the code is not compiled for this device compute capability. https://devtalk.nvidia.com/default/topic/474415/cuda-programming-and-performance/copy-to-constant-memory-fails/post/3376488/#3376488
+                                float eps) {
+  cutilSafeCall(cudaMemcpyToSymbol(const_nx, &nx, sizeof(int)));
+  /* this could fail with "invalid device symbol" if the code is not compiled
+  for this device compute capability.
+  https://devtalk.nvidia.com/default/topic/474415/cuda-programming-and-performance/copy-to-constant-memory-fails/post/3376488/#3376488
+  */
   cutilSafeCall(cudaMemcpyToSymbol(const_ny, &ny, sizeof(int)));
   cutilSafeCall(cudaMemcpyToSymbol(const_nz, &nz, sizeof(int)));
   unsigned int nxyz = nx * ny * nz;
   cutilSafeCall(cudaMemcpyToSymbol(const_nxyz, &nxyz, sizeof(unsigned int)));
-  cutilSafeCall(cudaMemcpyToSymbol(const_nrotf, &nrotf, sizeof(int)));
+  cutilSafeCall(cudaMemcpyToSymbol(const_nxotf, &nxotf, sizeof(int)));
+  cutilSafeCall(cudaMemcpyToSymbol(const_nyotf, &nyotf, sizeof(int)));
   cutilSafeCall(cudaMemcpyToSymbol(const_nzotf, &nzotf, sizeof(int)));
   cutilSafeCall(cudaMemcpyToSymbol(const_kxscale, &kxscale, sizeof(float)));
   cutilSafeCall(cudaMemcpyToSymbol(const_kyscale, &kyscale, sizeof(float)));
   cutilSafeCall(cudaMemcpyToSymbol(const_kzscale, &kzscale, sizeof(float)));
   cutilSafeCall(cudaMemcpyToSymbol(const_eps, &eps, sizeof(float)));
-  cutilSafeCall(
-      cudaMemcpyToSymbol(const_otf, h_otf, nrotf * nzotf * 2 * sizeof(float))); // load complex 2D OTF to GPU array. 
 }
 
 // __host__ void prepareOTFtexture(float * realpart, float * imagpart, int nx,
@@ -213,50 +215,91 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
 }
 
 // returns otfval at the given kx, ky, kz coordinates, based on the GPU 2D array "const_otf" which was loaded with "transferConstants"
-__device__ cuFloatComplex dev_otfinterpolate( // cuFloatComplex * d_otf,
-    float kx, float ky, float kz) 
+__device__ cuFloatComplex dev_otfinterpolate(cuFloatComplex * d_rawotf,
+    float kx, float ky, float kz)
 /* (kx, ky, kz) is Fourier space coords with origin at kx=ky=kz=0 and going
    betwen -nx(or ny,nz)/2 and +nx(or ny,nz)/2 */
 {
-  float krindex = sqrt(kx * kx + ky * ky);
-  float kzindex = (kz < 0 ? kz + const_nzotf : kz);
-
   cuFloatComplex otfval = make_cuFloatComplex(0.f, 0.f);
+  float kzindex = (kz<0 ? kz+const_nzotf : kz);
+  if (const_nyotf == 1) {// rotationally averaged raw OTF
+    float krindex = sqrt(kx*kx + ky*ky);
 
-  if (krindex < const_nrotf - 1 && kzindex < const_nzotf) {
-    // This should be rewritten using Textures for the interpolation. It will be
-    // much easier and faster!
-    int irindex, izindex, indices[2][2];
-    float ar, az;
+    if (krindex < const_nxotf-1 && kzindex < const_nzotf) {
+      int irindex, izindex, indices[2][2];
+      float ar, az;
 
-    irindex = floor(krindex);
-    izindex = floor(kzindex);
+      irindex = floor(krindex);
+      izindex = floor(kzindex);
 
-    ar = krindex - irindex;
-    az = kzindex - izindex; // az is always 0 for 2D case, and it'll just become
-                            // a 1D interp
+      ar = krindex - irindex;
+      az = kzindex - izindex;  // az is always 0 for 2D case, and it'll just become a 1D interp
 
-    if (izindex == const_nzotf - 1) {
-      indices[0][0] = irindex * const_nzotf + izindex;
-      indices[0][1] = irindex * const_nzotf;
-      indices[1][0] = (irindex + 1) * const_nzotf + izindex;
-      indices[1][1] = (irindex + 1) * const_nzotf;
-    } else {
-      indices[0][0] = irindex * const_nzotf + izindex;
-      indices[0][1] = irindex * const_nzotf + (izindex + 1);
-      indices[1][0] = (irindex + 1) * const_nzotf + izindex;
-      indices[1][1] = (irindex + 1) * const_nzotf + (izindex + 1);
+      if (izindex == const_nzotf-1) {
+        indices[0][0] = irindex*const_nzotf+izindex;
+        indices[0][1] = irindex*const_nzotf;
+        indices[1][0] = (irindex+1)*const_nzotf+izindex;
+        indices[1][1] = (irindex+1)*const_nzotf;
+      }
+      else {
+        indices[0][0] = irindex*const_nzotf+izindex;
+        indices[0][1] = irindex*const_nzotf+(izindex+1);
+        indices[1][0] = (irindex+1)*const_nzotf+izindex;
+        indices[1][1] = (irindex+1)*const_nzotf+(izindex+1);
+      }
+      otfval.x = (1-ar)*(d_rawotf[indices[0][0]].x*(1-az) + d_rawotf[indices[0][1]].x*az) +
+        ar*(d_rawotf[indices[1][0]].x*(1-az) + d_rawotf[indices[1][1]].x*az);
+      otfval.y = (1-ar)*(d_rawotf[indices[0][0]].y*(1-az) + d_rawotf[indices[0][1]].y*az) +
+        ar*(d_rawotf[indices[1][0]].y*(1-az) + d_rawotf[indices[1][1]].y*az);
     }
-    otfval.x = (1 - ar) * (const_otf[indices[0][0]].x * (1 - az) +
-                           const_otf[indices[0][1]].x * az) +
-               ar * (const_otf[indices[1][0]].x * (1 - az) +
-                     const_otf[indices[1][1]].x * az);
-    otfval.y = (1 - ar) * (const_otf[indices[0][0]].y * (1 - az) +
-                           const_otf[indices[0][1]].y * az) +
-               ar * (const_otf[indices[1][0]].y * (1 - az) +
-                     const_otf[indices[1][1]].y * az);
   }
+  else {  // non-RA raw OTF
+    float kxindex = kx; // because of half kx dimension; and no need for conj concern; check!
+    float kyindex = (ky < 0? ky + const_nyotf : ky);
+    if (kxindex < const_nxotf-1 && kyindex < const_nyotf && kzindex < const_nzotf) {
+      int ixindex, iyindex, izindex, indices[2][2][2];
+      float ax, ay, az;
 
+      ixindex = floor(kxindex);
+      iyindex = floor(kyindex);
+      izindex = floor(kzindex);
+
+      int iyindex_plus_1 = (iyindex+1) % const_nyotf;
+      int izindex_plus_1 = (izindex+1) % const_nzotf;
+      ax = kxindex - ixindex;
+      ay = kyindex - iyindex;
+      az = kzindex - izindex;
+      int nxyotf = const_nxotf * const_nyotf;
+
+      // Find the 8 vertices surrounding the point (kxindex, kyindex, kzindex)
+      indices[0][0][0] = izindex*nxyotf        + iyindex*const_nxotf        + ixindex;
+      indices[0][0][1] = izindex*nxyotf        + iyindex*const_nxotf        + (ixindex+1);
+      indices[0][1][0] = izindex*nxyotf        + iyindex_plus_1*const_nxotf + ixindex;
+      indices[0][1][1] = izindex*nxyotf        + iyindex_plus_1*const_nxotf + (ixindex+1);
+      indices[1][0][0] = izindex_plus_1*nxyotf + iyindex*const_nxotf        + ixindex;
+      indices[1][0][1] = izindex_plus_1*nxyotf + iyindex*const_nxotf        + (ixindex+1);
+      indices[1][1][0] = izindex_plus_1*nxyotf + iyindex_plus_1*const_nxotf + ixindex;
+      indices[1][1][1] = izindex_plus_1*nxyotf + iyindex_plus_1*const_nxotf + (ixindex+1);
+
+      otfval.x = (1-az)*(d_rawotf[indices[0][0][0]].x*(1-ay)*(1-ax) +
+                       d_rawotf[indices[0][0][1]].x*(1-ay)*ax +
+                       d_rawotf[indices[0][1][0]].x*ay*(1-ax) +
+                       d_rawotf[indices[0][1][1]].x*ay*ax)    +
+                   az*(d_rawotf[indices[1][0][0]].x*(1-ay)*(1-ax) +
+                       d_rawotf[indices[1][0][1]].x*(1-ay)*ax +
+                       d_rawotf[indices[1][1][0]].x*ay*(1-ax) +
+                       d_rawotf[indices[1][1][1]].x*ay*ax);
+      otfval.y = (1-az)*(d_rawotf[indices[0][0][0]].y*(1-ay)*(1-ax) +
+                       d_rawotf[indices[0][0][1]].y*(1-ay)*ax +
+                       d_rawotf[indices[0][1][0]].y*ay*(1-ax) +
+                       d_rawotf[indices[0][1][1]].y*ay*ax)    +
+                   az*(d_rawotf[indices[1][0][0]].y*(1-ay)*(1-ax) +
+                       d_rawotf[indices[1][0][1]].y*(1-ay)*ax +
+                       d_rawotf[indices[1][1][0]].y*ay*(1-ax) +
+                       d_rawotf[indices[1][1][1]].y*ay*ax);
+    }
+  }
+  // This could be rewritten using Textures for the interpolation?
   // float krindex = sqrt(kx*kx + ky*ky) / const_nrotf;
   // float kzindex = (kz<0 ? kz+const_nzotf : kz) / const_nzotf;
 
@@ -288,29 +331,29 @@ __global__ void filterConj_kernel(cuFloatComplex *devImg,
   }
 }
 
-__global__ void makeOTFarray_kernel(cuFloatComplex *result) {
+__global__ void makeOTFarray_kernel(cuFloatComplex *src, cuFloatComplex *result) {
   unsigned kx = blockIdx.x * blockDim.x + threadIdx.x;
   // x>>1 is equivalent to x/2 when x is integer
   int ky = blockIdx.y > const_ny >> 1 ? blockIdx.y - const_ny : blockIdx.y;
   int kz = blockIdx.z > const_nz >> 1 ? blockIdx.z - const_nz : blockIdx.z;
 
-  if (kx < const_nx / 2 + 1) {
-    cuFloatComplex otf_val = dev_otfinterpolate(
-        kx * const_kxscale, ky * const_kyscale, kz * const_kzscale);
-    unsigned ind = blockIdx.z * (const_nx / 2 + 1) * const_ny +
-                   blockIdx.y * (const_nx / 2 + 1) + kx;
+  int half_nx = (const_nx>>1) + 1;
+  if (kx < half_nx) {
+    cuFloatComplex otf_val = dev_otfinterpolate(src, kx*const_kxscale, ky*const_kyscale, kz*const_kzscale);
+    unsigned ind = blockIdx.z * half_nx * const_ny  + blockIdx.y * half_nx + kx;
     result[ind].x = otf_val.x;
     result[ind].y = otf_val.y;
   }
 }
 
-__host__ void makeOTFarray(GPUBuffer &otfarray, int nx, int ny, int nz) {
+__host__ void makeOTFarray(GPUBuffer &raw_otfarray, GPUBuffer &otfarray, int nx, int ny, int nz) {
   unsigned nThreads = 128;
   dim3 block(nThreads, 1, 1);
   unsigned blockNx = ceil((nx / 2 + 1) / (float)nThreads);
   dim3 grid(blockNx, ny, nz);
 
-  makeOTFarray_kernel<<<grid, block>>>((cuFloatComplex *)otfarray.getPtr());
+  makeOTFarray_kernel<<<grid, block>>>((cuFloatComplex *) raw_otfarray.getPtr(),
+                                       (cuFloatComplex *)otfarray.getPtr());
 #ifndef NDEBUG
   std::cout << "makeOTFarray(): " << cudaGetErrorString(cudaGetLastError())
             << std::endl;
