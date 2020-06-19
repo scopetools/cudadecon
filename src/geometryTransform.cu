@@ -23,7 +23,7 @@ __global__ void deskew_kernel(float *in, int nx, int ny, int nz,
       unsigned indin = zout * nx * ny + yout * nx + (unsigned int) floor(xin);
 
       float offset = xin - floor(xin);
-      out[indout] = (1-offset) * in[indin] + offset * in[indin+1];
+      out[indout] = (1-offset) * in[indin] + offset * in[indin+1]; // linear interpolation done within each slice (i.e. along x)
     }
     else
       out[indout] = padVal;
