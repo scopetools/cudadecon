@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
   // Step 1: call RL_interface_init() once for all images to be 
   // acquired at this session; see linearDecon.h for detailed parameter descriptions
   RL_interface_init(raw.width(), raw.height(), raw.depth(),
-                    .104, .4, .104, .1, -32.8, -32.8, 0, 0, argv[2]);
+                    .104, .4, .104, .1, -32.8, -32.8, 0, 0, 0, argv[2]);
 
   // Step 2: allocate buffer for result image, whose dimension might be different than 
   // the raw because CUFFT prefers dimensions to be factorizable to 2, 3, 5, and 7

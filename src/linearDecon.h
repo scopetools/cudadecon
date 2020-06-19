@@ -32,7 +32,7 @@
 #include <math.h>
 
 #define cimg_use_tiff
-#define cimg_display 0
+//#define cimg_display 0
 #include <CImg.h>
 using namespace cimg_library;
 
@@ -158,7 +158,8 @@ void RichardsonLucy_GPU(CImg<> &raw, float background, GPUBuffer &otf,
 CImg<> MaxIntProj(CImg<> &input, int axis);
 
 void transferConstants(int nx, int ny, int nz, int nxotf, int nyotf, int nzotf,
-                       float kxscale, float kyscale, float kzscale, float eps);
+                       float kxscale, float kyscale, float kzscale, int bLR,
+                       float eps);
 unsigned findOptimalDimension(unsigned inSize, int step = -1);
 // void prepareOTFtexture(float * realpart, float * imagpart, int nx, int ny);
 void determine_OTF_dimensions(CImg<> &complexOTF, float dr_psf, float dz_psf,
@@ -170,7 +171,7 @@ void backgroundSubtraction_GPU(GPUBuffer &img, int nx, int ny, int nz,
                                float background, unsigned maxGridXdim);
 
 void filterGPU(GPUBuffer &img, int nx, int ny, int nz, cufftHandle &rfftplan,
-               cufftHandle &rfftplanInv, GPUBuffer &fftBuf, GPUBuffer &otf,
+               cufftHandle &rfftplanInv, cufftHandle &, GPUBuffer &fftBuf, GPUBuffer &otf,
                bool bConj, unsigned maxGridXdim);
 
 void calcLRcore(GPUBuffer &reblurred, GPUBuffer &raw, int nx, int ny, int nz,
@@ -215,7 +216,7 @@ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz,
                                unsigned maxGridXdim, int myGPUdevice);
 void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale,
                  unsigned maxGridXdim);
-void apodize_GPU(GPUBuffer *image, int nx, int ny, int nz, int napodize);
+void apodize_GPU(GPUBuffer &image, int nx, int ny, int nz, int napodize);
 void zBlend_GPU(GPUBuffer &image, int nx, int ny, int nz, int nZblend);
 
 void duplicateReversedStack_GPU(GPUBuffer &in, int nx, int ny, int nz);
@@ -263,6 +264,7 @@ void makeNewDir(std::string subdirname);
                                       float dz, float dr_psf, float dz_psf,
                                       float deskewAngle, float rotationAngle,
                                       int outputWidth, bool bSkewedDecon,
+                                      bool bNoLimitRatio,
                                       char *OTF_file_name);
 
   //! RL_interface() to run deconvolution

@@ -30,6 +30,7 @@ __constant__ float const_kxscale;
 __constant__ float const_kyscale;
 __constant__ float const_kzscale;
 __constant__ float const_eps;
+__constant__ int   const_bNoLimitRatio;
 
 __global__ void filter_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF,
                               int size);
@@ -71,7 +72,7 @@ template <class T> struct SharedMemory {
 
 __host__ void transferConstants(int nx, int ny, int nz, int nxotf, int nyotf, int nzotf,
                                 float kxscale, float kyscale, float kzscale,
-                                float eps) {
+                                int bNoLimitRatio, float eps) {
   cutilSafeCall(cudaMemcpyToSymbol(const_nx, &nx, sizeof(int)));
   /* this could fail with "invalid device symbol" if the code is not compiled
   for this device compute capability.
@@ -87,6 +88,7 @@ __host__ void transferConstants(int nx, int ny, int nz, int nxotf, int nyotf, in
   cutilSafeCall(cudaMemcpyToSymbol(const_kxscale, &kxscale, sizeof(float)));
   cutilSafeCall(cudaMemcpyToSymbol(const_kyscale, &kyscale, sizeof(float)));
   cutilSafeCall(cudaMemcpyToSymbol(const_kzscale, &kzscale, sizeof(float)));
+  cutilSafeCall(cudaMemcpyToSymbol(const_bNoLimitRatio, &bNoLimitRatio, sizeof(int)));
   cutilSafeCall(cudaMemcpyToSymbol(const_eps, &eps, sizeof(float)));
 }
 
@@ -121,7 +123,7 @@ __host__ void transferConstants(int nx, int ny, int nz, int nxotf, int nyotf, in
 //   cudaBindTextureToArray(texRef2, d_imagpart, channelDesc);
 // }
 
-__global__ void bgsubtr_kernel(float *img, int size, float background) {
+__global__ void bgsubtr_kernel(float *img, size_t size, float background) {
   unsigned ind =
       (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
 
@@ -137,9 +139,11 @@ __host__ void backgroundSubtraction_GPU(GPUBuffer &img, int nx, int ny, int nz,
   unsigned nThreads = 1024;
   unsigned NXblock = ceil(nx * ny * nz / (float)nThreads);
   unsigned NYblock = 1;
-  if (NXblock > maxGridXdim)
-    NYblock = NXblock = ceil(sqrt(NXblock));
-
+  if (NXblock > maxGridXdim) {
+	NYblock = NXblock / maxGridXdim;
+	NXblock = maxGridXdim;
+    // NYblock = NXblock = ceil(sqrt(NXblock));
+  }
   dim3 grid(NXblock, NYblock);
   dim3 block(nThreads);
 
@@ -152,8 +156,8 @@ __host__ void backgroundSubtraction_GPU(GPUBuffer &img, int nx, int ny, int nz,
 }
 
 __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
-                        // GPUBuffer &otf,
                         cufftHandle &rfftplan, cufftHandle &rfftplanInv,
+                        cufftHandle &rfftplan2D,
                         GPUBuffer &fftBuf, GPUBuffer &otfArray, bool bConj,
                         unsigned maxGridXdim)
 // "img" is of dimension (nx, ny, nz) and of float type
@@ -172,15 +176,29 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
   scale_kernel<<<gridDim, nThreads>>>((float *)img.getPtr(),
                                       1. / (nx * ny * nz));
 #ifndef NDEBUG
-  std::cout << "scale_kernel(): " << cudaGetErrorString(cudaGetLastError())
-            << std::endl;
+  std::cout << "scale_kernel(): " << cudaGetErrorString(cudaGetLastError()) << std::endl;
 #endif
-
-  cufftResult cuFFTErr = cufftExecR2C(rfftplan, (cufftReal *)img.getPtr(),
-                                      (cuFloatComplex *)fftBuf.getPtr());
-
+  cufftResult cuFFTErr;
+  unsigned strideR = ny * nx;
+  unsigned strideC = (nx/2 + 1) * ny;
+  
+  if (rfftplan2D == NULL)
+    cuFFTErr = cufftExecR2C(rfftplan, (cufftReal *)img.getPtr(),
+                            (cuFloatComplex *)fftBuf.getPtr());
+  else {  // implying 2-step 3D FFT
+	// First, 2D R2C FFT of all planes:
+	for (auto z=0; z<nz; z++) {
+	  cuFFTErr = cufftExecR2C(rfftplan2D, ((cufftReal *)img.getPtr()) + z*strideR,
+							  ((cuFloatComplex *)fftBuf.getPtr()) + z*strideC);
+	  if (cuFFTErr != CUFFT_SUCCESS) break;
+	}
+	// Second, a batch of in-place 1D C2C FFT along Z of all X-Y pixels:
+    if (cuFFTErr == CUFFT_SUCCESS)
+	  cuFFTErr = cufftExecC2C(rfftplan, (cuFloatComplex *)fftBuf.getPtr(),
+							  (cuFloatComplex *)fftBuf.getPtr(), CUFFT_FORWARD);
+  }
   if (cuFFTErr != CUFFT_SUCCESS) {
-    std::cout << "Line:" << __LINE__ << std::endl;
+    std::cerr << "Line:" << __LINE__ << " in function: " << __func__ << std::endl;
     throw std::runtime_error("cufft failed.");
   }
   //
@@ -189,7 +207,10 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
 
   unsigned arraySize = nz * ny * (nx / 2 + 1);
   NXblock = ceil(arraySize / (float)nThreads);
-  dim3 grid(NXblock);
+  NYblock = 1;
+  if (NXblock > maxGridXdim)
+    NXblock = NYblock = ceil(sqrt(NXblock));
+  dim3 grid(NXblock, NYblock);
   dim3 block(nThreads);
 
   if (bConj)
@@ -205,11 +226,28 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
             << std::endl;
 #endif
 
-  cuFFTErr = cufftExecC2R(rfftplanInv, (cuFloatComplex *)fftBuf.getPtr(),
-                          (cufftReal *)img.getPtr());
+  if (rfftplan2D == NULL)
+	cuFFTErr = cufftExecC2R(rfftplanInv, (cuFloatComplex *)fftBuf.getPtr(),
+							(cufftReal *)img.getPtr());
+  else {  // implying 2-step 3D IFFT
+	// First, a batch of in-place 1D C2C IFFT along Z of all X-Y pixels:
+	cuFFTErr = cufftExecC2C(rfftplan, (cuFloatComplex *) fftBuf.getPtr(),
+							(cuFloatComplex *) fftBuf.getPtr(), CUFFT_INVERSE);
+	if (cuFFTErr != CUFFT_SUCCESS) {
+	  std::cout << "Line:" << __LINE__ << " in function " << __func__ << std::endl;
+	  throw std::runtime_error("cufft failed.");
+	}
+	// Second, 2D C2R FFT of all planes:
+	for (auto z=0; z>=nz; z++) {
+	  cuFFTErr = cufftExecC2R(rfftplanInv, ((cuFloatComplex *) fftBuf.getPtr()) + z*strideC,
+							  ((cufftReal *) img.getPtr()) + z*strideR);
+	  // printf("z=%d\n", z);
+	  if (cuFFTErr != CUFFT_SUCCESS) break;
+	}
+  }
 
   if (cuFFTErr != CUFFT_SUCCESS) {
-    std::cout << "Line:" << __LINE__;
+    std::cout << "Line:" << __LINE__ << " in function " << __func__ << std::endl;
     throw std::runtime_error("cufft failed.");
   }
 }
@@ -394,7 +432,7 @@ __global__ void LRcore_kernel(float *img1, float *img2)
 //! Calculate img2/img1; results returned in img1
 {
   unsigned ind =
-      (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
+    (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
 
   if (ind < const_nxyz) {
     img1[ind] = fabs(img1[ind]) > 0 ? img1[ind] : const_eps;
@@ -403,10 +441,12 @@ __global__ void LRcore_kernel(float *img1, float *img2)
     img1[ind] = img2[ind] / img1[ind] + const_eps;
     // The following thresholding is necessary for occasional very high
     // DR data and incorrectly high background value specified (-b flag).
-    if (img1[ind] > 10)
-      img1[ind] = 10;
-    if (img1[ind] < -10)
-      img1[ind] = -10;
+    if (!const_bNoLimitRatio) {
+      if (img1[ind] > 10)
+        img1[ind] = 10;
+      if (img1[ind] < -10)
+        img1[ind] = -10;
+    }
   }
 }
 
@@ -726,7 +766,7 @@ __global__ void summation_kernel(float *img, double *intRes, int n)
   }
   // write result for this block to global mem
   if (tid == 0)
-    intRes[blockIdx.x] = sdata[0];
+    intRes[blockIdx.y*gridDim.x+blockIdx.x] = sdata[0];
 }
 
 __global__ void sumAboveThresh_kernel(float *img, double *intRes,
@@ -789,8 +829,8 @@ __global__ void sumAboveThresh_kernel(float *img, double *intRes,
   }
   // write result for this block to global mem
   if (tid == 0) {
-    intRes[blockIdx.x] = sdata[0];
-    counter[blockIdx.x] = count[0];
+    intRes [blockIdx.y*gridDim.x+blockIdx.x] = sdata[0];
+    counter[blockIdx.y*gridDim.x+blockIdx.x] = count[0];
   }
 }
 
@@ -810,8 +850,9 @@ __host__ void rescale_GPU(GPUBuffer &img, int nx, int ny, int nz, float scale,
 #endif
 }
 
-__host__ void apodize_GPU(GPUBuffer *image, int nx, int ny, int nz,
-                          int napodize) {
+__host__ void apodize_GPU(GPUBuffer &image, int nx, int ny, int nz,
+                          int napodize)
+{
   unsigned blockSize = 64;
   dim3 grid;
   grid.x = ceil((float)nx / blockSize);
@@ -819,11 +860,15 @@ __host__ void apodize_GPU(GPUBuffer *image, int nx, int ny, int nz,
   grid.z = 1;
 
   apodize_x_kernel<<<grid, blockSize>>>(napodize, nx, ny,
-                                        ((float *)image->getPtr()));
+                                        ((float *)image.getPtr()));
 
   grid.x = ceil((float)ny / blockSize);
   apodize_y_kernel<<<grid, blockSize>>>(napodize, nx, ny,
-                                        ((float *)image->getPtr()));
+                                        ((float *)image.getPtr()));
+#ifndef NDEBUG
+  std::cout << __func__ <<"(): " << cudaGetErrorString(cudaGetLastError())
+            << std::endl;
+#endif
 }
 
 __global__ void apodize_x_kernel(int napodize, int nx, int ny, float *image) {
