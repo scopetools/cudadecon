@@ -642,8 +642,8 @@ int main(int argc, char *argv[])
             if (!(fabs(deskewAngle) > 0.0) || bSkewedDecon) {
               new_nx = findOptimalDimension(startnx, step_size);
               if (new_nx%2 && new_nx>1000) // Lin: for unknown reason, an odd X dimension
-		// sometimes results in doubled cuFFT work size; to-do...
-		new_nx = findOptimalDimension(new_nx-1, step_size);
+                // sometimes results in doubled cuFFT work size; to-do...
+                new_nx = findOptimalDimension(new_nx-1, step_size);
               if (new_nx != startnx) {
                 printf("new nx=%d\n", new_nx);
                 bCrop = true;
@@ -1416,41 +1416,41 @@ int main(int argc, char *argv[])
 
 CImg<> MaxIntProj(CImg<> &input, int axis)
 {
-    CImg <> out;
+  CImg <> out;
 
-    if (axis==0) {
-        CImg<> maxvals(input.height(), input.depth());
-        maxvals = -1e10;
-        #pragma omp parallel for
-        cimg_forYZ(input, y, z) for (int x=0; x<input.width(); x++) {
-            if (input(x, y, z) > maxvals(y, z))
-                maxvals(y, z) = input(x, y, z);
-        }
-        return maxvals;
+  if (axis==0) {
+    CImg<> maxvals(input.height(), input.depth());
+    maxvals = -1e10;
+#pragma omp parallel for
+    cimg_forYZ(input, y, z) for (int x=0; x<input.width(); x++) {
+      if (input(x, y, z) > maxvals(y, z))
+        maxvals(y, z) = input(x, y, z);
     }
-    else if (axis==1) {
-        CImg<> maxvals(input.width(), input.depth());
-        maxvals = -1e10;
-        #pragma omp parallel for
-        cimg_forXZ(input, x, z) for (int y=0; y<input.height(); y++) {
-            if (input(x, y, z) > maxvals(x, z))
-                maxvals(x, z) = input(x, y, z);
-        }
-        return maxvals;
+    return maxvals;
+  }
+  else if (axis==1) {
+    CImg<> maxvals(input.width(), input.depth());
+    maxvals = -1e10;
+#pragma omp parallel for
+    cimg_forXZ(input, x, z) for (int y=0; y<input.height(); y++) {
+      if (input(x, y, z) > maxvals(x, z))
+        maxvals(x, z) = input(x, y, z);
     }
+    return maxvals;
+  }
 
-    else if (axis==2) {
-        CImg<> maxvals(input.width(), input.height());
-        maxvals = -1e10;
-        #pragma omp parallel for
-        cimg_forXY(input, x, y) for (int z=0; z<input.depth(); z++) {
-            if (input(x, y, z) > maxvals(x, y))
-                maxvals(x, y) = input(x, y, z);
-        }
-        return maxvals;
+  else if (axis==2) {
+    CImg<> maxvals(input.width(), input.height());
+    maxvals = -1e10;
+#pragma omp parallel for
+    cimg_forXY(input, x, y) for (int z=0; z<input.depth(); z++) {
+      if (input(x, y, z) > maxvals(x, y))
+        maxvals(x, y) = input(x, y, z);
     }
-    else {
-        throw std::runtime_error("unknown axis number in MaxIntProj()");
-    }
-    return out;
+    return maxvals;
+  }
+  else {
+    throw std::runtime_error("unknown axis number in MaxIntProj()");
+  }
+  return out;
 }

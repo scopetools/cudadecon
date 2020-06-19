@@ -32,7 +32,7 @@
 #include <math.h>
 
 #define cimg_use_tiff
-//#define cimg_display 0
+#define cimg_display 0
 #include <CImg.h>
 using namespace cimg_library;
 

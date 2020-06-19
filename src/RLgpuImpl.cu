@@ -140,8 +140,8 @@ __host__ void backgroundSubtraction_GPU(GPUBuffer &img, int nx, int ny, int nz,
   unsigned NXblock = ceil(nx * ny * nz / (float)nThreads);
   unsigned NYblock = 1;
   if (NXblock > maxGridXdim) {
-	NYblock = NXblock / maxGridXdim;
-	NXblock = maxGridXdim;
+    NYblock = NXblock / maxGridXdim;
+    NXblock = maxGridXdim;
     // NYblock = NXblock = ceil(sqrt(NXblock));
   }
   dim3 grid(NXblock, NYblock);
@@ -186,16 +186,16 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
     cuFFTErr = cufftExecR2C(rfftplan, (cufftReal *)img.getPtr(),
                             (cuFloatComplex *)fftBuf.getPtr());
   else {  // implying 2-step 3D FFT
-	// First, 2D R2C FFT of all planes:
-	for (auto z=0; z<nz; z++) {
-	  cuFFTErr = cufftExecR2C(rfftplan2D, ((cufftReal *)img.getPtr()) + z*strideR,
-							  ((cuFloatComplex *)fftBuf.getPtr()) + z*strideC);
-	  if (cuFFTErr != CUFFT_SUCCESS) break;
-	}
-	// Second, a batch of in-place 1D C2C FFT along Z of all X-Y pixels:
+    // First, 2D R2C FFT of all planes:
+    for (auto z=0; z<nz; z++) {
+      cuFFTErr = cufftExecR2C(rfftplan2D, ((cufftReal *)img.getPtr()) + z*strideR,
+                              ((cuFloatComplex *)fftBuf.getPtr()) + z*strideC);
+      if (cuFFTErr != CUFFT_SUCCESS) break;
+    }
+    // Second, a batch of in-place 1D C2C FFT along Z of all X-Y pixels:
     if (cuFFTErr == CUFFT_SUCCESS)
-	  cuFFTErr = cufftExecC2C(rfftplan, (cuFloatComplex *)fftBuf.getPtr(),
-							  (cuFloatComplex *)fftBuf.getPtr(), CUFFT_FORWARD);
+      cuFFTErr = cufftExecC2C(rfftplan, (cuFloatComplex *)fftBuf.getPtr(),
+                              (cuFloatComplex *)fftBuf.getPtr(), CUFFT_FORWARD);
   }
   if (cuFFTErr != CUFFT_SUCCESS) {
     std::cerr << "Line:" << __LINE__ << " in function: " << __func__ << std::endl;
@@ -227,23 +227,22 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
 #endif
 
   if (rfftplan2D == NULL)
-	cuFFTErr = cufftExecC2R(rfftplanInv, (cuFloatComplex *)fftBuf.getPtr(),
-							(cufftReal *)img.getPtr());
+    cuFFTErr = cufftExecC2R(rfftplanInv, (cuFloatComplex *)fftBuf.getPtr(),
+                            (cufftReal *)img.getPtr());
   else {  // implying 2-step 3D IFFT
-	// First, a batch of in-place 1D C2C IFFT along Z of all X-Y pixels:
-	cuFFTErr = cufftExecC2C(rfftplan, (cuFloatComplex *) fftBuf.getPtr(),
-							(cuFloatComplex *) fftBuf.getPtr(), CUFFT_INVERSE);
-	if (cuFFTErr != CUFFT_SUCCESS) {
-	  std::cout << "Line:" << __LINE__ << " in function " << __func__ << std::endl;
-	  throw std::runtime_error("cufft failed.");
-	}
-	// Second, 2D C2R FFT of all planes:
-	for (auto z=0; z>=nz; z++) {
-	  cuFFTErr = cufftExecC2R(rfftplanInv, ((cuFloatComplex *) fftBuf.getPtr()) + z*strideC,
-							  ((cufftReal *) img.getPtr()) + z*strideR);
-	  // printf("z=%d\n", z);
-	  if (cuFFTErr != CUFFT_SUCCESS) break;
-	}
+    // First, a batch of in-place 1D C2C IFFT along Z of all X-Y pixels:
+    cuFFTErr = cufftExecC2C(rfftplan, (cuFloatComplex *) fftBuf.getPtr(),
+                            (cuFloatComplex *) fftBuf.getPtr(), CUFFT_INVERSE);
+    if (cuFFTErr != CUFFT_SUCCESS) {
+      std::cout << "Line:" << __LINE__ << " in function " << __func__ << std::endl;
+      throw std::runtime_error("cufft failed.");
+    }
+    // Second, 2D C2R FFT of all planes:
+    for (auto z=0; z>=nz; z++) {
+      cuFFTErr = cufftExecC2R(rfftplanInv, ((cuFloatComplex *) fftBuf.getPtr()) + z*strideC,
+                              ((cufftReal *) img.getPtr()) + z*strideR);
+      if (cuFFTErr != CUFFT_SUCCESS) break;
+    }
   }
 
   if (cuFFTErr != CUFFT_SUCCESS) {
@@ -254,7 +253,7 @@ __host__ void filterGPU(GPUBuffer &img, int nx, int ny, int nz,
 
 // returns otfval at the given kx, ky, kz coordinates, based on the GPU 2D array "const_otf" which was loaded with "transferConstants"
 __device__ cuFloatComplex dev_otfinterpolate(cuFloatComplex * d_rawotf,
-    float kx, float ky, float kz)
+                                             float kx, float ky, float kz)
 /* (kx, ky, kz) is Fourier space coords with origin at kx=ky=kz=0 and going
    betwen -nx(or ny,nz)/2 and +nx(or ny,nz)/2 */
 {
@@ -320,21 +319,21 @@ __device__ cuFloatComplex dev_otfinterpolate(cuFloatComplex * d_rawotf,
       indices[1][1][1] = izindex_plus_1*nxyotf + iyindex_plus_1*const_nxotf + (ixindex+1);
 
       otfval.x = (1-az)*(d_rawotf[indices[0][0][0]].x*(1-ay)*(1-ax) +
-                       d_rawotf[indices[0][0][1]].x*(1-ay)*ax +
-                       d_rawotf[indices[0][1][0]].x*ay*(1-ax) +
-                       d_rawotf[indices[0][1][1]].x*ay*ax)    +
-                   az*(d_rawotf[indices[1][0][0]].x*(1-ay)*(1-ax) +
-                       d_rawotf[indices[1][0][1]].x*(1-ay)*ax +
-                       d_rawotf[indices[1][1][0]].x*ay*(1-ax) +
-                       d_rawotf[indices[1][1][1]].x*ay*ax);
+                         d_rawotf[indices[0][0][1]].x*(1-ay)*ax +
+                         d_rawotf[indices[0][1][0]].x*ay*(1-ax) +
+                         d_rawotf[indices[0][1][1]].x*ay*ax)    +
+        az*(d_rawotf[indices[1][0][0]].x*(1-ay)*(1-ax) +
+            d_rawotf[indices[1][0][1]].x*(1-ay)*ax +
+            d_rawotf[indices[1][1][0]].x*ay*(1-ax) +
+            d_rawotf[indices[1][1][1]].x*ay*ax);
       otfval.y = (1-az)*(d_rawotf[indices[0][0][0]].y*(1-ay)*(1-ax) +
-                       d_rawotf[indices[0][0][1]].y*(1-ay)*ax +
-                       d_rawotf[indices[0][1][0]].y*ay*(1-ax) +
-                       d_rawotf[indices[0][1][1]].y*ay*ax)    +
-                   az*(d_rawotf[indices[1][0][0]].y*(1-ay)*(1-ax) +
-                       d_rawotf[indices[1][0][1]].y*(1-ay)*ax +
-                       d_rawotf[indices[1][1][0]].y*ay*(1-ax) +
-                       d_rawotf[indices[1][1][1]].y*ay*ax);
+                         d_rawotf[indices[0][0][1]].y*(1-ay)*ax +
+                         d_rawotf[indices[0][1][0]].y*ay*(1-ax) +
+                         d_rawotf[indices[0][1][1]].y*ay*ax)    +
+        az*(d_rawotf[indices[1][0][0]].y*(1-ay)*(1-ax) +
+            d_rawotf[indices[1][0][1]].y*(1-ay)*ax +
+            d_rawotf[indices[1][1][0]].y*ay*(1-ax) +
+            d_rawotf[indices[1][1][1]].y*ay*ax);
     }
   }
   // This could be rewritten using Textures for the interpolation?
@@ -349,7 +348,8 @@ __device__ cuFloatComplex dev_otfinterpolate(cuFloatComplex * d_rawotf,
 }
 
 __global__ void filter_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF,
-                              int size) {
+                              int size)
+{
   unsigned ind = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (ind < size) {
@@ -359,7 +359,8 @@ __global__ void filter_kernel(cuFloatComplex *devImg, cuFloatComplex *devOTF,
 }
 
 __global__ void filterConj_kernel(cuFloatComplex *devImg,
-                                  cuFloatComplex *devOTF, int size) {
+                                  cuFloatComplex *devOTF, int size)
+{
   unsigned ind = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (ind < size) {
@@ -369,7 +370,8 @@ __global__ void filterConj_kernel(cuFloatComplex *devImg,
   }
 }
 
-__global__ void makeOTFarray_kernel(cuFloatComplex *src, cuFloatComplex *result) {
+__global__ void makeOTFarray_kernel(cuFloatComplex *src, cuFloatComplex *result)
+{
   unsigned kx = blockIdx.x * blockDim.x + threadIdx.x;
   // x>>1 is equivalent to x/2 when x is integer
   int ky = blockIdx.y > const_ny >> 1 ? blockIdx.y - const_ny : blockIdx.y;
@@ -384,7 +386,8 @@ __global__ void makeOTFarray_kernel(cuFloatComplex *src, cuFloatComplex *result)
   }
 }
 
-__host__ void makeOTFarray(GPUBuffer &raw_otfarray, GPUBuffer &otfarray, int nx, int ny, int nz) {
+__host__ void makeOTFarray(GPUBuffer &raw_otfarray, GPUBuffer &otfarray, int nx, int ny, int nz)
+{
   unsigned nThreads = 128;
   dim3 block(nThreads, 1, 1);
   unsigned blockNx = ceil((nx / 2 + 1) / (float)nThreads);
@@ -398,9 +401,10 @@ __host__ void makeOTFarray(GPUBuffer &raw_otfarray, GPUBuffer &otfarray, int nx,
 #endif
 }
 
-__global__ void scale_kernel(float *img, double factor) {
+__global__ void scale_kernel(float *img, double factor)
+{
   unsigned ind =
-      (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
+    (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
   if (ind < const_nxyz)
     img[ind] *= factor;
 }
@@ -465,17 +469,17 @@ __host__ void updateCurrEstimate(GPUBuffer &X_k, GPUBuffer &CC, GPUBuffer &Y_k,
   dim3 grid(NXBlocks, NYBlocks);
   dim3 block(nThreads);
 
-  currEstimate_kernel<<<grid, block>>>(
-      (float *)X_k.getPtr(), (float *)CC.getPtr(), (float *)Y_k.getPtr());
+  currEstimate_kernel<<<grid, block>>>((float *)X_k.getPtr(), (float *)CC.getPtr(),
+                                       (float *)Y_k.getPtr());
 #ifndef NDEBUG
   std::cout << "updateCurrEstimate(): "
             << cudaGetErrorString(cudaGetLastError()) << std::endl;
 #endif
 }
 
-__global__ void currEstimate_kernel(float *img1, float *img2, float *img3) {
-  unsigned ind =
-      (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
+__global__ void currEstimate_kernel(float *img1, float *img2, float *img3)
+{
+  unsigned ind = (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
 
   if (ind < const_nxyz) {
     img1[ind] = img2[ind] * img3[ind];
@@ -509,7 +513,8 @@ __host__ void calcCurrPrevDiff(GPUBuffer &X_k, GPUBuffer &Y_k,
 #endif
 }
 
-__global__ void currPrevDiff_kernel(float *img1, float *img2, float *img3) {
+__global__ void currPrevDiff_kernel(float *img1, float *img2, float *img3)
+{
   // compute x, y, z indices based on block and thread indices
   unsigned ind =
       (blockIdx.y * gridDim.x + blockIdx.x) * blockDim.x + threadIdx.x;
@@ -645,7 +650,8 @@ __global__ void innerProduct_kernel(float *img1, float *img2, double *intRes1)
 
 __host__ void updatePrediction(GPUBuffer &Y_k, GPUBuffer &X_k,
                                GPUBuffer &X_kminus1, double lambda, int nx,
-                               int ny, int nz, unsigned maxGridXdim) {
+                               int ny, int nz, unsigned maxGridXdim)
+{
   // Y_k = X_k + lambda * (X_k - X_kminus1)
   unsigned nThreads = 1024; // Maximum number of threads per block for C2070,
                             // M20990, or Quadro 4000
@@ -677,7 +683,8 @@ __global__ void updatePrediction_kernel(float *Y_k, float *X_k, float *X_km1,
 }
 
 __host__ double meanAboveBackground_GPU(GPUBuffer &img, int nx, int ny, int nz,
-                                        unsigned maxGridXdim, int myGPUdevice) {
+                                        unsigned maxGridXdim, int myGPUdevice)
+{
   unsigned nThreads = 1024;
   unsigned nXblocks = ceil(nx * ny * nz / (float)nThreads / 2);
   unsigned nYblocks = 1;
@@ -887,7 +894,8 @@ __global__ void apodize_x_kernel(int napodize, int nx, int ny, float *image) {
   }
 }
 
-__global__ void apodize_y_kernel(int napodize, int nx, int ny, float *image) {
+__global__ void apodize_y_kernel(int napodize, int nx, int ny, float *image)
+{
   int l = blockDim.x * blockIdx.x + threadIdx.x;
   if (l < ny) {
     unsigned section_offset = blockIdx.y * nx * ny;
@@ -904,7 +912,8 @@ __global__ void apodize_y_kernel(int napodize, int nx, int ny, float *image) {
 }
 
 __host__ void zBlend_GPU(GPUBuffer &image, int nx, int ny, int nz,
-                         int nZblend) {
+                         int nZblend)
+{
   dim3 block(32, 32);
   dim3 grid;
   grid.x = ceil((float)nx / 32);
@@ -916,7 +925,8 @@ __host__ void zBlend_GPU(GPUBuffer &image, int nx, int ny, int nz,
 }
 
 __global__ void zBlend_kernel(int nx, int ny, int nz, int nZblend,
-                              float *image) {
+                              float *image)
+{
   unsigned xidx = blockDim.x * blockIdx.x + threadIdx.x;
   unsigned yidx = blockDim.y * blockIdx.y + threadIdx.y;
 

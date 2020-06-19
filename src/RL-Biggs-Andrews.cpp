@@ -10,7 +10,7 @@
 
 
 
-#include <helper_timer.h>
+//#include <helper_timer.h>
 
 bool notGoodDimension(unsigned num)
 /*! Good dimension is defined as one that can be fatorized into 2s, 3s, 5s, and 7s
@@ -463,7 +463,6 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   else {
     CPUBuffer temp(X_k);
     CImg<> temp1((float *) temp.getPtr(), nx, ny, nz, 1, true);
-    // temp1.display();
     raw = temp1;
     // Why the following throws "unspecified launch error" for nx less than certain limit?
     // Download from device memory back to "raw":
