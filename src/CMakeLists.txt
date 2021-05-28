@@ -217,6 +217,8 @@ endif()
    camcor.cu
    )
 
+set_target_properties(libcudaDecon PROPERTIES PREFIX "")
+
 add_dependencies(
    libcudaDecon
    Buffer
