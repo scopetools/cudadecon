@@ -146,4 +146,6 @@ the source code), but requires that you set up build dependencies correctly.
 
     *note that you can specify the CUDA version to use by using the `-DCUDA_TOOLKIT_ROOT_DIR` flag* 
 
-The binary will be written to `cudaDecon\build\<platform>-<compiler>-release`.  If you change the source code, you can just rerun `ninja` or `make` and the binary will be updated.
+The binary will be written to `cudaDecon\build\<platform>-<compiler>-release`.
+If you change the source code, you can just rerun `ninja` or `make` and the
+binary will be updated.
