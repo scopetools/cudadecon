@@ -1,0 +1,53 @@
+# This file was generated automatically from conda-smithy. To update this configuration,
+# update the conda-forge.yml and/or the recipe/meta.yaml.
+# -*- mode: yaml -*-
+
+jobs:
+- job: linux
+  pool:
+    vmImage: ubuntu-16.04
+  strategy:
+    matrix:
+      linux_64_cuda_compiler_version10.2:
+        CONFIG: linux_64_cuda_compiler_version10.2
+        UPLOAD_PACKAGES: 'False'
+        DOCKER_IMAGE: quay.io/condaforge/linux-anvil-cuda:10.2
+  timeoutInMinutes: 360
+
+  steps:
+  - checkout: self
+    fetchDepth: 0
+  - script: |
+         rm -rf /opt/ghc
+         df -h
+    displayName: Manage disk space
+
+  # configure qemu binfmt-misc running.  This allows us to run docker containers
+  # embedded qemu-static
+  - script: |
+      docker run --rm --privileged multiarch/qemu-user-static:register --reset --credential yes
+      ls /proc/sys/fs/binfmt_misc/
+    condition: not(startsWith(variables['CONFIG'], 'linux_64'))
+    displayName: Configure binfmt_misc
+
+  - script: |
+        export CI=azure
+        export GIT_BRANCH=$BUILD_SOURCEBRANCHNAME
+        export FEEDSTOCK_NAME=$(basename ${BUILD_REPOSITORY_NAME})
+        .scripts/run_docker_build.sh
+    displayName: Run docker build
+    env:
+      BINSTAR_TOKEN: $(BINSTAR_TOKEN)
+  - script: |
+        full_artifact_name="conda_artifacts_$(build.BuildId)_$(CONFIG)"
+        artifact_name=`echo "$full_artifact_name" | head -c 80`
+        echo "##vso[task.setVariable variable=ARTIFACT_NAME]$artifact_name"
+        if [ -d build_artifacts ]; then
+          echo "##vso[task.setVariable variable=CONDA_BLD_DIR_EXISTS]true"
+        fi
+    displayName: Check for conda build artifacts
+    condition: succeededOrFailed()
+
+  - publish: build_artifacts/
+    artifact: $(ARTIFACT_NAME)
+    condition: eq(variables.CONDA_BLD_DIR_EXISTS, 'true')
