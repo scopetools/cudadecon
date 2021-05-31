@@ -1,6 +1,62 @@
 # cudaDecon
 
-GPU accelerated 3D image deconvolution using CUDA.  Developed in the Betzig lab at Janelia by Lin Shao and Dan Milkie.
+GPU-accelerated 3D image deconvolution & affine transforms using CUDA.
+
+Python bindings are also available at [pycudadecon](https://github.com/tlambert03/pycudadecon)
+
+### Install
+
+Precompiled binaries available for linux and windows at conda-forge
+(see GPU driver requirements [below](#gpu-requirements))
+
+```sh
+conda install -c conda-forge cudadecon
+
+# or... to also install the python bindings
+conda install -c conda-forge pycudadecon
+```
+
+### Usage
+
+```sh
+# check that GPU is discovered
+cudaDecon -Q
+
+# Basic Usage
+# 1. create an OTF from a PSF with "radialft"
+radialft /path/to/psf.tif /path/to/otf_output.tif --nocleanup --fixorigin 10
+# 2. run decon on a folder of tiffs:
+# 'filename_pattern' is a string that must appear in the filename to be processed
+cudaDecon $OPTIONS /folder/of/images filename_pattern /path/to/otf_output.tif
+
+# see manual for all of the available arguments
+cudaDecon --help
+```
+
+### GPU requirements
+
+This software requires a CUDA-compatible NVIDIA GPU.
+The libraries available on conda-forge have been compiled against different versions of the CUDA toolkit.  The required CUDA libraries are bundled in the conda distributions so you don't need to install the CUDA toolkit separately.  If desired, you can pick which version of CUDA you'd like based on your needs, but please note that different versions of the CUDA toolkit have different GPU driver requirements:
+
+To specify a specific cudatoolkit version, install as follows (for instance, to use
+`cudatoolkit=10.2`)
+
+```sh
+conda install -c conda-forge cudadecon cudatoolkit=10.2
+```
+
+| CUDA  | Linux driver | Win driver |
+| ----- | ------------ | ---------- |
+| 10.2  | ≥ 440.33     | ≥ 441.22   |
+| 11.0  | ≥ 450.36.06  | ≥ 451.22   |
+| 11.1  | ≥ 455.23     | ≥ 456.38   |
+| 11.2  | ≥ 460.27.03  | ≥ 460.82   |
+
+
+If you run into trouble, feel free to [open an issue](https://github.com/scopetools/cudaDecon/issues) and describe your setup.
+
+
+----- 
 
 ## Notes
 
@@ -27,49 +83,28 @@ Running this command from an adminstrator command prompt should set the timeout 
 
 ---------------------
 
-## Build instructions
+## Local build instructions
 
-If you simply wish to use this package, it is best to just install the precompiled binaries from conda.
+If you simply wish to use this package, it is best to just install the precompiled binaries from conda as [described above](#install-precompiled-binaries)
 
-To build the source, you have two options:
+To build the source locally, you have two options:
 
-1. use `conda-build` to create a temporary conda environment that will build the source and link all necessary libraries in a way suitable for later installation using `conda install`
-2. don't use `conda-build`, but rather create a dedicated conda environment with all of the build dependencies installed, and then use cmake directly.  This method is faster and creates an immediately useable binary (i.e. it is better for iteration if you're changing the source code), but the compiled binaries are harder to redistribute if you aren't careful about also shipping the required libraries (which are automatically installed if you use method 1).
+### 1. Build using `run_docker_build`
 
-### using `conda-build`
+With docker installed, use `.scripts/run_docker_build.sh` with one of the
+configs available in `.ci_support`, for instance:
 
-1. install [miniconda](https://docs.conda.io/en/latest/miniconda.html)
-2. install [cudatoolkit](https://developer.nvidia.com/cuda-10.1-download-archive-update2) (I haven't yet tried 10.2)
-3. (*windows only*) install [build tools for VisualStudio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2017) 2017.  For linux, all necessary build tools will be installed by conda.
-4. open an `Anaconda Prompt`, and in the `base` environment, run:
-
-    ```sh
-    conda config --add channels conda-forge
-    conda install conda-build
-    ```
-
-5. `cd` into the `cudaDecon` folder
-6. (*important*) set the CUDA version you want to build for (this environmental variable allows you to have multiple cuda toolkits installed, and easily change which one you build against).
-
-    ```sh
-    # windows
-    set CUDA_VERSION=10.1
-    
-    # linux/mac
-    export CUDA_VERSION=10.1
-    ```
-
-7. build the program with: `conda build conda-recipe`
-
-It will take a little while, and then at the end, if all goes well, it will tell you where the build artifact is (for instance, on windows, mine is at `%HOMEPATH%\miniconda3\conda-bld\win-64\cudadecon-1.0.3-cu10.1.tar.bz2`).  That bz2 package is intended to be uploaded to anaconda cloud.  It doesn't include all of the dependencies (those are defined in the conda recipe and will be installed automatically).  If you want to test it locally, you can install the new bundle into a test environment:
-
-```sh
-conda create -n test -y --use-local cudadecon
-conda activate test
-cudaDecon.exe --help
+```
+CONFIG=linux_64_cuda_compiler_version10.2 .scripts/run_docker_build.sh
 ```
 
-### using cmake directly in a conda environment
+### 2. using cmake directly in a conda environment
+
+Here we create a dedicated conda environment with all of the build dependencies
+installed, and then use cmake directly.  This method is faster and creates an
+immediately useable binary (i.e. it is better for iteration if you're changing
+the source code), but requires that you set up build dependencies correctly.
+   
 
 1. install [miniconda](https://docs.conda.io/en/latest/miniconda.html)
 2. install [cudatoolkit](https://developer.nvidia.com/cuda-10.1-download-archive-update2) (I haven't yet tried 10.2)
@@ -112,120 +147,3 @@ cudaDecon.exe --help
     *note that you can specify the CUDA version to use by using the `-DCUDA_TOOLKIT_ROOT_DIR` flag* 
 
 The binary will be written to `cudaDecon\build\<platform>-<compiler>-release`.  If you change the source code, you can just rerun `ninja` or `make` and the binary will be updated.
-
----------------------
-
-
-## Legacy build instructions
-
-*Note: the build pipeline for cudaDecon is under active development.  These are the legacy notes for building cudaDecon locally on a windows machine. and works with `src/CMakeLists_Dan.txt` ... though it may not find FFTW*
-
-1. Prerequisites:
-1.a. Visual Studio Community (make sure it's supported by CUDA SDK.  I'm using VS Community 2017). Run Windows Updates.
-1.b. Install CMake Tools for Visual Studio.  This will give you color coded text when you make edits to CMakeLists.txt : [http://cmaketools.codeplex.com/](http://cmaketools.codeplex.com/)
-
-Run Visual Studio
-Select Tools->Visual Studio Command Prompt
-
-At the VS command prompt, change to the Visual C++ installation directory. (The location depends on the system and the Visual Studio installation, but a file search within the Visual Studio folder (like : C:\Program Files (x86)\Microsoft Visual Studio version\) will help you find it.) 
-Then configure this Command Prompt window for 64-bit command-line builds that target x64 platforms, at the command prompt, enter:
-
-"C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" amd64
-
-
-1.b. Install CMAKE v2.6 and later
-
-1.c. Install FFTW3
-
-* Download the 64-bit version dlls here : [http://fftw.org/install/windows.html](http://fftw.org/install/windows.html)
-* Unzip FFTW3 library into C:\fftw3 then created the x64 .lib files:
-
-cd c:\fftw3
-lib /machine:x64 /def:libfftw3-3.def
-lib /machine:x64 /def:libfftw3l-3.def
-lib /machine:x64 /def:libfftw3f-3.def
-
-1.d.a Install zlib
-
-* Download zlib source code from : [https://www.zlib.net/](https://www.zlib.net/)
-* Unzip zlib1211.zip source code into c:\zlib\zlib-1.2.11 or equivalent.
-* Open the solution file : C:\zlib\zlib-1.2.11\contrib\vstudio\vc14\zlibvc.sln in Visual Studio
-* At the top, change the pulldown menus to "Release" and "x64".
-* Build the solution. (F7 or from "Build" menu)
-
-1.d. Install Libtiff
-
-* I needed to change libtiff a little bit to deal with custom tiff tags.  please SVN checkout into c:\libtiff from:
-https://subversion.int.janelia.org/betziglab/tool_codes/libtiff/trunk/libtiff
-(Now it's git clone from dmilkie/libtiff_for_cudaDecon
-
-* in the revisions you will see the changes that I made.  If upgrading to new libtiff version, I would recommend : 1. checkout/clone latest version.  Unzip the latest libtiff version online and overwrite c:\libtiff.  Look at the svn entry for the changes I made (i.e. rev 60), and right click each of the files in rev 60 and "compare with working copy" to merge the additions I made in the left file with the right file.  Then build.
-
-* I think this is old.:
-
-```sh
-#  * then build:
-
-# cd c:\libtiff
-# cmake -G "Visual Studio 15 2017 Win64" -DZLIB_LIBRARY:STRING=C:\zlib\zlib-1.2.11\contrib\vstudio\vc14\x64\ZlibStatRelease\zlibstat.lib -DZLIB_INCLUDE_DIR:STRING=C:\zlib\zlib-1.2.11
-#  * This generates the cmake files and should identify that it found zlib.  Next run :
-
-#  cmake --build . --config Release
-#  ctest -V -C Release
-```
-
-* This should do it instead.
-
-```cmd
-cd c:\libtiff
-nmake /f makefile.vc
-```
-
-* You should have new libtiff.lib file in c:\libtiff\libtiff
-
-1.e. Install CUDA SDK (I'm using 10.1). Reboot.
-
-1.f. Install Boost C++ Libraries.
-
-* Download source code: https://www.boost.org/users/download/ into C:\boost folder, and build via:
-
-```cmd
-cd C:\boost\boost_1_69_0
-bootstrap
-.\b2 address-model=64
-```
-
-1. Generate makefiles:
-2.a. Make a subdirectory under where the source code (or this README) is located; let's call it "build"
-2.b. From the VS command prompt window, cd into the "build" directory just created and build like this:
-
-```cmd
-cd C:\cudaDecon\build
-cmake -D CMAKE_BUILD_TYPE=Release -G "NMake Makefiles" ..
-```
-
-* Make sure there's no error message. To generate makefiles from scratch, the entire content of "build" folder has to be deleted first.
-
-3. Copy runtime .dlls :
-* Copy "libfftw3f-3.dll" from C:\fftw3 into the directory with the cudaDeconv.exe
-* Copy "cufft64_100.dll" and "cudart64_100.dll" into the directoy as well :
-
-```cmd
-copy c:\fftw3\libfftw3f-3.dll c:\cudaDecon\build
-copy "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1\bin\cudart64_*.dll" c:\cudaDecon\build
-copy "C:\Program Files\NVIDIA GPU Computing Toolkit\CUDA\v10.1\bin\cufft64_*.dll"  c:\cudaDecon\build
-```
-
-4. Compile the libraries and executables:
-
-```cmd
-cd C:\cudaDecon\build
-nmake
-```
-
-5. To generate the .sln files for Visual Studio (so that you have a nice IDE to view the source files), you can create a folder, call it "VS", then run this command within the "VS" folder:
-
-```cmd
-cd C:\cudaDecon\VS
-cmake .. -G "Visual Studio 15 Wind64"
-```
