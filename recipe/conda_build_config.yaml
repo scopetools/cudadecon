@@ -7,7 +7,7 @@ cxx_compiler_version:   # [linux]
   - 7                   # [linux64 or aarch64]
 
 cuda_compiler_version:
-  - 11.2                       # [linux64 or win]
+  - 11.2                       # [linux64]
 
 cudnn:
   - 8                          # [linux64]

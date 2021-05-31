@@ -15,4 +15,4 @@ azure:
   upload_packages: False
 provider:
   linux: azure
-  win: azure
+  # win: azure
