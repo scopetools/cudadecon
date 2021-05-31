@@ -3,7 +3,7 @@ boost_cpp:
 c_compiler:
 - gcc
 c_compiler_version:
-- '9'
+- '7'
 cdt_name:
 - cos7
 channel_sources:
@@ -17,7 +17,7 @@ cuda_compiler_version:
 cxx_compiler:
 - gxx
 cxx_compiler_version:
-- '9'
+- '7'
 docker_image:
 - quay.io/condaforge/linux-anvil-cuda:11.2
 fftw:
