@@ -8,12 +8,6 @@ jobs:
     vmImage: vs2017-win2016
   strategy:
     matrix:
-      win_64_cuda_compiler_version10.2:
-        CONFIG: win_64_cuda_compiler_version10.2
-        UPLOAD_PACKAGES: 'False'
-      win_64_cuda_compiler_version11.0:
-        CONFIG: win_64_cuda_compiler_version11.0
-        UPLOAD_PACKAGES: 'False'
       win_64_cuda_compiler_version11.1:
         CONFIG: win_64_cuda_compiler_version11.1
         UPLOAD_PACKAGES: 'False'
