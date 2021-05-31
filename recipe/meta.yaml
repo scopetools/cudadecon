@@ -1,4 +1,4 @@
-{% set name = "cudaDecon" %}
+{% set name = "cudadecon" %}
 {% set version = environ.get('GIT_DESCRIBE_TAG', 'untagged')|string|replace('-','_') %}
 {% set build_number = environ.get('GIT_DESCRIBE_NUMBER', '0') %}
 
