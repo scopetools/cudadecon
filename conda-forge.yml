@@ -13,6 +13,7 @@ skip_render:
   - .github/workflows
 azure:
   upload_packages: False
+circle:
+  upload_packages: False
 provider:
-  linux: azure
-  # win: azure
+  linux: circle

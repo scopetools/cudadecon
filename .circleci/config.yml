@@ -5,20 +5,71 @@
 version: 2
 
 jobs:
-  build:
+  build_linux_64_cuda_compiler_version10.2:
     working_directory: ~/test
     machine: true
+    environment:
+      - CONFIG: "linux_64_cuda_compiler_version10.2"
+      - UPLOAD_PACKAGES: "False"
+        DOCKER_IMAGE: "quay.io/condaforge/linux-anvil-cuda:10.2"
     steps:
+      - checkout
       - run:
-          # The Circle-CI build should not be active, but if this is not true for some reason, do a fast finish.
-          command: exit 0
+          name: Fast finish outdated PRs and merge PRs
+          command: |
+            ./.circleci/fast_finish_ci_pr_build.sh
+            ./.circleci/checkout_merge_commit.sh
+      - run:
+          # Run, test and (if we have a BINSTAR_TOKEN) upload the distributions.
+          command: |
+            export CI=circle
+            export FEEDSTOCK_NAME=$(basename ${CIRCLE_PROJECT_REPONAME})
+            ./.scripts/run_docker_build.sh
+  build_linux_64_cuda_compiler_version11.2:
+    working_directory: ~/test
+    machine: true
+    environment:
+      - CONFIG: "linux_64_cuda_compiler_version11.2"
+      - UPLOAD_PACKAGES: "False"
+        DOCKER_IMAGE: "quay.io/condaforge/linux-anvil-cuda:11.2"
+    steps:
+      - checkout
+      - run:
+          name: Fast finish outdated PRs and merge PRs
+          command: |
+            ./.circleci/fast_finish_ci_pr_build.sh
+            ./.circleci/checkout_merge_commit.sh
+      - run:
+          # Run, test and (if we have a BINSTAR_TOKEN) upload the distributions.
+          command: |
+            export CI=circle
+            export FEEDSTOCK_NAME=$(basename ${CIRCLE_PROJECT_REPONAME})
+            ./.scripts/run_docker_build.sh
+  build_linux_64_cuda_compiler_version9.2:
+    working_directory: ~/test
+    machine: true
+    environment:
+      - CONFIG: "linux_64_cuda_compiler_version9.2"
+      - UPLOAD_PACKAGES: "False"
+        DOCKER_IMAGE: "quay.io/condaforge/linux-anvil-cuda:9.2"
+    steps:
+      - checkout
+      - run:
+          name: Fast finish outdated PRs and merge PRs
+          command: |
+            ./.circleci/fast_finish_ci_pr_build.sh
+            ./.circleci/checkout_merge_commit.sh
+      - run:
+          # Run, test and (if we have a BINSTAR_TOKEN) upload the distributions.
+          command: |
+            export CI=circle
+            export FEEDSTOCK_NAME=$(basename ${CIRCLE_PROJECT_REPONAME})
+            ./.scripts/run_docker_build.sh
 
 workflows:
   version: 2
   build_and_test:
     jobs:
-      - build:
-          filters:
-            branches:
-              ignore:
-                - /.*/
+      - build_linux_64_cuda_compiler_version10.2
+      - build_linux_64_cuda_compiler_version11.2
+      - build_linux_64_cuda_compiler_version9.2
