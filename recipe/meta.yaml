@@ -1,0 +1,36 @@
+{% set name = "cudaDecon" %}
+{% set version = environ.get('GIT_DESCRIBE_TAG', 'untagged')|string|replace('-','_') %}
+{% set build_number = environ.get('GIT_DESCRIBE_NUMBER', '0') %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  git_url: {{ environ.get('FEEDSTOCK_ROOT', '..') }}
+
+build:
+
+  number: {{ build_number }}
+  string: {{ [build_number, ('h' + PKG_HASH), environ.get('GIT_DESCRIBE_HASH', '')]|join('_') }}
+  skip: True  # [osx or (cuda_compiler_version in ('None', 'undefined'))]
+
+
+requirements:
+  build:
+    - {{ compiler('c') }}
+    - {{ compiler('cxx') }}
+    - {{ compiler('cuda') }}
+    - cmake
+    - make  # [not win]
+    - libgomp  # [linux]
+  host:
+    - boost-cpp
+    - libtiff
+    - fftw
+  run:
+    - boost-cpp
+
+test:
+  commands:
+    - cudaDecon --help

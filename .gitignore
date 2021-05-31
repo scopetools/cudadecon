@@ -8,3 +8,9 @@ VS/.vs/cudaDeconv/v15/Solution.VC.db-wal
 VS/.vs/cudaDeconv/v15/.suo
 VS/cudaDeconv.vcxproj.user
 VS/cudaDeconv.vcxproj.filters
+
+# conda smithy ci-skeleton start
+*.pyc
+
+build_artifacts
+# conda smithy ci-skeleton end
