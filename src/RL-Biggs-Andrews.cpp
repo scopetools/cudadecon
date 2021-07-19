@@ -7,10 +7,9 @@
 #include <stdio.h> // print to GPUmessage
 
 
-
-
-
-//#include <helper_timer.h>
+#ifndef NDEBUG
+#include <helper_timer.h>  //StopWatchWin, StopWatchLinux
+#endif
 
 bool notGoodDimension(unsigned num)
 /*! Good dimension is defined as one that can be fatorized into 2s, 3s, 5s, and 7s
@@ -442,7 +441,8 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     float *p = (float *) rotationMatrix.getPtr();
     // Refer to rotMatrix definition in main():
     int nz_afterRot = nz * p[3] / p[0];
-    int nx_afterRot = nx  * p[3] + nz * p[2] * p[2] / p[1];
+    int nx_afterRot = nx  * p[3] + nz * p[2] * p[2] / fabs(p[1]);
+    printf(" nx=%d, nz=%d, nx_afterRot=%d, nz_afterRot=%d\n", nx, nz, nx_afterRot, nz_afterRot);
     GPUBuffer d_rotatedResult(nz_afterRot * nx_afterRot * ny * sizeof(float), myGPUdevice, UseOnlyHostMem);
     GPUBuffer d_rotMatrix(rotationMatrix, myGPUdevice, UseOnlyHostMem);
 

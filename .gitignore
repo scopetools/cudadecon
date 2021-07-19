@@ -1,10 +1,11 @@
 
-.DS_Store
+*.DS_Store
 .vscode/
-build/
+*build/
 VS/.vs/cudaDeconv/v15/Solution.VC.db
 VS/.vs/cudaDeconv/v15/Solution.VC.db-shm
 VS/.vs/cudaDeconv/v15/Solution.VC.db-wal
 VS/.vs/cudaDeconv/v15/.suo
 VS/cudaDeconv.vcxproj.user
 VS/cudaDeconv.vcxproj.filters
+*~
