@@ -141,7 +141,6 @@ if(NOT(CUDA_VERSION LESS 10.0))  # if CUDA version is > or = 10.0
     -gencode=arch=compute_75,code=compute_75") # make available to future hardware see JIT compilation : https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#just-in-time-compilation
   elseif(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
 	  set(CUDA_NVCC_FLAGS "-O2;\
-		-gencode=arch=compute_20,code=sm_20;\
 		-gencode=arch=compute_30,code=sm_30;\
 		-gencode=arch=compute_35,code=sm_35;\
 		-gencode=arch=compute_37,code=sm_37;\
@@ -217,6 +216,8 @@ endif()
 #   camcor.cpp
    camcor.cu
    )
+
+set_target_properties(libcudaDecon PROPERTIES PREFIX "")
 
 add_dependencies(
    libcudaDecon
@@ -325,9 +326,9 @@ target_link_libraries(
   ${TIFF_LIBRARIES}
   )
 
-if (UNIX)
+if (UNIX AND NOT APPLE)
   target_link_libraries(cudaDecon rt)
-endif (UNIX)
+endif ()
 
 target_link_libraries(
   radialft
