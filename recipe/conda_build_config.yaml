@@ -5,8 +5,16 @@ docker_image:                                     # [os.environ.get("BUILD_PLATF
 
 c_compiler_version:     # [linux]
   - 7                   # [linux64 or aarch64]
+  - 7                   # [linux64 or aarch64]
+  - 7                   # [linux64 or aarch64]
 cxx_compiler_version:   # [linux]
   - 7                   # [linux64 or aarch64]
+  - 7                   # [linux64 or aarch64]
+  - 7                   # [linux64 or aarch64]
+fortran_compiler_version: # [linux]
+  - 7                     # [linux64 or aarch64]
+  - 7                     # [linux64 or aarch64]
+  - 7                     # [linux64 or aarch64]
 
 
 cuda_compiler_version:
