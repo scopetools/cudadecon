@@ -135,9 +135,8 @@ if(NOT(CUDA_VERSION LESS 11.0))  # if CUDA version is > or = 10.0
   -gencode=arch=compute_75,code=sm_75,\
   -gencode=arch=compute_75,code=compute_75,\
   -gencode=arch=compute_80,code=compute_80,\
-  -gencode=arch=compute_86,code=compute_86,\
-  -gencode=arch=compute_87,code=compute_87")
-elseif(NOT(CUDA_VERSION LESS 10.0))  # if CUDA version is > or = 8.0
+  -gencode=arch=compute_86,code=compute_86")
+elseif(NOT(CUDA_VERSION LESS 10.0))  # if CUDA version is > or = 10.0
   set(CUDA_NVCC_FLAGS "-O3;\
   -lcudart;\
   -gencode=arch=compute_52,code=sm_52;\ 
