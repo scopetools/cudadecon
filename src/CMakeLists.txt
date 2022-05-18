@@ -80,12 +80,8 @@ endforeach()
 
 # message(STATUS "2 Build type is '${CMAKE_BUILD_TYPE}'")
 
-if (APPLE)
-  set(CMAKE_CXX_FLAGS "-std=c++11 -stdlib=libc++")
-else()
-  find_package(OpenMP)
-  set( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${OpenMP_CXX_FLAGS}" )
-endif()
+find_package(OpenMP)
+set( CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${OpenMP_CXX_FLAGS}" )
 
 if (NOT WIN32)
   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -Wall")
@@ -138,7 +134,10 @@ if(NOT(CUDA_VERSION LESS 10.0))  # if CUDA version is > or = 10.0
     -gencode=arch=compute_70,code=sm_70;\
     -gencode=arch=compute_72,code=sm_72;\
     -gencode=arch=compute_75,code=sm_75,\
-    -gencode=arch=compute_75,code=compute_75") # make available to future hardware see JIT compilation : https://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#just-in-time-compilation
+    -gencode=arch=compute_75,code=compute_75,\
+    -gencode=arch=compute_80,code=compute_80,\
+    -gencode=arch=compute_86,code=compute_86,\
+    -gencode=arch=compute_87,code=compute_87")
   elseif(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
 	  set(CUDA_NVCC_FLAGS "-O2;\
 		-gencode=arch=compute_30,code=sm_30;\
@@ -224,37 +223,6 @@ add_dependencies(
    Buffer
    )
 
-if (APPLE)
-  set_target_properties(libcudaDecon
-                        PROPERTIES
-                        OUTPUT_NAME cudaDecon
-                        MACOSX_RPATH 1
-                        POSITION_INDEPENDENT_CODE ON)
-endif()
-
-
-#####  libLLSpy.dll ###########################################
-
-#  CUDA_ADD_LIBRARY(
-#    libLLSpy
-#    SHARED
-#    geometryTransform.cu
-#    camcor.cu
-#    llspy.cpp
-#    )
-# 
-# add_dependencies(
-#    libLLSpy
-#    Buffer
-#    )
-# 
-# if (APPLE)
-#   set_target_properties(libLLSpy
-#                         PROPERTIES
-#                         OUTPUT_NAME LLSpy
-#                         MACOSX_RPATH 1)
-# endif()
-
 
 #####  libradialft.dll ###########################################
 
@@ -326,7 +294,7 @@ target_link_libraries(
   ${TIFF_LIBRARIES}
   )
 
-if (UNIX AND NOT APPLE)
+if (UNIX)
   target_link_libraries(cudaDecon rt)
 endif ()
 
@@ -338,18 +306,6 @@ target_link_libraries(
   ${Boost_PROGRAM_OPTIONS_LIBRARY}
   ${TIFF_LIBRARIES}
 )
-
-# target_link_libraries(
-#   otfviewer
-#   ${TIFF_LIBRARIES}
-#   ${X11_X11_LIB}
-#   )
-
-# target_link_libraries(
-#   libLLSpy
-#   Buffer
-#   ${X11_X11_LIB}
-#   )
 
 
 target_link_libraries(
