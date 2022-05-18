@@ -24,6 +24,11 @@ jobs:
           command: |
             export CI=circle
             export FEEDSTOCK_NAME=$(basename ${CIRCLE_PROJECT_REPONAME})
+            if [[ "${CIRCLE_PR_NUMBER:-}" == "" ]]; then
+              export IS_PR_BUILD="False"
+            else
+              export IS_PR_BUILD="True"
+            fi
             ./.scripts/run_docker_build.sh
   build_linux_64_cuda_compiler_version11.2:
     working_directory: ~/test
@@ -44,6 +49,11 @@ jobs:
           command: |
             export CI=circle
             export FEEDSTOCK_NAME=$(basename ${CIRCLE_PROJECT_REPONAME})
+            if [[ "${CIRCLE_PR_NUMBER:-}" == "" ]]; then
+              export IS_PR_BUILD="False"
+            else
+              export IS_PR_BUILD="True"
+            fi
             ./.scripts/run_docker_build.sh
   build_linux_64_cuda_compiler_version9.2:
     working_directory: ~/test
@@ -64,6 +74,11 @@ jobs:
           command: |
             export CI=circle
             export FEEDSTOCK_NAME=$(basename ${CIRCLE_PROJECT_REPONAME})
+            if [[ "${CIRCLE_PR_NUMBER:-}" == "" ]]; then
+              export IS_PR_BUILD="False"
+            else
+              export IS_PR_BUILD="True"
+            fi
             ./.scripts/run_docker_build.sh
 
 workflows:
