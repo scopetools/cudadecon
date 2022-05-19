@@ -7,7 +7,7 @@ c_compiler_version:
 cdt_name:
 - cos7
 channel_sources:
-- conda-forge
+- conda-forge,defaults
 channel_targets:
 - conda-forge main
 cuda_compiler:

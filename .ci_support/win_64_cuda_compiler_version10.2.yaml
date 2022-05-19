@@ -3,7 +3,7 @@ boost_cpp:
 c_compiler:
 - vs2017
 channel_sources:
-- conda-forge
+- conda-forge,defaults
 channel_targets:
 - conda-forge main
 cuda_compiler:

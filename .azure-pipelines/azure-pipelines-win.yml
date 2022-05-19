@@ -10,16 +10,16 @@ jobs:
     matrix:
       win_64_cuda_compiler_version10.2:
         CONFIG: win_64_cuda_compiler_version10.2
-        UPLOAD_PACKAGES: 'True'
+        UPLOAD_PACKAGES: 'False'
       win_64_cuda_compiler_version11.0:
         CONFIG: win_64_cuda_compiler_version11.0
-        UPLOAD_PACKAGES: 'True'
+        UPLOAD_PACKAGES: 'False'
       win_64_cuda_compiler_version11.1:
         CONFIG: win_64_cuda_compiler_version11.1
-        UPLOAD_PACKAGES: 'True'
+        UPLOAD_PACKAGES: 'False'
       win_64_cuda_compiler_version11.2:
         CONFIG: win_64_cuda_compiler_version11.2
-        UPLOAD_PACKAGES: 'True'
+        UPLOAD_PACKAGES: 'False'
   timeoutInMinutes: 360
   variables:
     CONDA_BLD_PATH: D:\\bld\\
