@@ -20,6 +20,5 @@ int main(int argc, char *argv[])
   for (unsigned i=0; i< btiff.size(); i++)
     btiff(i) = sqrt(abs(std::complex<float> (atiff(2*i), atiff(2*i+1))));
 
-  // btiff = btiff.max() - btiff;
-  btiff.display();
+  btiff.display(0, false);
 }

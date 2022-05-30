@@ -10,7 +10,9 @@
 
 
 
-//#include <helper_timer.h>
+#ifndef NDEBUG
+#include <helper_timer.h> //StopWatchWin, StopWatchLinux
+#endif
 
 bool notGoodDimension(unsigned num)
 /*! Good dimension is defined as one that can be fatorized into 2s, 3s, 5s, and 7s
@@ -59,6 +61,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         cudaDeviceProp *devProp,
                         bool bFlatStartGuess, float my_median,
                         bool bDoRescale,
+                        bool bSkewedDecon,
                         float padVal,
                         bool bDupRevStack,
                         bool UseOnlyHostMem,
@@ -110,14 +113,14 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 	//**************************** Background subtraction ***********************************
     // background subtraction (including thresholding by 0):
     // printf("background=%f\n", background);
-    backgroundSubtraction_GPU(X_k, nx, ny, nz, background, devProp->maxGridSize[2]);
+    backgroundSubtraction_GPU(X_k, nx, ny, nz, background, devProp->maxGridSize[0]);
 
 
 	
 	//**************************** Bleach correction ***********************************
 
     // Calculate sum for bleach correction:
-    double intensity_overall = meanAboveBackground_GPU(X_k, nx, ny, nz, devProp->maxGridSize[2], myGPUdevice);
+    double intensity_overall = meanAboveBackground_GPU(X_k, nx, ny, nz, devProp->maxGridSize[0], myGPUdevice);
     
     if (bDoRescale) {
         if (bFirstTime) {
@@ -125,7 +128,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
           bFirstTime = false;
         }
         else {
-          rescale_GPU(X_k, nx, ny, nz, intensity_overall0/intensity_overall, devProp->maxGridSize[2]);
+          rescale_GPU(X_k, nx, ny, nz, intensity_overall0/intensity_overall, devProp->maxGridSize[0]);
         }
     }
 #ifndef NDEBUG
@@ -135,14 +138,15 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
 
 	//**************************** Deskew ***********************************
-    if (fabs(deskewFactor) > 0.0) { //then deskew raw data along x-axis first:
+    if ( (!bSkewedDecon || raw_deskewed.size()>0 && nIter == 0)
+        && fabs(deskewFactor) > 0.0) { //then deskew raw data along x-axis first:
 
 		GPUBuffer deskewedRaw(nz * ny * deskewedNx * sizeof(float), myGPUdevice, UseOnlyHostMem);
 		std::cout << "deskewedRaw allocated.  ";
 		cudaMemGetInfo(&free, &total);
-		std::cout << std::setw(8) << X_k.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" ;
+		std::cout << std::setw(8) << deskewedRaw.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" ;
 		
-		std::cout << " Deskewing. ";
+		std::cout << " Deskewing... ";
     deskew_GPU(X_k, nx, ny, nz, deskewFactor, deskewedRaw, deskewedNx, extraShift, padVal);
 
       // update raw (i.e., X_k) and its dimension variables.
@@ -202,15 +206,15 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   } //  if (nIter > 0 || raw_deskewed.size()>0 || rotationMatrix.getSize())
 
 
-  GPUBuffer rawGPUbuf(X_k, myGPUdevice, UseOnlyHostMem);  // make a copy of raw image
 
-  { // these guys are needed only during RL iterations, we can deallocate them once we are done with iterations.  output we need is only rawGPUbuf and X_k.
+  { // these guys are needed only during RL iterations, we can deallocate them once we are done with iterations.  output we need in later stageis only (no rawGPUbuf) and X_k.
 
 	  GPUBuffer CC(nz * nxy * sizeof(float), myGPUdevice, UseOnlyHostMem); // RL factor to apply to Y_k to get X_k
 	  std::cout << "CC allocated.           ";
 	  cudaMemGetInfo(&free, &total);
 	  std::cout << std::setw(8) << CC.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
 
+  GPUBuffer rawGPUbuf(X_k, myGPUdevice, UseOnlyHostMem);  // make a copy of raw image
 	  std::cout << "rawGPUbuf allocated.    ";
 	  cudaMemGetInfo(&free, &total);
 	  std::cout << std::setw(8) << rawGPUbuf.getSize() / (1024 * 1024) << "MB" << std::setw(8) << free / (1024 * 1024) << "MB free" << std::endl;
@@ -266,7 +270,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
 
 	  double lambda = 0; // acceleration factor
-	  float eps = std::numeric_limits<float>::epsilon();
+	  float eps = std::numeric_limits<float>::epsilon();// a value used inside RL iterations
 
 
 	  //****************************************************************************
@@ -294,7 +298,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
 				  printf("Lambda = %.2f. ", lambda);
 
-				  updatePrediction(Y_k, X_k, X_kminus1, lambda, nx, ny, nz, devProp->maxGridSize[2]); // Y_k = X_k + lambda * (X_k - X_kminus1)
+				  updatePrediction(Y_k, X_k, X_kminus1, lambda, nx, ny, nz, devProp->maxGridSize[0]); // Y_k = X_k + lambda * (X_k - X_kminus1)
 			  }
 
 			  else if (bFlatStartGuess && k == 0)
@@ -331,7 +335,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 		  // b.  Make core for the LR estimation ( raw/reblurred_current_estimation )
 		  CC = Y_k;
 		  filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
-			  false, devProp->maxGridSize[2]);
+			  false, devProp->maxGridSize[0]);
 
 
 		  // if (k==0) {
@@ -342,7 +346,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
 		  std::cout << "LRcore. ";
 
-		  calcLRcore(CC, rawGPUbuf, nx, ny, nz, devProp->maxGridSize[2]);
+		  calcLRcore(CC, rawGPUbuf, nx, ny, nz, devProp->maxGridSize[0]);
 
 
 		  // c. Determine next iteration image & apply positivity constraint
@@ -350,13 +354,13 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
 
 		  std::cout << "Filter2. ";
 		  filterGPU(CC, nx, ny, nz, rfftplanGPU, rfftplanInvGPU, fftGPUbuf, d_interpOTF,
-			  true, devProp->maxGridSize[2]);
+			  true, devProp->maxGridSize[0]);
 
 
-		  updateCurrEstimate(X_k, CC, Y_k, nx, ny, nz, devProp->maxGridSize[2]); //updated current estimate: Y_k * CC plus positivity constraint. "X_k" is updated upon return.
+		  updateCurrEstimate(X_k, CC, Y_k, nx, ny, nz, devProp->maxGridSize[0]); //updated current estimate: Y_k * CC plus positivity constraint. "X_k" is updated upon return.
 
 		  // G_kminus2 = G_kminus1;
-		  calcCurrPrevDiff(X_k, Y_k, G_kminus1, nx, ny, nz, devProp->maxGridSize[2]); //G_kminus1 = X_k - Y_k change from RL
+		  calcCurrPrevDiff(X_k, Y_k, G_kminus1, nx, ny, nz, devProp->maxGridSize[0]); //G_kminus1 = X_k - Y_k change from RL
 		  std::cout << "Done. " << std::endl;
 		  POP_RANGE
 	  }
@@ -370,6 +374,31 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     // even though X_k contains double-sized stack.
     nz /= 2;
 
+  cudaDeviceSynchronize();
+#ifndef NDEBUG
+  std::cout << "After RL iterations: " << cudaGetErrorString(cudaGetLastError()) << std::endl;
+#endif
+  
+  if (bSkewedDecon && fabs(deskewFactor) > 0.0) { //addtion for deskew after decon
+    cudaMemGetInfo(&free, &total);
+    std::cout << std::setw(8) << free / (1<<20) << "MB free" << std::endl;
+    GPUBuffer deskewedAfter(nz * ny * deskewedNx * sizeof(float), myGPUdevice, UseOnlyHostMem);
+    std::cout << "deskewedAfter allocated.  ";
+    cudaMemGetInfo(&free, &total);
+    std::cout << std::setw(8) << deskewedAfter.getSize() / (1<<20) << "MB" << std::setw(8) << free / (1<<20) << "MB free" ;
+
+    std::cout << " Deskewing after deconv... ";
+    deskew_GPU(X_k, nx, ny, nz, deskewFactor, deskewedAfter, deskewedNx, extraShift);
+    X_k = deskewedAfter;
+    nx = deskewedNx;
+    nxy = nx * ny;
+
+    cutilSafeCall(cudaHostUnregister(raw.data()));
+    raw.clear();
+    raw.assign(nx, ny, nz, 1);
+    cutilSafeCall(cudaHostRegister(raw.data(), nz*nxy*sizeof(float), cudaHostRegisterPortable));
+  }
+
   // Rotate decon result if requested:
   
   if (rotationMatrix.getSize()) {
@@ -378,7 +407,7 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
     float *p = (float *) rotationMatrix.getPtr();
     // Refer to rotMatrix definition in main():
     int nz_afterRot = nz * p[3] / p[0];
-    int nx_afterRot = nx  * p[3] + nz * p[2] * p[2] / p[1];
+    int nx_afterRot = nx  * p[3] + nz * p[2] * p[2] / fabs(p[1]);
     GPUBuffer d_rotatedResult(nz_afterRot * nx_afterRot * ny * sizeof(float), myGPUdevice, UseOnlyHostMem);
     GPUBuffer d_rotMatrix(rotationMatrix, myGPUdevice, UseOnlyHostMem);
 
@@ -397,9 +426,13 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
   }
 
   else {
+    CPUBuffer temp(X_k);
+    CImg<> temp1((float *) temp.getPtr(), nx, ny, nz, 1, true);
+    raw = temp1;
     // Download from device memory back to "raw":
-    cutilSafeCall(cudaMemcpy(raw.data(), X_k.getPtr(), nz*nxy*sizeof(float),
-		cudaMemcpyDefault));
+    // cutilSafeCall(cudaMemcpy(raw.data(), X_k.getPtr(), nz*nxy*sizeof(float),
+	// 	cudaMemcpyDefault));
+    // This cudaMemcpy call sometimes throw "unspecified launch error" for nx less than certain limit; haven't figured out the cause
   }
 
   if (nIter > 0)
@@ -462,12 +495,39 @@ unsigned get_output_nz()
   
 }
 
+// Function was added at the introduction of skewed decon:
+void  determine_OTF_dimensions(CImg<> &complexOTF, float dr_psf, float dz_psf,
+                              unsigned &nx_otf, unsigned &ny_otf, unsigned &nz_otf,
+                              float &dkx_otf, float &dky_otf, float &dkz_otf)
+{
+  if (complexOTF.depth() > 1) {  // indicating non-RA OTF
+    nx_otf = complexOTF.width() / 2;
+    ny_otf = complexOTF.height();
+    nz_otf = complexOTF.depth();
+  }
+  else {
+    nx_otf = complexOTF.height();
+    ny_otf = 1;   // indicator for a rotationally averaged OTF?
+    nz_otf = complexOTF.width() / 2;
+  }
+
+  dkx_otf = 1/((nx_otf-1)*2 * dr_psf);
+
+  if (ny_otf > 1)
+    dky_otf = 1/(ny_otf * dr_psf);
+  else
+    dky_otf = dkx_otf;
+
+  dkz_otf = 1/(nz_otf * dz_psf);
+}
+
 int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
                       float dr, float dz, // raw image pixel sizes
                       float dr_psf, float dz_psf, // PSF image pixel sizes
                       float deskewAngle, // deskew
                       float rotationAngle,
                       int outputWidth,
+                      bool bSkewedDecon,
                       char * OTF_file_name) // device might not work, since d_interpOTF is a global and device is set at compile time.
 {
 
@@ -504,10 +564,23 @@ int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
     std::cerr << e.what() << std::endl; //OTF_file_name << " cannot be opened\n";
     return 0;
   }
-  unsigned nr_otf = complexOTF.height();
-  unsigned nz_otf = complexOTF.width() / 2;
-  float dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
-  float dkz_otf = 1/(nz_otf * dz_psf);
+  // unsigned nr_otf = complexOTF.height();
+  // unsigned nz_otf = complexOTF.width() / 2;
+  // float dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
+  // float dkz_otf = 1/(nz_otf * dz_psf);
+
+  // The above 4 lines were changed into the following at the introduction of skewed decon:
+  unsigned nx_otf, ny_otf, nz_otf;
+  float dkx_otf, dkz_otf, dky_otf;
+  if (bSkewedDecon)
+    dz_psf *= fabs(sin(deskewAngle * M_PI/180.));
+  determine_OTF_dimensions(complexOTF, dr_psf, dz_psf, nx_otf, ny_otf, nz_otf,
+                           dkx_otf, dky_otf, dkz_otf);
+
+  GPUBuffer d_rawOTF(0, false);
+  d_rawOTF.resize(nx_otf * ny_otf * nz_otf * sizeof(cuFloatComplex));
+  cutilSafeCall(cudaMemcpy(d_rawOTF.getPtr(), complexOTF.data(),
+                           d_rawOTF.getSize(), cudaMemcpyDefault));
 
   // Obtain deskew factor and new x dimension if deskew is run:
   deskewFactor = 0.;
@@ -523,7 +596,7 @@ int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
 
     deskewedXdim = findOptimalDimension(deskewedXdim);
     // update z step size: (this is fine even though dz is a function parameter)
-    dz *= sin(deskewAngle * M_PI/180.);
+    dz *= fabs(sin(deskewAngle * M_PI/180.));
   }
 
   // Construct rotation matrix:
@@ -555,14 +628,22 @@ int RL_interface_init(int nx, int ny, int nz, // raw image dimensions
   float dky = 1.0/(dr * output_ny);
   float dkz = 1.0/(dz * output_nz);
   float eps = std::numeric_limits<float>::epsilon();
-  transferConstants(deskewedXdim, output_ny, output_nz, nr_otf, nz_otf,
-                    dkx/dkr_otf, dky/dkr_otf, dkz/dkz_otf,
-                    eps, complexOTF.data());
+  // transferConstants(deskewedXdim, output_ny, output_nz, nr_otf, nz_otf,
+  //                   dkx/dkr_otf, dky/dkr_otf, dkz/dkz_otf,
+  //                   eps, complexOTF.data());
+  transferConstants(deskewedXdim, output_ny, output_nz, nx_otf, ny_otf, nz_otf,
+                    dkx/dkx_otf, dky/dky_otf, dkz/dkz_otf, eps);
 
   // make a 3D interpolated OTF array:
-  d_interpOTF.resize(output_nz * output_ny * (deskewedXdim+2) * sizeof(float));
-  // catch exception here
-  makeOTFarray(d_interpOTF, deskewedXdim, output_ny, output_nz);
+  if (bSkewedDecon) {
+    d_interpOTF.resize(output_nz * output_ny * (output_nx/2+1)* 2 * sizeof(float));
+    makeOTFarray(d_rawOTF, d_interpOTF, deskewedXdim, output_ny, output_nz);
+  }
+  else {
+    d_interpOTF.resize(output_nz * output_ny * (deskewedXdim+2) * sizeof(float));
+    // catch exception here
+    makeOTFarray(d_rawOTF, d_interpOTF, deskewedXdim, output_ny, output_nz);
+  }
   return 1;
 }
 
@@ -577,7 +658,8 @@ int RL_interface(const unsigned short * const raw_data,
                  int extraShift,
                  int napodize, int nZblend,
                  float padVal,
-                 bool bDupRevStack
+                 bool bDupRevStack,
+                 bool bSkewedDecon
                  )
 {
 
@@ -601,7 +683,7 @@ int RL_interface(const unsigned short * const raw_data,
   RichardsonLucy_GPU(raw_image, background, d_interpOTF, nIters,
                      deskewFactor, deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
                      rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp,
-                     bFlatStartGuess, my_median, bDoRescale, padVal, bDupRevStack, false);
+                     bFlatStartGuess, my_median, bDoRescale, padVal, bDupRevStack, bSkewedDecon, false);
 
   // Copy deconvolved data, stored in raw_image, to "result" for return:
   memcpy(result, raw_image.data(), raw_image.size() * sizeof(float));
