@@ -1,5 +1,5 @@
 #include <boost/filesystem.hpp>
-#include <boost/algorithm/string/predicate.hpp>
+#include <boost/algorithm/string/predicate.hpp>  // starts_with
 #include <regex>
 #include <iostream>
 #include <string>
@@ -28,9 +28,17 @@ std::vector<std::string> gatherMatchingFiles(std::string &target_path, std::stri
 	outputDir = dataDir / "GPUdecon";
 
   //***************** make regex filter ***************
+  // Check if the pattern is specified as a full file name; if so, insert
+  // an escape char '\' before '.'. Necessary?
+  size_t p1 = pattern.rfind(".tif");
+  size_t p2 = pattern.rfind(".TIF");
+  if (p1 != std::string::npos || p2 != std::string::npos) {
+    // do not append ".*tif" at the end of pattern
+  }
+  else 
+    pattern.append(".*\\.[tT][iI][fF]");
   pattern.insert(0, ".*");  // '.' is the wildcard in Perl regexp; '*' just means "repeat".
-  pattern.append(".*\\.tif");
-
+  std::cout << "file regex pattern: " << pattern << std::endl;
 
   const std::regex my_filter(pattern);
 

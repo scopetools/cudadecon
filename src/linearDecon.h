@@ -150,17 +150,20 @@ void RichardsonLucy_GPU(CImg<> &raw, float background, GPUBuffer &otf,
                         cufftHandle rfftplanInvGPU,
                         CImg<> &raw_deskewed, cudaDeviceProp *devprop,
                         bool bFlatStartGuess, float my_median, bool bDoRescale,
+                        bool bSkewedDecon,
                         float padVal = 0, bool bDupRevStack = false,
                         bool UseOnlyHostMem = false, int myGPUdevice = 0);
 
 CImg<> MaxIntProj(CImg<> &input, int axis);
 
-void transferConstants(int nx, int ny, int nz, int nrotf, int nzotf,
-                       float kxscale, float kyscale, float kzscale, float eps,
-                       float *otf);
+void transferConstants(int nx, int ny, int nz, int nxotf, int nyotf, int nzotf,
+                       float kxscale, float kyscale, float kzscale, float eps);
 unsigned findOptimalDimension(unsigned inSize, int step = -1);
 // void prepareOTFtexture(float * realpart, float * imagpart, int nx, int ny);
-void makeOTFarray(GPUBuffer &otfarray, int nx, int ny, int nz);
+void determine_OTF_dimensions(CImg<> &complexOTF, float dr_psf, float dz_psf,
+                              unsigned &nx_otf, unsigned &ny_otf, unsigned &nz_otf,
+                              float &dkx_otf, float &dky_otf, float &dkz_otf);
+void makeOTFarray(GPUBuffer &raw_otfarray, GPUBuffer &otfarray, int nx, int ny, int nz);
 
 void backgroundSubtraction_GPU(GPUBuffer &img, int nx, int ny, int nz,
                                float background, unsigned maxGridXdim);
@@ -258,7 +261,8 @@ void makeNewDir(std::string subdirname);
   CUDADECON_API int RL_interface_init(int nx, int ny, int nz, float dr,
                                       float dz, float dr_psf, float dz_psf,
                                       float deskewAngle, float rotationAngle,
-                                      int outputWidth, char *OTF_file_name);
+                                      int outputWidth, bool bSkewedDecon,
+                                      char *OTF_file_name);
 
   //! RL_interface() to run deconvolution
   /*!
@@ -276,7 +280,7 @@ void makeNewDir(std::string subdirname);
       const unsigned short *const raw_data, int nx, int ny, int nz,
       float *result, float *raw_deskewed_result, float background,
       bool bDoRescale, bool bSaveDeskewedRaw, int nIters, int extraShift,
-      int napodize = 0, int nZblend = 0, float padVal = 0,
+      bool bSkewedDecon = false, int napodize = 0, int nZblend = 0, float padVal = 0,
       bool bDupRevStack = false);
 
   CUDADECON_API int Deskew_interface(
