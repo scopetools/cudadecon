@@ -280,8 +280,8 @@ void makeNewDir(std::string subdirname);
       const unsigned short *const raw_data, int nx, int ny, int nz,
       float *result, float *raw_deskewed_result, float background,
       bool bDoRescale, bool bSaveDeskewedRaw, int nIters, int extraShift,
-      bool bSkewedDecon = false, int napodize = 0, int nZblend = 0, float padVal = 0,
-      bool bDupRevStack = false);
+      int napodize = 0, int nZblend = 0, float padVal = 0,
+      bool bDupRevStack = false, bool bSkewedDecon = false);
 
   CUDADECON_API int Deskew_interface(
       const float *const raw_data, int nx, int ny, int nz, float dz, float dr,
