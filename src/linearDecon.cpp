@@ -10,7 +10,7 @@
 #pragma warning(disable : 4305) // Disregard loss of data from double to float.
 #endif
 
-std::string version_number = "0.6.0";
+std::string version_number = "0.6.1";
 CImg<> next_file_image;
 
 CImg<> ToSave;

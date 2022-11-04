@@ -20,7 +20,7 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "6")
-set(VERSION_PATCH "0")
+set(VERSION_PATCH "1")
 set(PROJECT_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 
 # set -fPIC for all targets (for shared libraries)
