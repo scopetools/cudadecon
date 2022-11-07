@@ -10,7 +10,7 @@
 #pragma warning(disable : 4305) // Disregard loss of data from double to float.
 #endif
 
-std::string version_number = "0.6.1";
+std::string version_number = "0.6.2";
 CImg<> next_file_image;
 
 CImg<> ToSave;
@@ -45,8 +45,8 @@ std::string make_Image_Description(float nz, float dz)
 	std::string temp = "ImageJ=1.52o\n"
 		"spacing=" + std::to_string(dz) + "\n"
 		"unit=micron" "\n"
-		"images=" + std::to_string(nz) + "\n"
-		"slices=" + std::to_string(nz) + "\n"; // "slices" will designate this as a volume and not a time series, "frames"
+		"images=" + std::to_string(int(nz)) + "\n"
+		"slices=" + std::to_string(int(nz)) + "\n"; // "slices" will designate this as a volume and not a time series, "frames"
 	// std::cout << "my image description=" << temp;  // debug it:
 	return temp;
 }
