@@ -15,5 +15,4 @@ azure:
   upload_packages: False
 circle:
   upload_packages: False
-provider:
-  linux: circle
+build_with_mambabuild: False

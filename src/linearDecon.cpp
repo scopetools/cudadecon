@@ -10,7 +10,7 @@
 #pragma warning(disable : 4305) // Disregard loss of data from double to float.
 #endif
 
-std::string version_number = "0.4.1";
+std::string version_number = "0.6.1";
 CImg<> next_file_image;
 
 CImg<> ToSave;
@@ -199,6 +199,7 @@ int main(int argc, char *argv[])
 
     bool BlendTileOverlap = false;
     float deskewAngle=0.0;
+    bool bSkewedDecon = false;
     float rotationAngle=0.0;
     unsigned outputWidth;
     float padVal = 0.0;
@@ -238,7 +239,9 @@ int main(int argc, char *argv[])
     ("dupRevStack,d", po::bool_switch(&bDupRevStack)->default_value(false), "Duplicate reversed stack prior to decon to reduce Z ringing")
     ("NA,n", po::value<float>(&NA)->default_value(1.2), "Numerical aperture")
     ("RL,i", po::value<int>(&RL_iters)->default_value(15), "Run Richardson-Lucy, and set how many iterations")
-    ("deskew,D", po::value<float>(&deskewAngle)->default_value(0.0), "Deskew angle; if not 0.0 then perform deskewing before deconv")
+    ("deskew,D", po::value<float>(&deskewAngle)->default_value(0.0), "Deskew angle; if not 0.0 then perform deskewing before or afterdeconv")
+    ("dcbds", po::bool_switch(&bSkewedDecon)->implicit_value(true),
+     "If deskewing, do it after decon; require sample-scan PSF and non-RA 3D OTF")
     ("padval", po::value<float>(&padVal)->default_value(0.0), "Value to pad image with when deskewing")
     ("width,w", po::value<unsigned>(&outputWidth)->default_value(0), "If deskewed, the output image's width")
     ("shift,x", po::value<int>(&extraShift)->default_value(0), "If deskewed, the output image's extra shift in X (positive->left")
@@ -376,7 +379,7 @@ int main(int argc, char *argv[])
 
     CImg<> raw_image, raw_imageFFT, complexOTF, raw_deskewed, LSImage, sub_image, file_image, stitch_image, blend_weight_image;
     CImg<float> AverageLS;
-    float dkr_otf, dkz_otf;
+    float dkx_otf, dky_otf, dkz_otf;
     float dkx, dky, dkz, rdistcutoff;
     fftwf_plan rfftplan=NULL, rfftplan_inv=NULL;
     CPUBuffer rotMatrix;
@@ -387,6 +390,8 @@ int main(int argc, char *argv[])
     cufftHandle rfftplanGPU = NULL, rfftplanInvGPU = NULL;
     GPUBuffer d_interpOTF(1, myGPUdevice, UseOnlyHostMem);
     GPUBuffer workArea(1, myGPUdevice, UseOnlyHostMem);
+    // Lin: why were the above GPUBuffer()'s called with "1" as the first parameter ("size")??
+    GPUBuffer d_rawOTF(myGPUdevice, UseOnlyHostMem);
 
     cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, myGPUdevice);
@@ -634,10 +639,13 @@ int main(int argc, char *argv[])
                             bCrop = true;
                         }
 
-                        // only if no deskewing is happening do we want to change image width here
+                        // only if no deskewing is happening before decon do we want to change image width here
                         new_nx = startnx;
-                        if (!(fabs(deskewAngle) > 0.0)) {
+                        if (!(fabs(deskewAngle) > 0.0) || bSkewedDecon) {
                             new_nx = findOptimalDimension(startnx, step_size);
+                            if (new_nx%2 && new_nx>1000) // Lin: for unknown reason, an odd X dimension
+                              // sometimes results in doubled cuFFT work size; to-do...
+                              new_nx = findOptimalDimension(new_nx-1, step_size);
                             if (new_nx != startnx) {
                                 printf("new nx=%d\n", new_nx);
                                 bCrop = true;
@@ -654,12 +662,23 @@ int main(int argc, char *argv[])
                     //****************************Load OTF to CPU RAM(assuming 3D rotationally averaged OTF)***********************************
                     std::cout <<  "Loading OTF... ";
                     complexOTF.assign(otffiles.c_str());
-                    unsigned nr_otf = complexOTF.height();		// because it is rotationally averaged, kx = ky = kr
-                    unsigned nz_otf = complexOTF.width() / 2;	// because we are storing complex data in the .tiff file as two pixels: the real "width" is half the number of pixels in a row.
-                    dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
-                    dkz_otf = 1/(nz_otf * dz_psf);
-                    std::cout << "nr x nz     : " << nr_otf << " x " << nz_otf << ". " << std::endl << std::endl ;
+                    // unsigned nr_otf = complexOTF.height();		// because it is rotationally averaged, kx = ky = kr
+                    // unsigned nz_otf = complexOTF.width() / 2;	// because we are storing complex data in the .tiff file as two pixels: the real "width" is half the number of pixels in a row.
+                    // dkr_otf = 1/((nr_otf-1)*2 * dr_psf);
+                    // dkz_otf = 1/(nz_otf * dz_psf);
+                    // std::cout << "nr x nz     : " << nr_otf << " x " << nz_otf << ". " << std::endl << std::endl ;
+                    unsigned nx_otf, ny_otf, nz_otf;
 
+                    if (bSkewedDecon && fabs(deskewAngle) > 0.0)
+                      dz_psf *= fabs(sin(deskewAngle * M_PI/180.));
+
+                    determine_OTF_dimensions(complexOTF, dr_psf, dz_psf,
+                                             nx_otf, ny_otf, nz_otf,
+                                             dkx_otf, dky_otf, dkz_otf);
+                    std::cout << "nx x ny x nz     : " << nx_otf << " x " << ny_otf << " x " << nz_otf << ". " << std::endl << std::endl ;
+                    // transfer raw OTF into device memory; texture TO-DO
+                    d_rawOTF.resize(nx_otf * ny_otf * nz_otf * sizeof(cuFloatComplex));
+                    cutilSafeCall(cudaMemcpy(d_rawOTF.getPtr(), complexOTF.data(), d_rawOTF.getSize(), cudaMemcpyDefault));
 
                     //****************************Construct deskew matrix***********************************
                     deskewedXdim = new_nx;
@@ -675,11 +694,11 @@ int main(int argc, char *argv[])
                             deskewedXdim = outputWidth; // use user-provided output width if available
 
                         // Adjust resolution to optimal FFT size if desired
-                        if (bAdjustResolution)
+                        if (bAdjustResolution&& !bSkewedDecon)
                             deskewedXdim = findOptimalDimension(deskewedXdim);
 
                         // update z step size:
-                        imgParams.dz *= sin(deskewAngle * M_PI/180.);
+                        imgParams.dz *= fabs(sin(deskewAngle * M_PI/180.));
                         if (fabs(deskewFactor) < 1)
                         {
                             #ifdef _WIN32
@@ -755,6 +774,9 @@ int main(int argc, char *argv[])
                         else
                             nz_final = new_nz;
 
+                        unsigned xdim4FFT = deskewedXdim;
+                        if (bSkewedDecon) xdim4FFT = new_nx;
+
                         if (0) {
                             // old way,  just autoallocate FFTplans.
                             // This will always be on the GPU, and the two plans 
@@ -792,15 +814,15 @@ int main(int argc, char *argv[])
 
                             cuFFTErr = cufftCreate(&rfftplanGPU);							// create object.
                             cuFFTErr = cufftSetAutoAllocation(rfftplanGPU, autoAllocate);
-                            cuFFTErr = cufftMakePlan3d(rfftplanGPU, new_nz, new_ny, deskewedXdim, CUFFT_R2C, &workSizeR2C);   // make plan, retrieve needed workSize
+                            cuFFTErr = cufftMakePlan3d(rfftplanGPU, nz_final, new_ny, xdim4FFT, CUFFT_R2C, &workSizeR2C);   // make plan, retrieve needed workSize
                             if (cuFFTErr != CUFFT_SUCCESS) {
                                 std::cerr << "cufftMakePlan3d() r2c failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
                                 cudaMemGetInfo(&GPUfree, &GPUtotal);
                                 std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
 
-                                cuFFTErr = cufftEstimate3d(new_nz, new_ny, deskewedXdim, CUFFT_R2C, &workSizeR2C);
+                                cuFFTErr = cufftEstimate3d(new_nz, new_ny, xdim4FFT, CUFFT_R2C, &workSizeR2C);
                                 if (cuFFTErr != CUFFT_SUCCESS)
-                                    std::cerr << "cufftEstimate3d() failed. " << new_nz << " x " << new_ny << " x " << deskewedXdim << " Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
+                                    std::cerr << "cufftEstimate3d() failed. " << new_nz << " x " << new_ny << " x " << xdim4FFT << " Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
 
                                 std::cerr << "R2C FFT Plan desires " << workSizeR2C / (1024 * 1024) << " MB. " << std::endl;
                                 throw std::runtime_error("cufftMakePlan3d() r2c failed.");
@@ -814,26 +836,22 @@ int main(int argc, char *argv[])
                             if (cuFFTErr != CUFFT_SUCCESS)
                                 std::cerr << "cufftSetAutoAllocation(rfftplanInvGPU, autoAllocate) failed. Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
 
-                            cuFFTErr = cufftMakePlan3d(rfftplanInvGPU, new_nz, new_ny, deskewedXdim, CUFFT_C2R, &workSizeC2R);// make plan, get workSize
+                            cuFFTErr = cufftMakePlan3d(rfftplanInvGPU, nz_final/*new_nz??*/, new_ny, xdim4FFT, CUFFT_C2R, &workSizeC2R);// make plan, get workSize
                             if (cuFFTErr != CUFFT_SUCCESS) {
-                                std::cerr << "cufftMakePlan3d() c2r failed. " << new_nz << " x " << new_ny << " x " << deskewedXdim << " Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
+                                std::cerr << "cufftMakePlan3d() c2r failed. " << nz_final << " x " << new_ny << " x " << xdim4FFT << " Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
                                 cudaMemGetInfo(&GPUfree, &GPUtotal);
                                 std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
 
-                                cuFFTErr = cufftEstimate3d(new_nz, new_ny, deskewedXdim, CUFFT_C2R, &workSizeC2R);
+                                cuFFTErr = cufftEstimate3d(new_nz, new_ny, xdim4FFT, CUFFT_C2R, &workSizeC2R);
                                 if (cuFFTErr != CUFFT_SUCCESS)
-                                    std::cerr << "cufftEstimate3d() failed. " << new_nz << " x " << new_ny << " x " << deskewedXdim << " Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
+                                    std::cerr << "cufftEstimate3d() failed. " << new_nz << " x " << new_ny << " x " << xdim4FFT << " Error code: " << cuFFTErr << " : " << _cudaGetErrorEnum(cuFFTErr) << std::endl;
 
                                 std::cerr << "C2R FFT Plan desires " << workSizeC2R / (1024 * 1024) << " MB. " << std::endl;
                                 throw std::runtime_error("cufftMakePlan3d() c2r failed.");
                             }
 
-                            if (workSizeC2R > workSizeR2C) {
-                                workSize = workSizeC2R;    // set workSize to max of C2R and R2C plans.
-                            }
-                            else {
-                                workSize = workSizeR2C;
-                            }
+                            // set workSize to max of C2R and R2C plans.
+                            workSize = std::max(workSizeC2R,workSizeR2C);
 
                             if (workArea.getSize() != workSize) {  // do we need to (re)allocate workArea?
                                 workArea.resize(workSize);
@@ -848,7 +866,7 @@ int main(int argc, char *argv[])
                                 cudaMemGetInfo(&GPUfree, &GPUtotal);
                                 std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
 
-                                cufftEstimate3d(new_nz, new_ny, deskewedXdim, CUFFT_R2C, &workSizeR2C);
+                                cufftEstimate3d(new_nz, new_ny, xdim4FFT, CUFFT_R2C, &workSizeR2C);
                                 std::cerr << "R2C FFT Plan desires " << workSizeR2C / (1024 * 1024) << " MB. " << std::endl;
                                 throw std::runtime_error("cufftSetWorkArea() r2c failed.");
                             }
@@ -859,7 +877,7 @@ int main(int argc, char *argv[])
                                 cudaMemGetInfo(&GPUfree, &GPUtotal);
                                 std::cerr << "GPU " << GPUfree / (1024 * 1024) << " MB free / " << GPUtotal / (1024 * 1024) << " MB total. " << std::endl;
 
-                                cufftEstimate3d(new_nz, new_ny, deskewedXdim, CUFFT_C2R, &workSizeC2R);
+                                cufftEstimate3d(new_nz, new_ny, xdim4FFT, CUFFT_C2R, &workSizeC2R);
                                 std::cerr << "C2R FFT Plan desires " << workSizeC2R / (1024 * 1024) << " MB. " << std::endl;
                                 throw std::runtime_error("cufftSetWorkArea() c2r failed.");
                             }
@@ -869,16 +887,19 @@ int main(int argc, char *argv[])
                         std::cout << "FFT plans allocated.    ";
                         cudaMemGetInfo(&GPUfree, &GPUtotal);
                         std::cout << std::setw(8) << (GPUfree_prev - GPUfree) / (1024 * 1024) << "MB" << std::setw(8) << GPUfree / (1024 * 1024)
-                                  << "MB free" << " nz=" << new_nz << ", ny=" << new_ny << ", nx=" << deskewedXdim << std::endl;
+                                  << "MB free" << " nz=" << new_nz << ", ny=" << new_ny << ", nx=" << xdim4FFT << std::endl;
 
                     }  //else if (RL_iters>0)
 
                     //****************Transfer a bunch of constants to device, including OTF array:*******************
 
-                    dkx = 1.0/(imgParams.dr * deskewedXdim);
+                    unsigned xdim_during_decon = deskewedXdim;
+                    if (bSkewedDecon)
+                      xdim_during_decon = new_nx;
+                    dkx = 1.0/(imgParams.dr * xdim_during_decon);
                     dky = 1.0/(imgParams.dr * new_ny);
 
-                    unsigned nz_const;
+                    unsigned nz_const;  // same as "nz_final"??
                     if (bDupRevStack)
                         nz_const = new_nz*2;
                     else
@@ -888,14 +909,16 @@ int main(int argc, char *argv[])
                     rdistcutoff = 2*NA/(imgParams.wave); // lateral resolution limit in 1/um
                     float eps = std::numeric_limits<float>::epsilon();
 
-                    transferConstants(deskewedXdim, new_ny,
+                    transferConstants(xdim_during_decon, new_ny,
                                       nz_const,
-                                      complexOTF.height(), complexOTF.width()/2,
-                                      dkx/dkr_otf, dky/dkr_otf, dkz/dkz_otf,
-                                      eps, complexOTF.data());
+                                      // complexOTF.height(), complexOTF.width()/2,
+                                      nx_otf, ny_otf, nz_otf,
+                                      dkx/dkx_otf, dky/dky_otf, dkz/dkz_otf,
+                                      eps);
 
-                    d_interpOTF.resize(nz_const * new_ny * (deskewedXdim+2) * sizeof(float)); // allocate memory
-                    makeOTFarray(d_interpOTF, deskewedXdim, new_ny, nz_const); // interpolate.  This reads from the complexOTF.data sent to the GPU from transferConstants().
+                    d_interpOTF.resize(nz_const * new_ny * (xdim_during_decon/2+1)*2 * sizeof(float)); // allocate memory
+                    makeOTFarray(d_rawOTF, d_interpOTF, xdim_during_decon, new_ny, nz_const); // interpolate.
+                    d_rawOTF.resize(0);
                     std::cout << "d_interpOTF allocated.  ";
                     cudaMemGetInfo(&GPUfree, &GPUtotal);
                     std::cout << std::setw(8) << d_interpOTF.getSize() / (1024 * 1024) << "MB" << std::setw(8) << GPUfree / (1024 * 1024) << "MB free" << std::endl;
@@ -1067,8 +1090,29 @@ int main(int argc, char *argv[])
 
                 // If deskew is to happen, it'll be performed inside RichardsonLucy_GPU() on GPU;
                 // but here raw data's x dimension is still just "new_nx"
-                if (bCrop)
-                    raw_image.crop(0, 0, 0, 0, new_nx-1, new_ny-1, new_nz-1, 0);
+                if (bCrop) {
+                    //raw_image.crop(0, 0, 0, 0, new_nx-1, new_ny-1, new_nz-1, 0);
+                  // raw_image.crop((nx-new_nx)/2, (ny-new_ny)/2, (nz-new_nz)/2,
+                  //                (nx+new_nx)/2-1, (ny+new_ny)/2-1, (nz+new_nz)/2-1);
+
+                  // From Dan Milkie's commit b8ab540 12/07/2021
+                  int cropx_start = ((int) nx - (int) new_nx) / 2; // handle if new_nx is larger than nx (e.g. we are using padding.)
+                  int cropy_start = ((int) ny - (int) new_ny) / 2;
+                  int cropz_start = ((int) nz - (int) new_nz) / 2;
+
+                  cropx_start = std::max(cropx_start, 0); // don't go below zero.
+                  cropy_start = std::max(cropy_start, 0);
+                  cropz_start = std::max(cropz_start, 0);
+
+                  int cropx_end   = (cropx_start + new_nx) - 1; // cropping start and end are included in the region.
+                  int cropy_end   = (cropy_start + new_ny) - 1;
+                  int cropz_end   = (cropz_start + new_nz) - 1;
+			
+                  std::cout << "Cropping raw_image to      : " << cropx_start << " to "<< cropx_end << "  x  " << cropy_start << " to " << cropy_end << "  x  " << cropz_start << " to " << cropz_end << ". " << std::endl;
+
+                  raw_image.crop(cropx_start, cropy_start, cropz_start,
+                                 cropx_end,   cropy_end,   cropz_end);
+                }
 
                 if (wiener >0) { // plain 1-step Wiener filtering
                     raw_image -= background;
@@ -1077,7 +1121,7 @@ int main(int argc, char *argv[])
                     wienerfilter(raw_imageFFT,
                                  dkx, dky, dkz,
                                  complexOTF,
-                                 dkr_otf, dkz_otf,
+                                 dkx_otf, dkz_otf,
                                  rdistcutoff, wiener);
 
                     fftwf_execute_dft_c2r(rfftplan_inv, (fftwf_complex *) raw_imageFFT.data(), raw_image.data());
@@ -1108,7 +1152,7 @@ int main(int argc, char *argv[])
                     RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters, deskewFactor,
                                        deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
                                        rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp,
-                                       bFlatStartGuess, my_median, bDoRescale, padVal, bDupRevStack,
+                                       bFlatStartGuess, my_median, bDoRescale, bSkewedDecon, padVal, bDupRevStack,
                                        UseOnlyHostMem, myGPUdevice);
                     #ifdef USE_NVTX
                     cudaProfilerStop();
