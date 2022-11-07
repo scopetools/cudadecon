@@ -45,8 +45,8 @@ std::string make_Image_Description(float nz, float dz)
 	std::string temp = "ImageJ=1.52o\n"
 		"spacing=" + std::to_string(dz) + "\n"
 		"unit=micron" "\n"
-		"images=" + std::to_string(nz) + "\n"
-		"slices=" + std::to_string(nz) + "\n"; // "slices" will designate this as a volume and not a time series, "frames"
+		"images=" + std::to_string(int(nz)) + "\n"
+		"slices=" + std::to_string(int(nz)) + "\n"; // "slices" will designate this as a volume and not a time series, "frames"
 	// std::cout << "my image description=" << temp;  // debug it:
 	return temp;
 }
