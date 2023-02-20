@@ -10,6 +10,6 @@ authors:
 - family-names: "Lambert"
   given-names: "Talley"
   orcid: "https://orcid.org/0000-0002-2409-0181"
-title: "cudaDecon"
+title: "cudadecon"
 doi: 10.5281/zenodo.7659013
-url: "https://github.com/scopetools/cudaDecon"
+url: "https://github.com/scopetools/cudadecon"
