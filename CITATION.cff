@@ -1,0 +1,15 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Lin"
+  given-names: "Shao"
+  orcid: "https://orcid.org/0000-0002-1905-4442"
+- family-names: "Milkie"
+  given-names: "Dan"
+  orcid: "https://orcid.org/0000-0002-3917-6965"
+- family-names: "Lambert"
+  given-names: "Talley"
+  orcid: "https://orcid.org/0000-0002-2409-0181"
+title: "cudaDecon"
+doi: 10.5281/zenodo.7659013
+url: "https://github.com/scopetools/cudaDecon"
