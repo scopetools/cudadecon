@@ -1,5 +1,7 @@
 # cudaDecon
 
+[![DOI](https://zenodo.org/badge/172128164.svg)](https://zenodo.org/badge/latestdoi/172128164)
+
 GPU-accelerated 3D image deconvolution & affine transforms using CUDA.
 
 Python bindings are also available at [pycudadecon](https://github.com/tlambert03/pycudadecon)
