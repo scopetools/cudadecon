@@ -13,8 +13,9 @@ Select Tools->Visual Studio Command Prompt
 At the VS command prompt, change to the Visual C++ installation directory. (The location depends on the system and the Visual Studio installation, but a file search within the Visual Studio folder (like : C:\Program Files (x86)\Microsoft Visual Studio version\) will help you find it.) 
 Then configure this Command Prompt window for 64-bit command-line builds that target x64 platforms, at the command prompt, enter:
 
+```
 "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvarsall.bat" amd64
-
+```
 
 1.b. Install CMAKE v2.6 and later
 
@@ -23,10 +24,14 @@ Then configure this Command Prompt window for 64-bit command-line builds that ta
 * Download the 64-bit version dlls here : [http://fftw.org/install/windows.html](http://fftw.org/install/windows.html)
 * Unzip FFTW3 library into C:\fftw3 then created the x64 .lib files:
 
+```
 cd c:\fftw3
 lib /machine:x64 /def:libfftw3-3.def
 lib /machine:x64 /def:libfftw3l-3.def
 lib /machine:x64 /def:libfftw3f-3.def
+
+```
+
 
 1.d.a Install zlib
 
