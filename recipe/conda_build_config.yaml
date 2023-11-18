@@ -13,10 +13,6 @@ cdt_name:                 # [linux]
   - cos7                  # [linux64]
   - cos7                  # [linux64]
 
-cuda_compiler:
-  - nvcc
-  - cuda-nvcc
-
 cuda_compiler_version:
   - 11.2
   - 12.0

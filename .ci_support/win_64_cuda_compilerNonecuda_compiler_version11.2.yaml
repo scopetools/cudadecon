@@ -5,9 +5,9 @@ channel_sources:
 channel_targets:
 - conda-forge main
 cuda_compiler:
-- cuda-nvcc
+- None
 cuda_compiler_version:
-- '12.0'
+- '11.2'
 cxx_compiler:
 - vs2019
 fftw:
