@@ -1,7 +1,7 @@
 c_compiler:
 - gcc
 c_compiler_version:
-- '12'
+- '10'
 cdt_name:
 - cos7
 channel_sources:
@@ -11,13 +11,13 @@ channel_targets:
 cuda_compiler:
 - nvcc
 cuda_compiler_version:
-- '12.0'
+- '11.2'
 cxx_compiler:
 - gxx
 cxx_compiler_version:
-- '12'
+- '10'
 docker_image:
-- quay.io/condaforge/linux-anvil-cos7-x86_64
+- quay.io/condaforge/linux-anvil-cuda:11.2
 fftw:
 - '3'
 libboost_devel:
