@@ -25,11 +25,11 @@ requirements:
     - make  # [not win]
     - libgomp  # [linux]
   host:
-    - boost-cpp
+    - libboost-devel
     - libtiff
     - fftw
+    - libcufft-dev # [(cuda_compiler_version or "").startswith("12")]
   run:
-    - boost-cpp
 
 test:
   commands:
