@@ -209,9 +209,7 @@ __global__ void transformKernel(float *output,
 
     // Read from texture and write to global memory
     int idx = z * (nx*ny) + y * nx + x;
-    float val;
-    cudaTex3D(&val, texObj, tu, tv, tw);
-    output[idx] = val;
+    output[idx] = tex3D<float>(texObj, tu, tv, tw);
 }
 
 // Simple transformation kernel
@@ -251,9 +249,7 @@ __global__ void transformKernelRA(float *output,
 
     // Read from texture and write to global memory
     int idx = z * (nx*ny) + y * nx + x;
-    float val;
-    cudaTex3D(&val, texObj, tu, tv, tw);
-    output[idx] = val;
+    output[idx] = tex3D<float>(texObj, tu, tv, tw);
 }
 
 
