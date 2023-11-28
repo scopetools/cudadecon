@@ -1,6 +1,6 @@
 #!/bin/bash
 
-export PATH="$PATH:$BUILD_PREFIX/nvvm/bin/cicc"
+export PATH="$PATH:$BUILD_PREFIX/nvvm/bin/"
 
 mkdir cmake_build
 cd cmake_build
