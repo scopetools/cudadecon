@@ -10,12 +10,18 @@
 ######################################################################
 
 
-cmake_minimum_required (VERSION 3.18)
+cmake_minimum_required (VERSION 3.12)
 # cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
 # cmake_policy(SET CMP0012 NEW) #Set IF statements to use values of numbers and booleans rather than pretend that they could be variables
 
-project (cudaDecon VERSION 0.7.0 LANGUAGES CXX CUDA)
+project (cudaDecon)
+
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+
+set(VERSION_MAJOR "0")
+set(VERSION_MINOR "7")
+set(VERSION_PATCH "0")
+set(PROJECT_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 
 # set -fPIC for all targets (for shared libraries)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -97,6 +103,7 @@ endif()
 #
 ######################################################################
 
+find_package(CUDA REQUIRED)
 if (WIN32)
   set (FFTW3_INCLUDE_DIR $ENV{CONDA_PREFIX}/Library/lib)
   set (FFTW3F_LIBRARY fftw3f)
@@ -117,8 +124,50 @@ message(STATUS "FFTW3 Library: " ${FFTW3F_LIBRARY})
 find_package(Boost REQUIRED COMPONENTS program_options filesystem system)
 
 
-message(STATUS "CUDA version : ${CMAKE_CUDA_COMPILER_VERSION}")
-set(CMAKE_CUDA_ARCHITECTURES all-major)
+message(STATUS "CUDA version : ${CUDA_VERSION}") 
+if(NOT(CUDA_VERSION LESS 11.1))  # if CUDA version is > or = 11.1  
+  set(CUDA_NVCC_FLAGS "-O3;\
+  -lcudart;\
+  -gencode=arch=compute_61,code=sm_61;\
+  -gencode=arch=compute_62,code=sm_62;\
+  -gencode=arch=compute_70,code=sm_70;\
+  -gencode=arch=compute_72,code=sm_72;\
+  -gencode=arch=compute_75,code=sm_75,\
+  -gencode=arch=compute_75,code=compute_75,\
+  -gencode=arch=compute_80,code=compute_80,\
+  -gencode=arch=compute_86,code=compute_86")
+elseif(NOT(CUDA_VERSION LESS 10.0))  # if CUDA version is > or = 10.0
+  set(CUDA_NVCC_FLAGS "-O3;\
+  -lcudart;\
+  -gencode=arch=compute_52,code=sm_52;\ 
+  -gencode=arch=compute_61,code=sm_61;\
+  -gencode=arch=compute_62,code=sm_62;\
+  -gencode=arch=compute_70,code=sm_70;\
+  -gencode=arch=compute_72,code=sm_72;\
+  -gencode=arch=compute_75,code=sm_75,\
+  -gencode=arch=compute_75,code=compute_75")
+elseif(NOT(CUDA_VERSION LESS 8.0))  # if CUDA version is > or = 8.0
+  set(CUDA_NVCC_FLAGS "-O2;\
+  -gencode=arch=compute_30,code=sm_30;\
+  -gencode=arch=compute_35,code=sm_35;\
+  -gencode=arch=compute_37,code=sm_37;\
+  -gencode=arch=compute_50,code=sm_50;\
+  -gencode=arch=compute_52,code=sm_52;\
+  -gencode=arch=compute_61,code=sm_61") # compute capability 6.1 only avaiable in CUDA 8.0 or greater
+else()
+  set(CUDA_NVCC_FLAGS "-O2;\
+  -gencode=arch=compute_20,code=sm_20;\
+  -gencode=arch=compute_30,code=sm_30;\
+  -gencode=arch=compute_35,code=sm_35;\
+  -gencode=arch=compute_37,code=sm_37;\
+  -gencode=arch=compute_50,code=sm_50;\
+  -gencode=arch=compute_52,code=sm_52")
+                      # compute capability 6.1 only avaiable in CUDA 8.0 or greater
+endif()
+
+# Specifies which compute capabilities are supported by the built .exe http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#virtual-architecture-feature-list http://docs.nvidia.com/cuda/cuda-compiler-driver-nvcc/index.html#gpu-feature-list 
+# Need to add to these if different GPUs are targeted.
+#--ptxas-options=-v;
 
 ######################################################################
 #
@@ -133,10 +182,13 @@ include_directories(
   "${CMAKE_CURRENT_SOURCE_DIR}/Buffers"
   ${CUDA_INCLUDE_DIRS}
   ${FFTW3_INCLUDE_DIR}
+  # ${X11_INCLUDE_DIR}
 )
 
 
 if(WIN32)
+  set(CUDA_NVCC_FLAGS
+    ${CUDA_NVCC_FLAGS};--use-local-env;)
   link_directories ( ${Boost_LIBRARY_DIRS} ${FFTW3_INCLUDE_DIR} ${TIFF_LIBRARY} )
   include_directories( ${Boost_INCLUDE_DIRS} ${FFTW3_INCLUDE_DIR}  ${TIFF_INCLUDE_DIR}
     "$ENV{NVCUDASAMPLES_ROOT}/common/inc" )
@@ -144,22 +196,34 @@ else()
   include_directories( ${CUDA_TOOLKIT_ROOT_DIR}/samples/common/inc )
 endif()
 
+
+
+
+##### Make this everything time so that linearDecon.cpp is remade each time.  This will ensure that the build date is correct #####
+#add_custom_target(invalidate_files ALL
+#                  COMMAND ${CMAKE_COMMAND} -E touch "${CMAKE_CURRENT_SOURCE_DIR}/linearDecon.cpp")
+
+
 ######################################################################
 #
 # Add build outputs and their dependencies
 #
 ######################################################################
 
+
+
 #####  libcudaDecon.dll ###########################################
 
-add_library(
-  libcudaDecon
-  SHARED
-  RL-Biggs-Andrews.cpp
-  RLgpuImpl.cu
-  geometryTransform.cu
+ CUDA_ADD_LIBRARY(
+   libcudaDecon
+   SHARED
+   RL-Biggs-Andrews.cpp
+   RLgpuImpl.cu
+   geometryTransform.cu
+#   camcor.cpp
   #  camcor.cu
-  )
+   )
+
 set_target_properties(libcudaDecon PROPERTIES PREFIX "")
 
 add_dependencies(
@@ -196,7 +260,7 @@ endif()
 
 #####  cudaDecon.exe ###########################################
 
-add_executable(
+CUDA_ADD_EXECUTABLE(
   cudaDecon
   linearDecon.cpp
   RL-Biggs-Andrews.cpp
@@ -224,11 +288,9 @@ add_executable(radialft radialft-nonSIM.cpp)
 # Link libraries
 #
 ######################################################################
-find_library(CUFFT_LIBRARY cufft)
 
 target_link_libraries(
   cudaDecon
-  PRIVATE
   Buffer
   ${FFTW3F_LIBRARY}
   ${FFTW3F_THREADS_LIBRARY}
@@ -238,11 +300,10 @@ target_link_libraries(
   ${Boost_PREDICATE_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
-  ${CUFFT_LIBRARY}
   )
 
 if (UNIX)
-  target_link_libraries(cudaDecon PRIVATE rt)
+  target_link_libraries(cudaDecon rt)
 endif ()
 
 target_link_libraries(
@@ -254,9 +315,9 @@ target_link_libraries(
   ${TIFF_LIBRARIES}
 )
 
+
 target_link_libraries(
   libcudaDecon
-  PRIVATE
   Buffer
   ${FFTW3F_LIBRARY}
   ${FFTW3F_THREADS_LIBRARY}
@@ -266,8 +327,8 @@ target_link_libraries(
   ${Boost_PREDICATE_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
-  ${CUFFT_LIBRARY}
 )
+CUDA_ADD_CUFFT_TO_TARGET(libcudaDecon)
 
 
 target_link_libraries(
@@ -275,6 +336,8 @@ target_link_libraries(
   ${FFTW3F_LIBRARY}
   ${TIFF_LIBRARIES}
 )
+
+CUDA_ADD_CUFFT_TO_TARGET(cudaDecon)
 
 # added for make install to work in conda
 set(HEADERS
