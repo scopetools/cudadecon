@@ -4,10 +4,10 @@ docker_image:                                     # [os.environ.get("BUILD_PLATF
 
 c_compiler_version:       # [linux]
   - 10                    # [linux64 or aarch64]
-  - 12                    # [linux64 or aarch64]
+  - 10                    # [linux64 or aarch64]
 cxx_compiler_version:     # [linux]
   - 10                    # [linux64 or aarch64]
-  - 12                    # [linux64 or aarch64]
+  - 10                    # [linux64 or aarch64]
 
 cdt_name:                 # [linux]
   - cos7                  # [linux64]
