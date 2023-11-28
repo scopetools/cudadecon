@@ -200,13 +200,13 @@ void affine_GPU(cudaArray *cuArray, int nx, int ny, int nz, float *result,
 void affine_GPU_RA(cudaArray *cuArray, int nx, int ny, int nz, float dx,
                    float dy, float dz, float *result, GPUBuffer &affMat);
 
-void camcor_GPU(int nx, int ny, int nz, GPUBuffer &outBuf);
+// void camcor_GPU(int nx, int ny, int nz, GPUBuffer &outBuf);
 
-void setupConst(int nx, int ny, int nz);
+// void setupConst(int nx, int ny, int nz);
 
-void setupCamCor(int nx, int ny, float *h_caparam);
+// void setupCamCor(int nx, int ny, float *h_caparam);
 
-void setupData(int nx, int ny, int nz, unsigned *h_data);
+// void setupData(int nx, int ny, int nz, unsigned *h_data);
 
 void cropGPU(GPUBuffer &inBuf, int nx, int ny, int nz, int new_nx, int new_ny,
              int new_nz, GPUBuffer &outBuf);
@@ -296,12 +296,12 @@ void makeNewDir(std::string subdirname);
       const float *const raw_data, int nx, int ny, int nz, float dx, float dy,
       float dz, float *const result, const float *affMat);
 
-  CUDADECON_API int camcor_interface_init(int nx, int ny, int nz,
-                                          const float *const camparam);
+  // CUDADECON_API int camcor_interface_init(int nx, int ny, int nz,
+  //                                         const float *const camparam);
 
-  CUDADECON_API int camcor_interface(const unsigned short *const raw_data,
-                                     int nx, int ny, int nz,
-                                     unsigned short *const result);
+  // CUDADECON_API int camcor_interface(const unsigned short *const raw_data,
+  //                                    int nx, int ny, int nz,
+  //                                    unsigned short *const result);
 
   //! Call this before program quits to release global GPUBuffer d_interpOTF
   CUDADECON_API void RL_cleanup();

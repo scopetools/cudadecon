@@ -221,7 +221,7 @@ endif()
    RLgpuImpl.cu
    geometryTransform.cu
 #   camcor.cpp
-   camcor.cu
+  #  camcor.cu
    )
 
 set_target_properties(libcudaDecon PROPERTIES PREFIX "")
@@ -267,7 +267,7 @@ CUDA_ADD_EXECUTABLE(
   boostfs.cpp
   RLgpuImpl.cu
   geometryTransform.cu
-  camcor.cu
+  # camcor.cu
   )
 
 add_dependencies(
