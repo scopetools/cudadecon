@@ -4,7 +4,7 @@ include_directories(
   "${CMAKE_SOURCE_DIR}/gtest/include"
   )
 
-CUDA_ADD_LIBRARY(
+add_library(
   Buffer
   Buffer.cpp
   bufferExample.cpp

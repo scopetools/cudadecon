@@ -21,7 +21,7 @@ requirements:
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     - {{ compiler('cuda') }}
-    - cmake ==3.24
+    - cmake >=3.18
     - make  # [not win]
     - libgomp  # [linux]
   host:
