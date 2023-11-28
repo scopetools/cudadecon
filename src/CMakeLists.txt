@@ -14,14 +14,10 @@ cmake_minimum_required (VERSION 3.12)
 # cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
 # cmake_policy(SET CMP0012 NEW) #Set IF statements to use values of numbers and booleans rather than pretend that they could be variables
 
-project (cudaDecon)
+project (cudaDecon, VERSION 0.7.0 LANGUAGES CXX CUDA)
 
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
-set(VERSION_MAJOR "0")
-set(VERSION_MINOR "7")
-set(VERSION_PATCH "0")
-set(PROJECT_VERSION ${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH})
 
 # set -fPIC for all targets (for shared libraries)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
@@ -103,7 +99,7 @@ endif()
 #
 ######################################################################
 
-find_package(CUDA REQUIRED)
+# find_package(CUDA REQUIRED)
 if (WIN32)
   set (FFTW3_INCLUDE_DIR $ENV{CONDA_PREFIX}/Library/lib)
   set (FFTW3F_LIBRARY fftw3f)
