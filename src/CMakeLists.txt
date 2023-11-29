@@ -10,7 +10,7 @@
 ######################################################################
 
 
-cmake_minimum_required (VERSION 3.18)
+cmake_minimum_required (VERSION 3.20)
 # cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
 # cmake_policy(SET CMP0012 NEW) #Set IF statements to use values of numbers and booleans rather than pretend that they could be variables
 
@@ -162,11 +162,6 @@ add_library(
   )
 set_target_properties(libcudaDecon PROPERTIES PREFIX "")
 
-add_dependencies(
-   libcudaDecon
-   Buffer
-   )
-
 
 #####  libradialft.dll ###########################################
 
@@ -176,10 +171,6 @@ add_dependencies(
    radialft_interface.cpp
    )
 
-add_dependencies(
-   libradialft
-   Buffer
-   )
 
 if (WIN32)
   set_property(TARGET libradialft PROPERTY POSITION_INDEPENDENT_CODE ON)
@@ -224,7 +215,6 @@ add_executable(radialft radialft-nonSIM.cpp)
 # Link libraries
 #
 ######################################################################
-find_library(CUFFT_LIBRARY cufft)
 
 target_link_libraries(
   cudaDecon
@@ -238,7 +228,7 @@ target_link_libraries(
   ${Boost_PREDICATE_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
-  ${CUFFT_LIBRARY}
+  CUDA::cufft
   )
 
 if (UNIX)
@@ -266,7 +256,7 @@ target_link_libraries(
   ${Boost_PREDICATE_LIBRARY}
   ${Boost_SYSTEM_LIBRARY}
   ${TIFF_LIBRARIES}
-  ${CUFFT_LIBRARY}
+  CUDA::cufft
 )
 
 
