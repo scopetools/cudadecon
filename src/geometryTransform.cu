@@ -177,13 +177,12 @@ __host__ void duplicateReversedStack_GPU(GPUBuffer &zExpanded, int nx, int ny, i
 }
 
 
-texture<float, cudaTextureType3D, cudaReadModeElementType> texRef;
 
 
 // Simple transformation kernel
 __global__ void transformKernel(float *output,
                                 int nx, int ny, int nz,
-                                float *mat)
+                                float *mat, cudaTextureObject_t texObj)
 {
 
     // Calculate texture coordinates
@@ -210,14 +209,14 @@ __global__ void transformKernel(float *output,
 
     // Read from texture and write to global memory
     int idx = z * (nx*ny) + y * nx + x;
-    output[idx] = tex3D(texRef, tu, tv, tw);
+    output[idx] = tex3D<float>(texObj, tu, tv, tw);
 }
 
 // Simple transformation kernel
 __global__ void transformKernelRA(float *output,
                                 int nx, int ny, int nz,
                                 float dx, float dy, float dz,
-                                float *mat)
+                                float *mat, cudaTextureObject_t texObj)
 {
 
     // Calculate texture coordinates
@@ -250,7 +249,7 @@ __global__ void transformKernelRA(float *output,
 
     // Read from texture and write to global memory
     int idx = z * (nx*ny) + y * nx + x;
-    output[idx] = tex3D(texRef, tu, tv, tw);
+    output[idx] = tex3D<float>(texObj, tu, tv, tw);
 }
 
 
@@ -259,19 +258,23 @@ __host__ void affine_GPU(cudaArray *cuArray, int nx, int ny, int nz,
                          float * result, GPUBuffer &affMat)
 {
 
-    // Allocate CUDA array in device memory
-    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(
-        32, 0, 0, 0, cudaChannelFormatKindFloat);
+    // Create texture object
+    cudaTextureObject_t texObj;
+    cudaResourceDesc resDesc;
+    memset(&resDesc, 0, sizeof(resDesc));
+    resDesc.resType = cudaResourceTypeArray;
+    resDesc.res.array.array = cuArray;
 
-    // Set texture reference parameters
-    texRef.addressMode[0] = cudaAddressModeBorder;
-    texRef.addressMode[1] = cudaAddressModeBorder;
-    texRef.addressMode[2] = cudaAddressModeBorder;
-    texRef.filterMode = cudaFilterModeLinear;
-    texRef.normalized = false;
+    cudaTextureDesc texDesc;
+    memset(&texDesc, 0, sizeof(texDesc));
+    texDesc.readMode = cudaReadModeElementType;
+    texDesc.addressMode[0] = cudaAddressModeBorder;
+    texDesc.addressMode[1] = cudaAddressModeBorder;
+    texDesc.addressMode[2] = cudaAddressModeBorder;
+    texDesc.filterMode = cudaFilterModeLinear;
+    texDesc.normalizedCoords = false;
 
-    // Bind the array to the texture reference
-    cudaBindTextureToArray(texRef, cuArray, channelDesc);
+    cudaCreateTextureObject(&texObj, &resDesc, &texDesc, NULL);
 
     // Allocate result of transformation in device memory
     float* output;
@@ -283,8 +286,11 @@ __host__ void affine_GPU(cudaArray *cuArray, int nx, int ny, int nz,
                  (ny + dimBlock.y - 1) / dimBlock.y,
                  (nz + dimBlock.z - 1) / dimBlock.z);
 
-    transformKernel<<<dimGrid, dimBlock>>>(output, nx, ny, nz, (float *) affMat.getPtr());
+    transformKernel<<<dimGrid, dimBlock>>>(output, nx, ny, nz, (float *) affMat.getPtr(), texObj);
     CudaCheckError();
+
+    // Destroy texture object
+    cudaDestroyTextureObject(texObj);
 
     //transfer result back to host
     cudaMemcpy(result, output, nz * nx * ny * sizeof(float), cudaMemcpyDeviceToHost);
@@ -300,19 +306,23 @@ __host__ void affine_GPU_RA(cudaArray *cuArray, int nx, int ny, int nz,
                          float * result, GPUBuffer &affMat)
 {
 
-    // Allocate CUDA array in device memory
-    cudaChannelFormatDesc channelDesc = cudaCreateChannelDesc(
-        32, 0, 0, 0, cudaChannelFormatKindFloat);
+    // Create texture object
+    cudaTextureObject_t texObj;
+    cudaResourceDesc resDesc;
+    memset(&resDesc, 0, sizeof(resDesc));
+    resDesc.resType = cudaResourceTypeArray;
+    resDesc.res.array.array = cuArray;
 
-    // Set texture reference parameters
-    texRef.addressMode[0] = cudaAddressModeBorder;
-    texRef.addressMode[1] = cudaAddressModeBorder;
-    texRef.addressMode[2] = cudaAddressModeBorder;
-    texRef.filterMode = cudaFilterModeLinear;
-    texRef.normalized = false;
+    cudaTextureDesc texDesc;
+    memset(&texDesc, 0, sizeof(texDesc));
+    texDesc.readMode = cudaReadModeElementType;
+    texDesc.addressMode[0] = cudaAddressModeBorder;
+    texDesc.addressMode[1] = cudaAddressModeBorder;
+    texDesc.addressMode[2] = cudaAddressModeBorder;
+    texDesc.filterMode = cudaFilterModeLinear;
+    texDesc.normalizedCoords = false;
 
-    // Bind the array to the texture reference
-    cudaBindTextureToArray(texRef, cuArray, channelDesc);
+    cudaCreateTextureObject(&texObj, &resDesc, &texDesc, NULL);
 
     // Allocate result of transformation in device memory
     float* output;
@@ -324,8 +334,11 @@ __host__ void affine_GPU_RA(cudaArray *cuArray, int nx, int ny, int nz,
                  (ny + dimBlock.y - 1) / dimBlock.y,
                  (nz + dimBlock.z - 1) / dimBlock.z);
 
-    transformKernelRA<<<dimGrid, dimBlock>>>(output, nx, ny, nz, dx, dy, dz, (float *) affMat.getPtr());
+    transformKernelRA<<<dimGrid, dimBlock>>>(output, nx, ny, nz, dx, dy, dz, (float *) affMat.getPtr(), texObj);
     CudaCheckError();
+
+    // Destroy texture object
+    cudaDestroyTextureObject(texObj);
 
     //transfer result back to host
     cudaMemcpy(result, output, nz * nx * ny * sizeof(float), cudaMemcpyDeviceToHost);

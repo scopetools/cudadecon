@@ -5,28 +5,24 @@
 jobs:
 - job: win
   pool:
-    vmImage: windows-2019
+    vmImage: windows-2022
   strategy:
     matrix:
-      win_64_cuda_compiler_version10.2:
-        CONFIG: win_64_cuda_compiler_version10.2
+      win_64_cuda_compilercuda-nvcccuda_compiler_version12.0:
+        CONFIG: win_64_cuda_compilercuda-nvcccuda_compiler_version12.0
         UPLOAD_PACKAGES: 'False'
-      win_64_cuda_compiler_version11.0:
-        CONFIG: win_64_cuda_compiler_version11.0
-        UPLOAD_PACKAGES: 'False'
-      win_64_cuda_compiler_version11.1:
-        CONFIG: win_64_cuda_compiler_version11.1
-        UPLOAD_PACKAGES: 'False'
-      win_64_cuda_compiler_version11.2:
-        CONFIG: win_64_cuda_compiler_version11.2
+      win_64_cuda_compilernvcccuda_compiler_version11.2:
+        CONFIG: win_64_cuda_compilernvcccuda_compiler_version11.2
         UPLOAD_PACKAGES: 'False'
   timeoutInMinutes: 360
   variables:
     CONDA_BLD_PATH: D:\\bld\\
+    UPLOAD_TEMP: D:\\tmp
 
   steps:
     - checkout: self
       fetchDepth: 0
+
     - task: PythonScript@0
       displayName: 'Download Miniforge'
       inputs:
@@ -45,42 +41,15 @@ jobs:
       displayName: Add conda to PATH
 
     - script: |
-        call activate base
-        mamba.exe install "python=3.9" conda-build conda pip conda-forge-ci-setup=3 "py-lief<0.12" -c conda-forge --strict-channel-priority --yes
-      displayName: Install conda-build
-
-    - script: set PYTHONUNBUFFERED=1
-      displayName: Set PYTHONUNBUFFERED
-
-    # Configure the VM
-    - script: |
-        call activate base
-        setup_conda_rc .\ ".\recipe" .\.ci_support\%CONFIG%.yaml
-      displayName: conda-forge CI setup
-
-    # Configure the VM.
-    - script: |
-        set "CI=azure"
-        call activate base
-        run_conda_forge_build_setup
-      displayName: conda-forge build setup
-
-    - script: |
-        call activate base
-        if EXIST LICENSE.txt (
-          copy LICENSE.txt "recipe\\recipe-scripts-license.txt"
-        )
-        conda.exe build "recipe" -m .ci_support\%CONFIG%.yaml --suppress-variables
-      displayName: Build recipe
+        call ".scripts\run_win_build.bat"
+      displayName: Run Windows build
       env:
         PYTHONUNBUFFERED: 1
-
-    - script: |
-        set "GIT_BRANCH=%BUILD_SOURCEBRANCHNAME%"
-        set "FEEDSTOCK_NAME=%BUILD_REPOSITORY_NAME:*/=%"
-        call activate base
-        upload_package  .\ ".\recipe" .ci_support\%CONFIG%.yaml
-      displayName: Upload package
-      env:
+        CONFIG: $(CONFIG)
+        CI: azure
+        flow_run_id: azure_$(Build.BuildNumber).$(System.JobAttempt)
+        remote_url: $(Build.Repository.Uri)
+        sha: $(Build.SourceVersion)
+        UPLOAD_PACKAGES: $(UPLOAD_PACKAGES)
+        UPLOAD_TEMP: $(UPLOAD_TEMP)
         BINSTAR_TOKEN: $(BINSTAR_TOKEN)
-      condition: and(succeeded(), not(eq(variables['UPLOAD_PACKAGES'], 'False')), not(eq(variables['Build.Reason'], 'PullRequest')))

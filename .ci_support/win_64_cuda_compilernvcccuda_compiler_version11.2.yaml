@@ -1,23 +1,23 @@
-boost_cpp:
-- 1.78.0
 c_compiler:
 - vs2019
 channel_sources:
-- conda-forge,defaults
+- conda-forge
 channel_targets:
 - conda-forge main
 cuda_compiler:
 - nvcc
 cuda_compiler_version:
-- '11.0'
+- '11.2'
 cxx_compiler:
 - vs2019
 fftw:
 - '3'
+libboost_devel:
+- '1.82'
 libtiff:
-- '4'
-pin_run_as_build:
-  boost-cpp:
-    max_pin: x.x.x
+- '4.6'
 target_platform:
 - win-64
+zip_keys:
+- - cuda_compiler
+  - cuda_compiler_version
