@@ -61,9 +61,9 @@ void RichardsonLucy_GPU(CImg<> & raw, float background,
                         cudaDeviceProp *devProp,
                         bool bFlatStartGuess, float my_median,
                         bool bDoRescale,
-                        bool bSkewedDecon,
                         float padVal,
                         bool bDupRevStack,
+                        bool bSkewedDecon,
                         bool UseOnlyHostMem,
                         int myGPUdevice)
 {
@@ -683,7 +683,7 @@ int RL_interface(const unsigned short * const raw_data,
   RichardsonLucy_GPU(raw_image, background, d_interpOTF, nIters,
                      deskewFactor, deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
                      rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp,
-                     bFlatStartGuess, my_median, bDoRescale, padVal, bDupRevStack, bSkewedDecon, false);
+                     bFlatStartGuess, my_median, bDoRescale, padVal, bDupRevStack, bSkewedDecon, false, 0);
 
   // Copy deconvolved data, stored in raw_image, to "result" for return:
   memcpy(result, raw_image.data(), raw_image.size() * sizeof(float));
