@@ -14,19 +14,19 @@ cdt_name:                 # [linux]
   - cos7                  # [linux64]
 
 cuda_compiler:
-  - nvcc                  # [not win]
+  - nvcc
   - cuda-nvcc
 
 cuda_compiler_version:
-  - 11.2                  # [not win]
+  - 11.2
   - 12.0
 
 libboost_devel:           
-  - '1.82'                # [not win]             
+  - '1.82'                
   - '1.82'                
 
 libtiff:
-  - 4.6                   # [not win]
+  - 4.6
   - 4.6
 
 channel_sources:
