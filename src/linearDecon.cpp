@@ -1,7 +1,7 @@
 #include "linearDecon.h"
+#include "version.h"
 #include <exception>
 #include <ctime>
-
 #ifdef _WIN32
 
 // Disable silly warnings on some Microsoft VC++ compilers.
@@ -10,7 +10,6 @@
 #pragma warning(disable : 4305) // Disregard loss of data from double to float.
 #endif
 
-std::string version_number = "0.7.0";
 CImg<> next_file_image;
 
 CImg<> ToSave;
@@ -225,7 +224,7 @@ int main(int argc, char *argv[])
     TIFFSetWarningHandler(NULL);
 
     std::string datafolder, filenamePattern, otffiles, LSfile;
-    po::options_description progopts("cudaDeconv. Version: " + version_number + "\n");
+    po::options_description progopts("cudaDeconv. Version: " + PROJECT_VERSION + "\n");
     progopts.add_options()
     ("drdata", po::value<float>(&imgParams.dr)->default_value(.104), "Image x-y pixel size (um)")
     ("dzdata,z", po::value<float>(&imgParams.dz)->default_value(.25), "Image z step (um)")
@@ -301,7 +300,7 @@ int main(int argc, char *argv[])
         }
 
         if (varsmap.count("version")) {
-            std::cout << version_number << "\n";
+            std::cout << PROJECT_VERSION << "\n";
             return 0;
         }
 
