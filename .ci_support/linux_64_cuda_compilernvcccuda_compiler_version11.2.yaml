@@ -29,7 +29,7 @@ target_platform:
 zip_keys:
 - - c_compiler_version
   - cxx_compiler_version
+  - cdt_name
   - cuda_compiler
   - cuda_compiler_version
-  - cdt_name
   - docker_image

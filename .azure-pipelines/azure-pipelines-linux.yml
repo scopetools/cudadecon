@@ -17,6 +17,7 @@ jobs:
         UPLOAD_PACKAGES: 'False'
         DOCKER_IMAGE: quay.io/condaforge/linux-anvil-cuda:11.2
   timeoutInMinutes: 360
+  variables: {}
 
   steps:
   - checkout: self
