@@ -14,23 +14,7 @@ cmake_minimum_required (VERSION 3.20)
 # cmake_policy(SET CMP0054 OLD) #Set IF statements to dereference variables like in CMAKE version < 3.1
 # cmake_policy(SET CMP0012 NEW) #Set IF statements to use values of numbers and booleans rather than pretend that they could be variables
 
-# Find the latest Git tag and use it as the project version
-find_package(Git QUIET)
-if(GIT_FOUND)
-  execute_process(
-    COMMAND ${GIT_EXECUTABLE} describe --tags --abbrev=0
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-    OUTPUT_VARIABLE PROJECT_VERSION
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-  )
-  # Strip the 'v' prefix from the tag if present
-  string(REGEX REPLACE "^v" "" PROJECT_VERSION "${PROJECT_VERSION}")
-else()
-  # Fallback version if Git is not found
-  set(PROJECT_VERSION "0.0.0")
-endif()
-
-project (cudaDecon VERSION ${PROJECT_VERSION} LANGUAGES CXX CUDA)
+project (cudaDecon VERSION 0.7.0 LANGUAGES CXX CUDA)
 set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 
 # set -fPIC for all targets (for shared libraries)
