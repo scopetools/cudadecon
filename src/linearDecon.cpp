@@ -224,7 +224,7 @@ int main(int argc, char *argv[])
     TIFFSetWarningHandler(NULL);
 
     std::string datafolder, filenamePattern, otffiles, LSfile;
-    po::options_description progopts("cudaDeconv. Version: " + PROJECT_VERSION + "\n");
+    po::options_description progopts("cudaDeconv. Version: " + std::string(PROJECT_VERSION) + "\n");
     progopts.add_options()
     ("drdata", po::value<float>(&imgParams.dr)->default_value(.104), "Image x-y pixel size (um)")
     ("dzdata,z", po::value<float>(&imgParams.dz)->default_value(.25), "Image z step (um)")
