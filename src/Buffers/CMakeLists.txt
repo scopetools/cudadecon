@@ -2,6 +2,7 @@ include_directories(
   "${CMAKE_CURRENT_SOURCE_DIR}"
   ${CUDA_INCLUDE_DIRS}
   "${CMAKE_SOURCE_DIR}/gtest/include"
+  ${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}
   )
 
 add_library(
