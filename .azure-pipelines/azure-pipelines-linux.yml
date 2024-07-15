@@ -8,28 +8,20 @@ jobs:
     vmImage: ubuntu-latest
   strategy:
     matrix:
-      linux_64_cuda_compiler_version10.2:
-        CONFIG: linux_64_cuda_compiler_version10.2
+      linux_64_cuda_compilercuda-nvcccuda_compiler_version12.0:
+        CONFIG: linux_64_cuda_compilercuda-nvcccuda_compiler_version12.0
         UPLOAD_PACKAGES: 'False'
-        DOCKER_IMAGE: quay.io/condaforge/linux-anvil-cuda:10.2
-      linux_64_cuda_compiler_version11.2:
-        CONFIG: linux_64_cuda_compiler_version11.2
+        DOCKER_IMAGE: quay.io/condaforge/linux-anvil-cos7-x86_64
+      linux_64_cuda_compilernvcccuda_compiler_version11.2:
+        CONFIG: linux_64_cuda_compilernvcccuda_compiler_version11.2
         UPLOAD_PACKAGES: 'False'
         DOCKER_IMAGE: quay.io/condaforge/linux-anvil-cuda:11.2
-      linux_64_cuda_compiler_version9.2:
-        CONFIG: linux_64_cuda_compiler_version9.2
-        UPLOAD_PACKAGES: 'False'
-        DOCKER_IMAGE: quay.io/condaforge/linux-anvil-cuda:9.2
   timeoutInMinutes: 360
+  variables: {}
 
   steps:
   - checkout: self
     fetchDepth: 0
-  - script: |
-         rm -rf /opt/ghc
-         df -h
-    displayName: Manage disk space
-
   # configure qemu binfmt-misc running.  This allows us to run docker containers
   # embedded qemu-static
   - script: |
@@ -40,6 +32,9 @@ jobs:
 
   - script: |
         export CI=azure
+        export flow_run_id=azure_$(Build.BuildNumber).$(System.JobAttempt)
+        export remote_url=$(Build.Repository.Uri)
+        export sha=$(Build.SourceVersion)
         export GIT_BRANCH=$BUILD_SOURCEBRANCHNAME
         export FEEDSTOCK_NAME=$(basename ${BUILD_REPOSITORY_NAME})
         if [[ "${BUILD_REASON:-}" == "PullRequest" ]]; then

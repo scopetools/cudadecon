@@ -54,17 +54,15 @@ conda install -c conda-forge cudadecon cudatoolkit=10.2
 | 11.1  | ≥ 455.23     | ≥ 456.38   |
 | 11.2  | ≥ 460.27.03  | ≥ 460.82   |
 
-
 If you run into trouble, feel free to [open an issue](https://github.com/scopetools/cudaDecon/issues) and describe your setup.
 
-
------ 
+-----------------------
 
 ## Notes
 
 * Compatible GPUs are specified in this "C:\cudaDecon\CMakeLists.txt".  This also sets up all of the linking to dependent libraries.  If you end up adding other code libraries, or changing versions, etc you will want to edit this file.  Specifically where you see the lines like : "-gencode=arch=compute_75,code=sm_75"
 
-* GPU based resources have a d_ prefix in their name such as : GPUBuffer & d_interpOTF
+* GPU based resources have a `d_` prefix in their name such as : GPUBuffer & d_interpOTF
 
 * transferConstants() is a function to send small data values from host to GPU device.
 
@@ -83,7 +81,7 @@ Running this command from an adminstrator command prompt should set the timeout 
 
 * Better yet, use a second GPU.  The GPU you wish to use for computation only should use the TCC driver (must be a Titan or Tesla or other GPU that supports TCC).  This card should be initialized after the display GPU, so put the compute card in a slot that is > display card.  The TCC driver is selected with NVIDIAsmi.exe -L from an administrator cmd window to show the GPUs, then NVIDIAsmi.exe -dm 1 -i 0 to set TCC on GPU 0.  Then use `set CUDA_VISIBLE_DEVICES` to pick the GPU the deconv code should execute on.
 
----------------------
+-----------------------
 
 ## Local build instructions
 
@@ -96,7 +94,7 @@ To build the source locally, you have two options:
 With docker installed, use `.scripts/run_docker_build.sh` with one of the
 configs available in `.ci_support`, for instance:
 
-```
+```shell
 CONFIG=linux_64_cuda_compiler_version10.2 .scripts/run_docker_build.sh
 ```
 
@@ -106,7 +104,6 @@ Here we create a dedicated conda environment with all of the build dependencies
 installed, and then use cmake directly.  This method is faster and creates an
 immediately useable binary (i.e. it is better for iteration if you're changing
 the source code), but requires that you set up build dependencies correctly.
-   
 
 1. install [miniconda](https://docs.conda.io/en/latest/miniconda.html)
 2. install [cudatoolkit](https://developer.nvidia.com/cuda-10.1-download-archive-update2) (I haven't yet tried 10.2)

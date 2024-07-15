@@ -21,15 +21,15 @@ requirements:
     - {{ compiler('c') }}
     - {{ compiler('cxx') }}
     - {{ compiler('cuda') }}
-    - cmake
+    - cmake >=3.18
     - make  # [not win]
     - libgomp  # [linux]
   host:
-    - boost-cpp
+    - libboost-devel
     - libtiff
     - fftw
+    - libcufft-dev # [(cuda_compiler_version or "").startswith("12")]
   run:
-    - boost-cpp
 
 test:
   commands:
