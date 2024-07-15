@@ -159,7 +159,7 @@ add_library(
   RL-Biggs-Andrews.cpp
   RLgpuImpl.cu
   geometryTransform.cu
-  #  camcor.cu
+  camcor.cu
   )
 set_target_properties(libcudaDecon PROPERTIES PREFIX "")
 
@@ -195,7 +195,7 @@ add_executable(
   boostfs.cpp
   RLgpuImpl.cu
   geometryTransform.cu
-  # camcor.cu
+  camcor.cu
   )
 
 add_dependencies(
