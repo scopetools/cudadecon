@@ -1152,7 +1152,7 @@ int main(int argc, char *argv[])
                     RichardsonLucy_GPU(raw_image, background, d_interpOTF, RL_iters, deskewFactor,
                                        deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
                                        rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp,
-                                       bFlatStartGuess, my_median, bDoRescale, bSkewedDecon, padVal, bDupRevStack,
+                                       bFlatStartGuess, my_median, bDoRescale, padVal, bDupRevStack, bSkewedDecon,
                                        UseOnlyHostMem, myGPUdevice);
                     #ifdef USE_NVTX
                     cudaProfilerStop();
