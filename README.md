@@ -106,32 +106,31 @@ immediately useable binary (i.e. it is better for iteration if you're changing
 the source code), but requires that you set up build dependencies correctly.
 
 1. install [miniconda](https://docs.conda.io/en/latest/miniconda.html)
-2. install [cudatoolkit](https://developer.nvidia.com/cuda-10.1-download-archive-update2) (I haven't yet tried 10.2)
-3. (*windows only*) install [build tools for VisualStudio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2017) 2017.  For linux, all necessary build tools will be installed by conda.
+1. (*windows only*) install [build tools for VisualStudio](https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2017) 2017.  For linux, all necessary build tools will be installed by conda.
 
-4. create a new conda environment with all of the dependencies installed
+1. create a new conda environment with all of the dependencies installed
 
     ```sh
     conda config --add channels conda-forge
-    conda create -n build -y cmake boost-cpp libtiff fftw ninja
+    conda create -n build -y cmake libboost-devel libtiff fftw ninja cuda-nvcc libcufft-dev
     conda activate build  
     # you will need to reactivate the "build" environment each time you close the terminal
     ```
 
-5. create a new `build` directory inside of the top level `cudaDecon` folder
+1. create a new `build` directory inside of the top level `cudaDecon` folder
 
     ```sh
     mkdir build  # inside the cudaDecon folder
     cd build
     ```
 
-6. (*windows only*) Activate your build tools:
+1. (*windows only*) Activate your build tools (adjust the path to your installation):
 
     ```cmd
     "C:\Program Files (x86)\Microsoft Visual Studio\2017\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
     ```
 
-7. Run `cmake` and compile with `ninja` on windows or `make` on linux.
+1. Run `cmake` and compile with `ninja` on windows or `make` on linux.
 
     ```sh
     # windows
@@ -148,3 +147,21 @@ the source code), but requires that you set up build dependencies correctly.
 The binary will be written to `cudaDecon\build\<platform>-<compiler>-release`.
 If you change the source code, you can just rerun `ninja` or `make` and the
 binary will be updated.
+
+### Testing
+
+There is some test data included in test_data.  You can use it to test the binaries
+created in the previous step.  For example, if you are on windows and followed the steps
+above, your binary will be in `cudaDecon\build\windows-msvc-release\cudaDecon.exe`.
+
+First build an otf:
+
+```sh
+.\build\windows-msvc-release\radialft.exe .\test_data\psf.tif .\test_data\otf.tif --nocleanup --fixorigin 10
+```
+
+Then run the deconvolution:
+
+```sh
+.\build\windows-msvc-release\cudaDecon.exe -z 0.3 -i 10 -D 31.5 .\test_data\ im_raw .\test_data\otf.tif
+```
