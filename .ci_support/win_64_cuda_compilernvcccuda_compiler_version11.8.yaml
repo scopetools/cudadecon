@@ -1,0 +1,23 @@
+c_compiler:
+- vs2019
+channel_sources:
+- conda-forge
+channel_targets:
+- conda-forge main
+cuda_compiler:
+- nvcc
+cuda_compiler_version:
+- '11.8'
+cxx_compiler:
+- vs2019
+fftw:
+- '3'
+libboost_devel:
+- '1.82'
+libtiff:
+- '4.6'
+target_platform:
+- win-64
+zip_keys:
+- - cuda_compiler
+  - cuda_compiler_version
