@@ -1,4 +1,5 @@
 #include "linearDecon.h"
+#include "version.h"
 
 
 #include <vector>
@@ -463,6 +464,12 @@ unsigned deskewedXdim;
 CPUBuffer rotMatrix;
 cufftHandle rfftplanGPU, rfftplanInvGPU;
 GPUBuffer d_interpOTF(0, false); // since this is a global for th RL_interface dll, just leave device empty.  It will probably default to GPU 0.
+
+
+const char * get_version()
+{
+  return PROJECT_VERSION;
+}
 
 unsigned get_output_nx()
 {
