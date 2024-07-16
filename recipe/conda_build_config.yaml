@@ -22,7 +22,7 @@ cuda_compiler_version:
   - 12.0
 
 libboost_devel:           
-  - '1.82'                
+  - '1.82'
   - '1.82'                
 
 libtiff:
