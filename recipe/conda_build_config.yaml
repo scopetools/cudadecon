@@ -18,7 +18,7 @@ cuda_compiler:
   - cuda-nvcc
 
 cuda_compiler_version:
-  - 11.2
+  - 11.8
   - 12.0
 
 libboost_devel:           
