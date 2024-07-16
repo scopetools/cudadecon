@@ -7,6 +7,7 @@
 #include <complex>
 #include <string>
 #include <vector>
+#include "camcor_context.h"
 
 #ifndef __clang__
 #include <omp.h>
@@ -200,13 +201,11 @@ void affine_GPU(cudaArray *cuArray, int nx, int ny, int nz, float *result,
 void affine_GPU_RA(cudaArray *cuArray, int nx, int ny, int nz, float dx,
                    float dy, float dz, float *result, GPUBuffer &affMat);
 
-void camcor_GPU(int nx, int ny, int nz, GPUBuffer &outBuf);
+void camcor_GPU(CamcorContext* ctx, GPUBuffer &outBuf);
 
-void setupConst(int nx, int ny, int nz);
+void setupCamCor(CamcorContext* ctx, float *h_caparam);
 
-void setupCamCor(int nx, int ny, float *h_caparam);
-
-void setupData(int nx, int ny, int nz, unsigned *h_data);
+void setupData(CamcorContext* ctx, unsigned *h_data);
 
 void cropGPU(GPUBuffer &inBuf, int nx, int ny, int nz, int new_nx, int new_ny,
              int new_nz, GPUBuffer &outBuf);

@@ -1,4 +1,5 @@
 #include "linearDecon.h"
+#include "camcor_context.h"
 
 
 //#include <vector>
@@ -66,27 +67,28 @@ void cuda_reset()
   cudaDeviceReset();
 }
 
-int camcor_interface_init(int nx, int ny, int nz,
+CamcorContext* camcor_interface_init(int nx, int ny, int nz,
                      const float * const camparam)
 {
+  CamcorContext ctx(nx, ny, nz);
   CImg<> h_camparam(camparam, nx, ny, 3);
-  setupConst(nx, ny, nz);
-  setupCamCor(nx, ny, h_camparam.data());
-  return 1;
+  setupCamCor(ctx, h_camparam.data());
+  return ctx;
 }
 
 
-int camcor_interface(const unsigned short * const raw_data,
-                     int nx, int ny, int nz,
+int camcor_interface(CamcorContext* ctx, const unsigned short * const raw_data,
                      unsigned short * const result)
 {
-  CImg<unsigned short> input(raw_data, nx, ny, nz);
+  CImg<unsigned short> input(raw_data, ctx->nx, ctx->ny, ctx->nz);
   CImg<unsigned> raw_image(input);
-  GPUBuffer d_correctedResult(nx * ny * nz * sizeof(unsigned short), 0, false);
-  setupData(nx, ny, nz, raw_image.data());
-  camcor_GPU(nx, ny, nz, d_correctedResult);
+  setupData(ctx, raw_image.data());
+
+  GPUBuffer d_correctedResult(ctx->nxyz * sizeof(unsigned short), 0, false);
+  camcor_GPU(ctx, d_correctedResult);
+
   //transfer result back to host
-  cudaMemcpy(result, d_correctedResult.getPtr(), nx * ny * nz * sizeof(unsigned short), cudaMemcpyDeviceToHost);
+  cudaMemcpy(result, d_correctedResult.getPtr(), ctx->nxyz * sizeof(unsigned short), cudaMemcpyDeviceToHost);
   return 1;
 }
 
