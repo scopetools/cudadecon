@@ -312,6 +312,9 @@ void makeNewDir(std::string subdirname);
   CUDADECON_API unsigned get_output_nx();
   CUDADECON_API unsigned get_output_ny();
   CUDADECON_API unsigned get_output_nz();
+  
+  // return version number 
+  CUDADECON_API const char* get_version();
 }
 
 #endif
