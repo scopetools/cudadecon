@@ -22,6 +22,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 add_compile_definitions(cimg_display=0)
 
+
 ######################################################################
 #
 # Set permissions before adding subdirectories
@@ -119,6 +120,18 @@ find_package(Boost REQUIRED COMPONENTS program_options filesystem system)
 find_package(CUDAToolkit REQUIRED)
 message(STATUS "CUDA version : ${CMAKE_CUDA_COMPILER_VERSION}")
 set(CMAKE_CUDA_ARCHITECTURES all-major)
+
+
+######################## Render version.h ############################
+
+# the single source of our version is above in the project() command
+# this header makes the version available to the compiler 
+
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/version.h.in
+  ${CMAKE_CURRENT_SOURCE_DIR}/version.h
+  @ONLY
+)
 
 ######################################################################
 #
