@@ -11,7 +11,7 @@ channel_targets:
 cuda_compiler:
 - nvcc
 cuda_compiler_version:
-- '11.2'
+- '11.8'
 cxx_compiler:
 - gxx
 cxx_compiler_version:
