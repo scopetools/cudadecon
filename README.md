@@ -130,6 +130,24 @@ The binary will be written to `cudaDecon\build\<platform>-<compiler>-release`.
 If you change the source code, you can just rerun `ninja` or `make` and the
 binary will be updated.
 
+### Testing
+
+There is some test data included in test_data.  You can use it to test the binaries
+created in the previous step.  For example, if you are on windows and followed the steps
+above, your binary will be in `cudaDecon\build\windows-msvc-release\cudaDecon.exe`.
+
+First build an otf:
+
+```sh
+.\build\windows-msvc-release\radialft.exe .\test_data\psf.tif .\test_data\otf.tif --nocleanup --fixorigin 10
+```
+
+Then run the deconvolution:
+
+```sh
+.\build\windows-msvc-release\cudaDecon.exe -z 0.3 -i 10 -D 31.5 .\test_data\ im_raw .\test_data\otf.tif
+```
+
 -----------------------
 
 ## Developer Notes
@@ -169,3 +187,4 @@ to 10 : `reg.exe ADD
   with NVIDIAsmi.exe -L from an administrator cmd window to show the GPUs, then
   NVIDIAsmi.exe -dm 1 -i 0 to set TCC on GPU 0.  Then use `set
   CUDA_VISIBLE_DEVICES` to pick the GPU the deconv code should execute on.
+

@@ -16,3 +16,5 @@ build_artifacts
 # conda smithy ci-skeleton end
 cmake_build
 src/version.h
+test_data/GPUdecon/
+test_data/otf.tif
