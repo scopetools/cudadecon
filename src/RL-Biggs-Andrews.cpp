@@ -1,4 +1,5 @@
 #include "linearDecon.h"
+#include "version.h"
 
 
 #include <vector>
@@ -464,6 +465,12 @@ CPUBuffer rotMatrix;
 cufftHandle rfftplanGPU, rfftplanInvGPU;
 GPUBuffer d_interpOTF(0, false); // since this is a global for th RL_interface dll, just leave device empty.  It will probably default to GPU 0.
 
+
+const char * get_version()
+{
+  return PROJECT_VERSION;
+}
+
 unsigned get_output_nx()
 {
 
@@ -683,7 +690,7 @@ int RL_interface(const unsigned short * const raw_data,
   RichardsonLucy_GPU(raw_image, background, d_interpOTF, nIters,
                      deskewFactor, deskewedXdim, extraShift, napodize, nZblend, rotMatrix,
                      rfftplanGPU, rfftplanInvGPU, raw_deskewed, &deviceProp,
-                     bFlatStartGuess, my_median, bDoRescale, padVal, bDupRevStack, bSkewedDecon, false);
+                     bFlatStartGuess, my_median, bDoRescale, bSkewedDecon, padVal, bDupRevStack, false, 0);
 
   // Copy deconvolved data, stored in raw_image, to "result" for return:
   memcpy(result, raw_image.data(), raw_image.size() * sizeof(float));
@@ -846,36 +853,3 @@ int Affine_interface_RA(const float * const raw_data,
 
   return 1;
 }
-
-
-// putting this here for now until I can clean up the camcor problem
-
-
-
-
-// int camcor_interface_init(int nx, int ny, int nz,
-//                      const float * const camparam)
-// {
-//   CImg<> h_camparam(camparam, nx, ny, 3);
-//   setupConst(nx, ny, nz);
-//   setupCamCor(nx, ny, h_camparam.data());
-//   return 1;
-// }
-
-
-// int camcor_interface(const unsigned short * const raw_data,
-//                      int nx, int ny, int nz,
-//                      unsigned short * const result)
-// {
-//   CImg<unsigned short> input(raw_data, nx, ny, nz);
-//   CImg<unsigned> raw_image(input);
-//   GPUBuffer d_correctedResult(nx * ny * nz * sizeof(unsigned short), 0, false);
-//   setupData(nx, ny, nz, raw_image.data());
-//   camcor_GPU(nx, ny, nz, d_correctedResult);
-//   //transfer result back to host
-//   cudaMemcpy(result, d_correctedResult.getPtr(), nx * ny * nz * sizeof(unsigned short), cudaMemcpyDeviceToHost);
-//   return 1;
-// }
-
-
-
