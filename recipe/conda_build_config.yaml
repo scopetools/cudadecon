@@ -2,13 +2,6 @@ docker_image:                                    # [os.environ.get("BUILD_PLATFO
   - quay.io/condaforge/linux-anvil-cuda:11.8     # [linux64 and (os.environ.get("BUILD_PLATFORM") == "linux-64" or os.environ.get("CONFIG_VERSION", "1") == "1")]
   - quay.io/condaforge/linux-anvil-cos7-x86_64   # [linux64 and (os.environ.get("BUILD_PLATFORM") == "linux-64" or os.environ.get("CONFIG_VERSION", "1") == "1")]
 
-c_compiler_version:       # [linux]
-  - 10                    # [linux64 or aarch64]
-  - 10                    # [linux64 or aarch64]
-cxx_compiler_version:     # [linux]
-  - 10                    # [linux64 or aarch64]
-  - 10                    # [linux64 or aarch64]
-
 cdt_name:                 # [linux]
   - cos7                  # [linux64]
   - cos7                  # [linux64]
