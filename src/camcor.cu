@@ -94,12 +94,12 @@ __global__ void camcor_kernel(unsigned nx, unsigned ny, unsigned nz,
   float w = (z + 0.5) / (float)nz;
   float wp = (z - 0.5) / (float)nz;
 
-  float a = tex3D(camparam_texObj, x, y, 0);
-  float b = tex3D(camparam_texObj, x, y, 1);
-  float offset = tex3D(camparam_texObj, x, y, 2);
+  float a = tex3D<float>(camparam_texObj, x, y, 0);
+  float b = tex3D<float>(camparam_texObj, x, y, 1);
+  float offset = tex3D<float>(camparam_texObj, x, y, 2);
 
-  unsigned voxel = tex3D(data_texObj, u, v, w);
-  unsigned previousvoxel = tex3D(data_texObj, u, v, wp);
+  unsigned voxel = tex3D<unsigned int>(data_texObj, u, v, w);
+  unsigned previousvoxel = tex3D<unsigned int>(data_texObj, u, v, wp);
 
   unsigned int i = z * ny * nx + y * nx + x;
   output[i] =
