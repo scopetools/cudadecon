@@ -8,12 +8,12 @@ jobs:
     vmImage: ubuntu-latest
   strategy:
     matrix:
-      linux_64_cuda_compilercuda-nvcccuda_compiler_version12.0:
-        CONFIG: linux_64_cuda_compilercuda-nvcccuda_compiler_version12.0
+      linux_64_c_compiler_version11cuda_compilercuda-nvcccuda_compiler_version12.0cxx_compiler_version11:
+        CONFIG: linux_64_c_compiler_version11cuda_compilercuda-nvcccuda_compiler_version12.0cxx_compiler_version11
         UPLOAD_PACKAGES: 'False'
         DOCKER_IMAGE: quay.io/condaforge/linux-anvil-cos7-x86_64
-      linux_64_cuda_compilernvcccuda_compiler_version11.8:
-        CONFIG: linux_64_cuda_compilernvcccuda_compiler_version11.8
+      linux_64_c_compiler_version12cuda_compilernvcccuda_compiler_version11.8cxx_compiler_version12:
+        CONFIG: linux_64_c_compiler_version12cuda_compilernvcccuda_compiler_version11.8cxx_compiler_version12
         UPLOAD_PACKAGES: 'False'
         DOCKER_IMAGE: quay.io/condaforge/linux-anvil-cuda:11.8
   timeoutInMinutes: 360
