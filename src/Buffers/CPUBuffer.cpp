@@ -159,9 +159,9 @@ bool CPUBuffer::hasNaNs(bool verbose) const
   } else {
     while ((!haveNaNs) && i < numEntries) {
 #ifndef _WIN32
-      haveNaNs |= std::isnan(arr[i]);
+      haveNaNs = haveNaNs || std::isnan(arr[i]);
 #else
-      haveNaNs |= _isnan(arr[i]);
+      haveNaNs = haveNaNs || _isnan(arr[i]);
 #endif
       ++i;
     }

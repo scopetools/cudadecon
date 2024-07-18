@@ -41,6 +41,12 @@ set(SCI_WORLD_PROGRAM_PERMS WORLD_READ WORLD_EXECUTE)
 # the command line, we want the compiler flag to be almost identical to the
 # ones used for Release except for -DNDEBUG
 
+
+########## suppress warnings from CImg.h ############################
+
+set(CIMG_INCLUDE_DIR "${PROJECT_SOURCE_DIR}/CImg")
+include_directories(SYSTEM ${CIMG_INCLUDE_DIR})
+
 ######################################################################
 #
 # Set compilier
@@ -172,7 +178,7 @@ add_library(
   RL-Biggs-Andrews.cpp
   RLgpuImpl.cu
   geometryTransform.cu
-  #  camcor.cu
+  camcor.cu
   )
 set_target_properties(libcudaDecon PROPERTIES PREFIX "")
 
@@ -208,7 +214,7 @@ add_executable(
   boostfs.cpp
   RLgpuImpl.cu
   geometryTransform.cu
-  # camcor.cu
+  camcor.cu
   )
 
 add_dependencies(
